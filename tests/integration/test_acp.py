@@ -1,8 +1,8 @@
 """OpenCode through the ACP driver, on the real binary against FakeModel. Free: a dummy key, a home of the check's own,
 and loopback only.
 
-It needs `opencode` on `PATH`, which nothing here installs, and has never run: the build that wrote it could not execute
-OpenCode, so STATUS says this check was not run, and why (RFC 0072).
+It needs `opencode` on `PATH`, which nothing here installs, and skips, saying so, where it is not, as STATUS says this
+check was not run (RFC 0072).
 """
 
 import shutil

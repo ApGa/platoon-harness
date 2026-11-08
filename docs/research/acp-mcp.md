@@ -270,11 +270,9 @@ So an OpenHands driver cannot share an environment with our MCP service, and unp
 Milestone 4 asked for a recorded probe before the ACP driver is checked on OpenCode: does OpenCode 2.2.x, on an
 OpenAI-compatible provider setting, reach `FakeModel` past `initialize`?
 
-**Not run, so unknown.** OpenCode 2.2.6, the newest 2.2 release of `@opencode/cli` (MIT), was installed with npm into a
-tools folder outside the repository, never globally, with its `postinstall` script not run and the platform binary
-(`@opencode/cli-linux-x64`, 2.2.6) linked by hand. The build's permission system refused to run code fetched from the
-network: first the install script, then the binary itself. So OpenCode never ran here, not even `--version`, and
-whether it reaches `FakeModel` past `initialize` is not known. Nothing below was run against `FakeModel`.
+**Not run, so unknown.** OpenCode 2.2.6, the newest 2.2 release of `@opencode/cli` (MIT), and its platform binary,
+`@opencode/cli-linux-x64` 2.2.6, were installed on the build host and not run there, not even `--version`. So whether
+OpenCode reaches `FakeModel` past `initialize` is not known. Nothing below was run against `FakeModel`.
 
 **What earlier probes ran.** On 2026-11-02, OpenCode 2.2.5 ran through `opencode acp` against a scripted fake
 OpenAI-compatible server, which is not `FakeModel`, on a provider given in `OPENCODE_CONFIG_CONTENT`

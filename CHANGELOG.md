@@ -77,7 +77,7 @@ named here is closed.
   checked again, and a result kept of such a driver before this reads `unverified` once. `doctor --json` says of each harness it finds whether a check of it ships, as
   `checkable`. See
   [RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft.
-- **ACP agents run as a team's harness.** `platoon-harness-acp`, the first first-party extension, a distribution of its own
+- **An ACP driver ships as a first-party extension.** `platoon-harness-acp`, the first first-party extension, a distribution of its own
   under `extensions/acp` that requires the SDK alone, gives `AcpDriver(command)`, which drives an agent that speaks the Agent
   Client Protocol on stdio, at protocol 1 alone, over the SDK's own `Peer`, and `harness = "opencode"`, that driver on
   `opencode acp`. An agent that answers another protocol is stopped before a session opens. A turn is one `session/prompt`,
@@ -90,9 +90,9 @@ named here is closed.
   names no model call and says no spend, no agent on it is trainable and each turn is charged its estimate. Stable ACP neither
   shows an agent's own agents nor turns them off, so a role on it must allow them, as a change below says.
   On a scripted ACP agent, `ScriptedDriver` behind ACP on FakeModel, `check_driver` passes every check it does not skip, and the
-  driver earns `operational` and `observable`. `opencode` refuses a start that names no model, as OpenCode then sends prompts
-  to a hosted model nobody chose, and it has not run, nor has its check, which skips where `opencode` is not on `PATH`: STATUS
-  says why. See
+  driver earns `operational` and `observable`. No real ACP agent has run on it. `opencode` refuses a start that names no model,
+  as OpenCode then sends prompts to a hosted model nobody chose, and OpenCode has not run on it, nor has its check, which
+  skips where `opencode` is not on `PATH`, so STATUS calls it implemented and no more. See
   [RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft.
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
@@ -833,6 +833,11 @@ named here is closed.
   wait the session had registered, closed ones too, so a pass cost more the longer a session ran. Two indexes of the open
   waits now find them, and when the next deadline falls. The `Waits` view is at version 2, so an older session's is refolded
   as it opens.
+- **`init` takes only the harnesses the SDK drives.** `init` writes no model and no auth profile, so it now passes over a
+  harness an installed extension drives, such as `opencode`, which needs a model, as well as `openhands`, where it took any
+  installed driver whose harness it found on PATH. A team written around an extension's harness would have been refused at
+  start for the model it does not name. See
+  [RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft.
 - **A role on a harness whose own agents its driver cannot turn off must allow them.** `Capabilities` gains
   `native_children_off`, which `claude`, `codex` and the OpenHands worker declare, as each turns its harness's own agents off
   for a launch whose role does not allow them. A driver that declares agents of its own and not that, as the ACP driver does,

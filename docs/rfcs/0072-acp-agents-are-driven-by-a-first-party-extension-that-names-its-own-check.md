@@ -156,8 +156,8 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 
 ## The hard parts
 
-- **OpenCode has not run here.** The recorded probe of OpenCode on `FakeModel` did not run, as this build could not execute it
-  ([acp-mcp.md, section 6](../research/acp-mcp.md#6-opencode-past-initialize-2026-11-08)). Its check is written from the
+- **OpenCode has not run.** The recorded probe of OpenCode on `FakeModel` did not run, as OpenCode has not run on any machine
+  that ran these tests ([acp-mcp.md, section 6](../research/acp-mcp.md#6-opencode-past-initialize-2026-11-08)). Its check is written from the
   2026-11-02 transcript and the 2.2.6 files, UNVERIFIED: the provider's shape, the names its model sees our tool and its shell by,
   and the values its model option takes, which may be `provider/model`, so that a start naming `fake-model` is refused. An ACP
   server reached the model behind Code Mode in that probe, so our tool may not be in the first request.
@@ -188,8 +188,8 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 
 ## Consequences
 
-- An ACP agent runs as a team's harness, with a level earned by a check on its machine, and an agent of any other ACP harness needs
-  only a subclass naming its command.
+- An ACP agent can run as a team's harness, with a level earned only by a check on its machine, and an agent of any other ACP
+  harness needs only a subclass naming its command. `opencode`, the one so named, has not run.
 - `doctor` lists `opencode` where the extension is installed, and `--check` checks it there, as it does the SDK's harnesses.
 - A result kept for any driver outside the SDK made before this pinned no distribution, so it reads `unverified` until checked
   again.
@@ -212,7 +212,9 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 1. Where do first-party extensions live and ship? This builds the default, pending the owner's ruling: `extensions/<name>`, each a
    distribution with its own version and tag. Another place moves a folder and a workspace member and removes nothing else.
 2. Should ACP be spoken over the ACP Python SDK or the SDK's own `rpc.Peer`? This builds the default, pending the owner's ruling:
-   `rpc.Peer` on protocol 1. The SDK's client would replace `driver.py`'s use of the peer alone.
+   `rpc.Peer` on protocol 1. The SDK's client would replace `driver.py`'s use of the peer, and it drops an update it cannot parse
+   before a client sees it, so an unknown update would keep its gap and lose its raw frame: that answer would change
+   `test_an_unknown_update_keeps_its_raw_frame_and_a_gap` and what STATUS says of it, and nothing else built here.
 3. Which agent is the reference, and is Prime Agent's live probe approved? This builds the default, pending the owner's ruling:
    OpenCode is the reference, checked once it runs on a test host, and Prime Agent waits.
 
