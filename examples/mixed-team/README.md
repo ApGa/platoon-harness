@@ -71,9 +71,9 @@ stays in your copy, uncommitted: `git diff` shows it, and `python3 -m unittest` 
 A real model chooses its own steps, so a run can go otherwise: it may name its worker differently, read more files
 before it acts, or take more turns. A live run of this example is held to 40 model calls and 15 minutes, by
 `tests/live/test_examples.py`, which has not run yet: [docs/STATUS.md](../../docs/STATUS.md) says what has run live.
-`tests/integration/test_examples.py` runs the commands on this page as shown, on the real `pi` and OpenHands against
-FakeModel, a loopback model that replies from a script, so the harnesses, the tools and the team file are real and only
-the model is scripted.
+`tests/integration/test_examples.py` runs the commands of sections 1, 2 and 4 as shown, on the real `pi` and OpenHands
+against FakeModel, a loopback model that replies from a script, so the harnesses, the tools and the team file are real and
+only the model is scripted.
 
 The run names its session `tally`, and a name is taken once: a second run named `tally` is refused, with exit 64, so give
 it another `--name`, and use that name in the steps below.

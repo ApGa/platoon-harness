@@ -73,11 +73,11 @@ role can spawn counts as several, and so does one that only a script's program s
 ## A name that is taken
 
 ```text
-platoon-harness: refused conflict: session dns exists: resume it, or choose another name
+platoon-harness: refused conflict: session tally exists: resume it, or choose another name
 ```
 
 `run` exits 64, before any cost. A session's name is claimed once under a root: choose another with `--name`, or
-`platoon-harness session resume dns` to go on with the one there, which can spend money.
+`platoon-harness session resume tally` to go on with the one there, which can spend money.
 
 ## A team file needs trust
 
