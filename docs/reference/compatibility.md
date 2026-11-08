@@ -539,7 +539,7 @@ distinct name. **Unsupported** means it is unavailable on this path, with a reas
 | `opencode` | Project instructions | Not determined | Not researched |
 | | Native skills | Not determined | Exists in its TUI. Reach over ACP was not researched |
 | | Slash commands | Not determined | Reach over ACP was not researched |
-| | Tool configuration | Namespaced, partial | `mcp.servers.<name>` in `OPENCODE_CONFIG_CONTENT`, with `codemode: false`. Ours then arrive as `<ns>_<tool>`. Servers passed in `session/new` did not appear as direct tools. Secrets there reach the tool shell |
+| | Tool configuration | Namespaced, partial | `mcp.servers.<name>` in `OPENCODE_CONFIG_CONTENT`, with `codemode: false`. Ours then arrive as `<ns>_<tool>`. Servers passed in `session/new` did not appear as direct tools. Secrets there reach the tool shell. The ACP driver passes ours in `session/new` and declares `namespaced`, so our words name them `mcp__<ns>__<tool>`, as its check calls them, which no run has checked |
 | | Hooks | Not determined | Plugin hooks exist, some experimental. Interaction was not researched |
 | | Native subagents | On, and a role on it must allow them | Its `subagent` tool starts child sessions [L on HTTP]. Through ACP the driver can neither turn them off nor see them, so a role on `opencode` must say `allow_native_children = true`, and `team check` refuses it otherwise. Whether a permission rule in `OPENCODE_CONFIG_CONTENT` takes the tool away is not determined |
 | | Session compaction | Not determined | `POST /compact` made two extra model calls; success was not observed. `session.compacted` was removed upstream. ACP behavior was not researched |

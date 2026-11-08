@@ -161,9 +161,11 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
   2026-11-02 transcript and the 2.2.6 files, UNVERIFIED: the provider's shape, the names its model sees our tool and its shell by,
   and the values its model option takes, which may be `provider/model`, so that a start naming `fake-model` is refused. An ACP
   server reached the model behind Code Mode in that probe, so our tool may not be in the first request.
-- **What a tool is called.** OpenCode showed a server's tool as `<server>_<tool>` in that probe, which neither value of
-  `tool_names` says, so our words name its tools `mcp__<ns>__<tool>`, as they name any ACP agent's, and whether a model reads
-  past the difference is UNVERIFIED.
+- **What a tool is called.** In that probe OpenCode showed a server its configuration named as `<server>_<tool>`, and one ACP
+  gave it behind Code Mode, neither of which a value of `tool_names` says. The driver declares the default, `namespaced`, as for
+  any ACP agent, so our words name its tools `mcp__<ns>__<tool>`, and its check calls our tool by that name, so that it fails
+  where OpenCode's model knows our tool by another, UNVERIFIED until it runs. A value of `tool_names` for OpenCode's naming waits
+  for a run that shows it.
 - **A whole ask can be large.** A diff's text is part of the ask, so a body can pass 64 KiB; the host keeps its first 64 KiB and
   counts the rest in `cut`, and refuses one the journal will not hold, as RFC 0066 says.
 - **Landing.** ACP never acknowledges a prompt before its answer, so an input is said to land at the first update that follows it,

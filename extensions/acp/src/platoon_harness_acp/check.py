@@ -1,9 +1,10 @@
 """The check `platoon-harness doctor --check` runs on OpenCode: `check_driver` on it as installed here, against
 FakeModel, in a home of the check's own and on no account.
 
-It has never run, as the build that wrote it could not execute OpenCode (RFC 0072). The provider's shape, the names
-OpenCode's model knows its shell and our tool by, and the rule that has its shell ask first are written from a probe of
-2.2.5 against another fake server and from the 2.2.6 release's files, read without running them.
+What it gives OpenCode no run has shown (RFC 0072): the provider's shape, the rule that has its shell ask first and the
+name its model knows its shell by, from a probe of 2.2.5 against another fake server and the 2.2.6 release's files. It
+calls our tool by the name the driver declares and our words use, `mcp__<namespace>__<tool>`, so that it fails where
+OpenCode's model knows our tool by another.
 """
 
 import json
@@ -79,6 +80,6 @@ async def opencode(folder: Path) -> Conformance:
         garble=_garbling(folder),
         gated=lambda command: _shell(command, "call_gated"),
         shell=_shell,
-        tool=lambda note: ToolCall(f"{NAMESPACE}_{TOOL}", {"note": note}),
+        tool=lambda note: ToolCall(f"mcp__{NAMESPACE}__{TOOL}", {"note": note}),
         timeout=60.0,
     )
