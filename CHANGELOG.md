@@ -775,8 +775,8 @@ named here is closed.
 - **`team check` warns when no budget bounds a program's spawns.** Under `until = "program"`, a role that only the program starts,
   none with the session and no role by `may_spawn`, as a population's workers are, is warned of when neither its budget nor the
   session's sets a limit, as nothing in the team then stops the program starting more, or what they spend. `team check` cannot
-  see a population's `attempts`, which lives in its script, so it is a warning. The topologies guide's git-swarm team now has a
-  budget, and its reviewers' team is warned of. See
+  see a population's `attempts`, which lives in its script, so it is a warning. The topologies guide's git-swarm and reviewers'
+  teams now have a budget. See
   [RFC 0070](docs/rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md), a draft.
 - **`git-swarm` takes `live`, which is its `max_live`, and makes board `outcomes`.** `[topology.git-swarm]` needs `live`, how many
   agents may be live at once, which the kernel holds against every spawner, and `git_swarm(role, *, live)` takes it. A team that

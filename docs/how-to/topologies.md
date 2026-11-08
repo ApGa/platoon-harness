@@ -503,9 +503,13 @@ lead adds to queue `tasks`; workers claim from it. Limits: hops 4. Closes when t
 A topology holds no control flow. When a team needs some, such as handing out work and closing the session once it is done, a program
 does it: a Python script that starts the session as `program:<name>` and acts through the ops a person has. `until = "program"`
 leaves the session to the program that owns it, so `run` and the terminal UI refuse such a team, naming this way. Here the program
-adds a task to `reviews` for each path, starts a reviewer to do them, and closes the session once each is done.
+adds a task to `reviews` for each path, starts a reviewer to do them, and closes the session once each is done. Only the program
+starts a reviewer, so a budget stops it, as `team check` warns of such a role with none.
 
 ```toml
+[budget]
+wall = "1h"
+
 [roles.reviewer]
 harness = "claude"
 count = 0
@@ -526,6 +530,7 @@ from typing import Any
 from platoon_harness import Refused, Session
 
 team = Team(
+    budget=Budget(wall="1h"),
     roles={"reviewer": Role(harness="claude", count=0)},
     topology=Topology(until="program", channels={"reviews": Queue(writers="program", readers="role:reviewer")}),
 )
