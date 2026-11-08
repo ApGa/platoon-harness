@@ -16,9 +16,11 @@ extension. Its `AcpDriver(command)` drives an agent that speaks the Agent Client
 SDK's own `rpc.Peer`, adding no dependency. A turn is one `session/prompt`, which is the only boundary it declares: a delivery for
 any other is refused until a recorded fixture shows an agent taking one. An update it does not map keeps its raw frame with a gap. A
 permission request is an approval whose whole ask is the tool call it names, as the agent last gave it. It never declares a sealed
-launch or an id per model call, so no agent on it is trainable. Its one named driver is `opencode`, on `opencode acp`, and a driver
-gains a way to name a check of its own, `DriverInfo.check`, which `platoon-harness doctor --check` runs and keeps as it does the
-SDK's, pinned to the driver's class and now also to the version of the distribution that holds it.
+launch or an id per model call, so no agent on it is trainable. Stable ACP cannot turn an agent's own agents off, so a role on it
+must allow them, as `native_children_off`, a new capability every other driver declares, says. Its one named driver is
+`opencode`, on `opencode acp`, and a driver gains a way to name a check of its own, `DriverInfo.check`, which
+`platoon-harness doctor --check` runs and keeps as it does the SDK's, pinned to the driver's class and now also to the release
+of each distribution outside the SDK that the class stands on.
 
 ## Motivation
 
@@ -141,14 +143,14 @@ class DriverInfo(Model):
 check, in the same folder under the root, keeping what it found the same way. `check_harness(name, folder)` runs either. A named
 check that returns a result of another class than the driver's, or of another harness's name, is refused, as it would speak for a
 driver it did not check, and would replace what was kept of that harness. A check that breaks, or returns no `Conformance`, is
-refused too, saying why, as another distribution ships it, and `doctor --check` goes on past it. A
-result is pinned to the class that implements the driver, and now also to the release, the distribution and its version, of each
-distribution outside the SDK whose driver entry points name the package of that class or of a class it is built on, so that an
-upgrade of an extension reads `unverified` until checked again, as an upgrade of the SDK does
+refused too, saying why, as another distribution ships it, and `doctor --check` goes on past it.
+
+A result is pinned to the class that implements the driver, and now also to the release, the distribution and its version, of
+each distribution outside the SDK whose driver entry points name the package of that class or of a class it is built on, so that
+an upgrade of an extension reads `unverified` until checked again, as an upgrade of the SDK does
 ([RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md)). A subclass of `AcpDriver` in a distribution of its own is
-pinned to that distribution and to `platoon-harness-acp`, which does its driving. A release is read from metadata, as entry points
-name it, so a class built on one from a distribution that names no driver of its own pins nothing of that distribution, which
-the pin then leaves unsaid.
+pinned to that distribution and to `platoon-harness-acp`, which does its driving. A release is read from entry points, so a base
+class from a distribution that names no driver of its own leaves that distribution out of the pin.
 
 `opencode` is `AcpDriver` on `opencode acp`, inheriting the shell's proxy variables, refusing a start with no model, as OpenCode then
 sends prompts to a hosted model nobody chose, and naming `platoon_harness_acp.check:opencode`, which runs `check_driver` on it
@@ -157,8 +159,8 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 ## The hard parts
 
 - **OpenCode has not run.** The recorded probe of OpenCode on `FakeModel` did not run, as OpenCode has not run on any machine
-  that ran these tests ([acp-mcp.md, section 6](../research/acp-mcp.md#6-opencode-past-initialize-2026-11-08)). Its check is written from the
-  2026-11-02 transcript and the 2.2.6 files, UNVERIFIED: the provider's shape, the names its model sees our tool and its shell by,
+  that ran these tests ([acp-mcp.md, section 6](../research/acp-mcp.md#6-opencode-past-initialize-2026-11-08)). Its check is
+  written from the 2026-11-02 transcript and the 2.2.6 files, UNVERIFIED: the provider's shape, the names its model sees our tool and its shell by,
   and the values its model option takes, which may be `provider/model`, so that a start naming `fake-model` is refused. An ACP
   server reached the model behind Code Mode in that probe, so our tool may not be in the first request.
 - **What a tool is called.** In that probe OpenCode showed a server its configuration named as `<server>_<tool>`, and one ACP
