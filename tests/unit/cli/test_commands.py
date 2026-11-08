@@ -326,20 +326,32 @@ async def test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_i
     site: Site, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ):
     """Installing activates nothing, so a session whose team does not name the extension holds none of its ops, and its
-    command is refused before anything is asked of the session. On one whose team names it, it runs."""
+    command is refused before anything is asked of the session. On one whose team names it, it runs. A team that names
+    an extension by `module:attr` records only that reference, which says nothing of its name until imported, so there
+    the session's runtime answers: it runs the op where the reference is the extension, and refuses it where not."""
     installed(site, "ballot_named")
+    site.module("other_extension", "from platoon_harness.kernel import Extension\n\nextension = Extension('other')\n")
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path / "home"))
     roles = {"bob": {"harness": scripted()}}
     vote = ["ballot", "cast", "--choice", "yes"]
 
+    def team(*extensions: str) -> Team:
+        return Team.model_validate({"roles": roles, "extensions": extensions})
+
     async with (
-        Session.start(Team.model_validate({"roles": roles}), name="plain") as plain,
-        Session.start(Team.model_validate({"roles": roles, "extensions": ["ballot"]}), name="named") as named,
+        Session.start(team(), name="plain") as plain,
+        Session.start(team("ballot"), name="named") as named,
+        Session.start(team("ballot_named:extension"), name="byref") as byref,
+        Session.start(team("other_extension:extension"), name="other"),
     ):
         refused = await asyncio.to_thread(main, [*vote[:2], "plain", *vote[2:]])
         said = capsys.readouterr()
-        ran = await asyncio.to_thread(main, [*vote[:2], "named", *vote[2:]])
-        votes = [event.gist async for event in named.events() if event.type == "ballot.voted"]
+        ran = [
+            (await asyncio.to_thread(main, [*vote[:2], name, *vote[2:]]), json.loads(capsys.readouterr().out))
+            for name in ("named", "byref")
+        ]
+        answered = await asyncio.to_thread(main, [*vote[:2], "other", *vote[2:]])
+        votes = [[event.gist async for event in one.events() if event.type == "ballot.voted"] for one in (named, byref)]
         held = [entry["name"] for entry in await plain.ops() if entry["name"].startswith("ballot.")]
 
     assert refused == REFUSED and said.out == ""
@@ -347,8 +359,9 @@ async def test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_i
         "platoon-harness: refused not_found: session plain's team does not name the extension ballot, so it holds none "
         "of its ops: a team names its extensions in `extensions`, and this one names none\n"
     )
-    assert ran == 0 and json.loads(capsys.readouterr().out) == {"choice": "yes"}
-    assert votes == ["a vote for yes"] and held == []
+    assert ran == [(0, {"choice": "yes"})] * 2
+    assert votes == [["a vote for yes"]] * 2 and held == []
+    assert answered == REFUSED and capsys.readouterr().err == "platoon-harness: refused not_found: no such op\n"
 
 
 def test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_before_any_import(

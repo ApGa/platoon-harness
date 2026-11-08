@@ -431,8 +431,8 @@ def derived(
 ) -> Callable[..., Awaitable[int]]:
     """A command made from a schema as an op's is: the session, then a flag per field, with `doc` in a person's words as
     its help. `run` takes the session, attached on a view credential if it `reads`, the arguments, and the flags as
-    given. A session whose team does not name `extension`, where one is given, is refused before anything is asked of
-    it."""
+    given. A session whose team does not name `extension`, where one is given and its manifest settles it, is refused
+    before anything is asked of it."""
     schema = input.model_json_schema()
     fields = _fields(schema)
 
@@ -454,11 +454,14 @@ def derived(
 
 
 def _refuse_unnamed(session: str, extension: str) -> None:
-    """Refuse a session whose team does not name `extension`, as its manifest records, saying so: installing activates
-    nothing, so only such a session holds the extension's ops."""
+    """Refuse a session whose team does not name `extension`, where its manifest settles it, saying so: installing
+    activates nothing, so only such a session holds the extension's ops. A team that names an extension by
+    `module:attr` records that reference, which says what extension it is only once imported, so then the session's
+    runtime answers, as it answers any op."""
     components = Manifest.model_validate_json((session_folder(find_root(), session) / MANIFEST).read_bytes()).components
-    named = [component.name for component in components if component.group == EXTENSIONS]
-    if extension not in named:
+    extensions = [component for component in components if component.group == EXTENSIONS]
+    named = [component.name for component in extensions]
+    if extension not in named and all(component.distribution is not None for component in extensions):
         names = ", ".join(named) or "none"
         what = f"session {session}'s team does not name the extension {extension}, so it holds none of its ops"
         raise Refused("not_found", f"{what}: a team names its extensions in `extensions`, and this one names {names}")

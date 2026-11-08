@@ -16,10 +16,12 @@ runs one of the SDK's: `ph ballot.cast --agent @author --choice yes` is `platoon
 --choice yes`. The command line finds installed extensions from metadata, imports only the one its first word names, and
 makes that extension's commands as it makes the SDK's, a command per op a person may run, with a flag per argument and the
 op's description as its help. Before anything is asked of the session, the command reads the session's manifest, and a
-session whose team does not name the extension is refused, saying so, as it holds none of its ops. An extension whose name
-is one of the command line's own commands gets no group: discovery refuses it from metadata, before any import, and says
-why on stderr. `--help` lists each installed extension under Installed extensions, from metadata, importing none. That an
-installed extension's op gets a command at all is the plan's default for an owner question the owner has not ruled on.
+session whose team, as the manifest records it, does not name the extension is refused, saying so, as it holds none of its
+ops; where a team names an extension by `module:attr`, the manifest cannot say which it is, and the session's runtime
+answers. An extension whose name is one of the command line's own commands gets no group: discovery refuses it from
+metadata, before any import, and says why on stderr. `--help` lists each installed extension under Installed extensions,
+from metadata, importing none. That an installed extension's op gets a command at all is the plan's default for an owner
+question the owner has not ruled on.
 
 ## Motivation
 
@@ -81,16 +83,22 @@ An extension that gives no op a person may run, as the SDK's `bwrap` gives none,
 
 A session holds an extension's ops only when its team names that extension, so before an extension's command attaches,
 stores a body or asks anything, it reads the session's `manifest.json`, whose components record each extension the team
-names, by name. A session whose team does not name the group's extension is refused `not_found`, with exit 1, as any
-refused command is, saying which extensions its team names:
+names, as the team names it. A session whose team, by those records, does not name the group's extension is refused
+`not_found`, with exit 1, as any refused command is, saying which extensions its team names:
 
 ```text
 platoon-harness: refused not_found: session plain's team does not name the extension ballot, so it holds none of its ops: a
 team names its extensions in `extensions`, and this one names none
 ```
 
-The check is by name, as a runtime loads an extension by the name its team gives each time it starts. A session whose team
-names it runs the op as any command runs one, on its runtime, which checks the arguments against the op it loaded.
+The manifest settles it where the team names each of its extensions by its entry point's name, `ballot` or `ballot@0.1.0`,
+which the manifest records as `ballot`, with the distribution that defines it. A team may also name one by `module:attr`,
+from a layer it trusts, as [architecture section 17](../architecture.md#17-extensions-and-configuration) says, and the
+manifest records that reference alone, which says what extension it is only once imported. So where a team names any by
+`module:attr`, the command line refuses nothing itself, and the session's runtime answers, as it answers any op: it runs the
+op where the reference is the extension, and where not refuses it `not_found`, `no such op`, after the command has stored
+any body it takes. A session whose team names it runs the op as any command runs one, on its runtime, which checks the
+arguments against the op it loaded.
 
 ### 4. Refused at discovery if its name is a built-in group
 
@@ -142,7 +150,7 @@ arguments against the op it holds, and refuses `invalid` what does not fit.
 | Make the flags from the session's `ops.list` | The parser is built before the session is read, and `--help` has no session |
 | A prefix of its own, `platoon-harness x ballot cast` | Collides with nothing, but no reader would guess it, and the command would no longer be the `ph` form split at its dot |
 | Let an extension take a built-in's name, or the built-in win silently | One shadows a command the reference documents; the other leaves an installed extension with no command and nothing said |
-| Ask the session, through `ops.list`, whether it holds the op | Attaches first, and a body would be stored before the refusal; the manifest says the same and asks nothing of the session |
+| Ask the session, through `ops.list`, whether it holds the op | Attaches first, and a body would be stored before the refusal; the manifest says the same wherever it settles it, and asks nothing of the session |
 | Doing nothing | An extension's op runs from the SDK, MCP, `ph` and both palettes, and from a shell or CI only through Python |
 
 ## Consequences
@@ -176,8 +184,9 @@ arguments against the op it holds, and refuses `invalid` what does not fit.
 
 - `tests/unit/cli/test_commands.py`, on fake distributions on `sys.path`, each whose module is not to be imported raising
   as it is: `test_an_installed_extension_s_group_loads_only_that_extension`,
-  `test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_is_refused_saying_why`, on two live sessions with
-  the command run as `main` in a thread of its own,
+  `test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_is_refused_saying_why`, on four live sessions with
+  the command run as `main` in a thread of its own, one whose team names the extension by `module:attr` running it and one
+  whose team names another by `module:attr` refused by its runtime,
   `test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_before_any_import` and
   `test_help_lists_installed_extensions_from_metadata_without_importing_them`.
 - `tests/integration/test_installed_extensions.py`, slow, `test_the_sample_s_op_is_a_command_from_its_wheel`: the sample's
