@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **Labels for a team's work.** A team file's `[labels]` declares each label with the values it may take, such as a
+  `difficulty` and a `kind` of work, fixed for the team. `task.add` and `agent.spawn` take `labels`, at most one value for
+  each, and so do `Session.task_add`, `Session.spawn` and their commands; one outside the vocabulary is refused `invalid`,
+  saying what may be given, and they are recorded on `task.added` and `agent.spawned`. A tool that takes them shows a model
+  each label's values as an `enum`, and leaves the argument out where the team declares none. Before, nothing on the record
+  said what kind of work a task or a spawn was. This is step 1 of RFC 0078, a draft.
 - **A line copied in the terminal.** `/copy` sends the chosen line's text to the terminal as OSC 52: the line as the
   transcript shows it and, while it is open, the text it opens on, or its gist while that is still being read, which it
   says, each control shown as its escape, so what is pasted acts on no terminal. Whether it reaches the clipboard is the

@@ -7,8 +7,22 @@ from pydantic import BaseModel, Field
 from platoon_harness.kernel import Args, Event, Refused, Timer, Txn, View, fold, op
 
 from .channels import Channel, Channels
-from .common import DIGEST_ITEMS, BasedOn, Body, Exposed, Gist, Name, Seq, address, cited, expose_read, fitted
+from .common import (
+    DIGEST_ITEMS,
+    BasedOn,
+    Body,
+    Exposed,
+    Gist,
+    Labels,
+    Name,
+    Seq,
+    address,
+    cited,
+    expose_read,
+    fitted,
+)
 from .messages import announce
+from .sessions import labelled
 
 TaskState = Literal["open", "claimed", "done", "failed", "dead"]
 
@@ -217,6 +231,7 @@ class Add(Args):
     queue: QueueName
     gist: Gist
     body: Body = None
+    labels: Labels = {}
     based_on: BasedOn = ()
 
 
@@ -226,10 +241,11 @@ def add(txn: Txn, a: Add) -> dict[str, Any]:
     may not write this queue, and `not_found` when no such queue exists. Call `channel.list` to see yours."""
     channel = _queue(txn, a.queue)
     id = str(txn.view(Tasks).count(a.queue) + 1)
-    data = {"queue": a.queue, "task": id, "body": a.body}
+    data = {"queue": a.queue, "task": id, "body": a.body, "labels": labelled(txn, a.labels)}
     refs = [a.body] if a.body else ()
     based_on = cited(txn, a.based_on)
-    event = txn.emit("task.added", f"task/{a.queue}/{id}", gist=a.gist, based_on=based_on, refs=refs, data=data)
+    stream = f"task/{a.queue}/{id}"
+    event = txn.emit("task.added", stream, gist=a.gist, based_on=based_on, refs=refs, data=data, v=2)
     announce(txn, channel, a.gist, event)
     return {"task": id, "ref": f"{event.stream}@{event.version}"}
 

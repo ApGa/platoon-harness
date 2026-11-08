@@ -248,7 +248,7 @@ async def test_the_repository_is_recorded_once_at_open(repo, tmp_path):
         tips = (await session.get_body(opened[0].data["repo"]["tips"])).decode()
 
     record = opened[0].data["repo"]
-    assert len(opened) == 1 and opened[0].v == 2
+    assert len(opened) == 1 and opened[0].v == 3
     assert record | {"tips": None} == {
         "name": "repo",
         "top": str(repo),

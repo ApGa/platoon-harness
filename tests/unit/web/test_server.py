@@ -985,6 +985,7 @@ async def test_the_page_is_given_each_write_op_s_form_worded_as_the_command_line
     assert shapes["agent.spawn"][3:] == [
         ("--body", "body", [], False, None),
         ("--stays", "yes-no", [], False, None),
+        ("--labels", "json", [], False, None),
         ("--based-on", "list", [], False, []),
     ]
 

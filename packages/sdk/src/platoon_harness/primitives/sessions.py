@@ -1,6 +1,7 @@
 """The session record: what was resolved at open, journaled, and the state the session is in."""
 
 import json
+from collections.abc import Mapping
 from typing import Annotated, Any, Literal
 
 from pydantic import Field, JsonValue
@@ -53,7 +54,8 @@ class Repo(Args):
 class Settings(Args):
     """What a session states at open. `manifest` is a stored body. `repo` is None when the session's cwd is in no
     repository, and when a session opened before it was recorded, which is not observed. `test` is the command a
-    runtime test of a commit runs, or None when the team names none."""
+    runtime test of a commit runs, or None when the team names none. `labels` are its team's labels, each with the
+    values it may take, and none for a session opened before they were recorded, which had none."""
 
     roles: dict[Name, Role] = {}
     limits: Limits = Limits()
@@ -61,6 +63,7 @@ class Settings(Args):
     manifest: BodyRef | None = None
     repo: Repo | None = None
     test: tuple[str, ...] | None = None
+    labels: dict[Name, tuple[Name, ...]] = {}
 
 
 class SessionRecord(View):
@@ -113,13 +116,38 @@ def open_session(txn: Txn, a: Settings) -> None:
     if txn.view(SessionRecord).state() != "unopened":
         raise Refused("conflict", "this session is open")
     refs = [ref for ref in (a.manifest, None if a.repo is None else a.repo.tips) if ref is not None]
-    txn.emit("session.opened", "session", gist="session opened", data=a, refs=refs, v=2)
+    txn.emit("session.opened", "session", gist="session opened", data=a, refs=refs, v=3)
 
 
 @op("session.manifest", query=True)
 def show_manifest(txn: Txn, a: Args) -> dict[str, Any]:
     """Name the stored manifest of this session, which holds no secrets."""
     return {"manifest": txn.view(SessionRecord).settings().manifest}
+
+
+@op("session.labels", query=True, runtime=True)
+def show_labels(txn: Txn, a: Args) -> dict[str, list[str]]:
+    """Show the labels this session's team declares, each with the values it may take, which a tool that takes them
+    shows a model."""
+    return {name: list(values) for name, values in txn.view(SessionRecord).settings().labels.items()}
+
+
+def labelled(txn: Txn, labels: Mapping[str, str]) -> dict[str, str]:
+    """Labels given to work, by name, once each is one this session's team declares and its value one that label may
+    take, or a refusal naming the first that is not and what may be given."""
+    declared = txn.view(SessionRecord).settings().labels
+    for name, value in labels.items():
+        if name not in declared:
+            known = f"its labels are {', '.join(declared)}" if declared else "it declares none"
+            raise Refused("invalid", f"this team has no label {name}: {known}")
+        if value not in declared[name]:
+            raise Refused("invalid", f"{name} takes {_either(declared[name])}, and not {value}")
+    return dict(sorted(labels.items()))
+
+
+def _either(values: tuple[str, ...]) -> str:
+    *rest, last = values
+    return f"{', '.join(rest)} or {last}" if rest else last
 
 
 class OpenEpisode(Args):

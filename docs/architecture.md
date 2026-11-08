@@ -377,7 +377,7 @@ as a hash outlives its bytes: `body.tombstone` takes a hash whether or not the j
 
 An event's **maker** is its actor, and for an event the runtime writes, the agent it is about. A commit's maker is the agent whose
 workspace its reflog names, and nobody, None, for the shared workspace or when no single workspace did (§13). A write of content an
-agent makes carries that agent as its envelope agent, so its turn and context version are its maker's: `agent.spawned`, at payload
+agent makes carries that agent as its envelope agent, so its turn and context version are its maker's: `agent.spawned`, from payload
 version 3, names its spawner and not the child it starts.
 
 ### 5.4 Effects
@@ -630,7 +630,7 @@ to do next.
 | Evidence | `blob.get` | `exposure` `lineage` `uses` `contributors` `eligibility` `spans` `context.show` `interactions` |
 | Evidence, kernel | `body.tombstone` | |
 | Repository | `repo.test` `repo.diff` `repo.commit` | |
-| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` `repo.record` `repo.keep` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` |
+| Runtime only | `agent.start` `agent.instruct` `agent.report` `agent.conclude` `agent.retell` `agent.rest` `delivery.offer` `blob.offer` `approval.request` `effect.start` `effect.finish` `effect.fail` `effect.expire` `timer.clear` `runtime.start` `daemon.fail` `daemon.recover` `budget.lapse` `principal.add` `principal.issue` `principal.revoke` `grant.add` `grant.remove` `wait.release` `lease.expire` `session.open` `session.stop` `group.define` `repo.report` `repo.record` `repo.keep` | `agent.records` `effect.ready` `effect.list` `lease.due` `timer.next` `delivery.ready` `delivery.pending` `repo.looks` `blob.hash` `session.labels` |
 
 An agent's `board.get`, `board.query`, `message.read`, `task.list`, `blob.get` and `repo.commit` are commands; for a human or a
 program they run as queries and write nothing. `repo.test` and `repo.diff` are a person's or a program's acts, and never tools: each
@@ -782,6 +782,23 @@ One stream per task. States: `open → claimed → done | failed | dead`. A `fai
   one entry on `queue/<name>` or `board/<name>`, for whoever holds `task.claim` or `board.get`, so `coalesce`, hops and attention
   come with it. It announces work and never assigns it.
 - Exclusive ownership is **not** exactly-once execution. External effects cannot be fenced by us, and the docs say so.
+
+### Labels
+
+A team's `labels` are the vocabulary of its work: each label a name with the values it may take, fixed for the team and journaled
+at open on `session.opened` payload 3. `task.add` and `agent.spawn` take `labels`, at most one value for each label, and record them
+on `task.added` payload 2 and `agent.spawned` payload 4, by name, where an older payload reads as none.
+
+- **Checked.** A label the team does not declare, or a value its label does not take, refuses the whole op `invalid`, saying what
+  may be given, and a team that declares none refuses any. A person's, a program's and the runtime's work meets the same check.
+- **Optional.** A label left out is none: the agents a session starts have no creator to give one, and a creator unsure of one
+  leaves it out rather than guess. Whoever creates the work decides its labels then, and nothing changes them after.
+- **Shown as the values allowed.** A tool that takes `labels` shows each label with its values as an `enum`, and no other key, and
+  says them in its description, which `ph` shows; where the team declares none, the argument is left out (§10).
+- **No reader is shown them.** `task.claim` and `task.list` show a task as they did: labels are for the record and the training
+  system that reads it.
+
+See [RFC 0078](rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md).
 
 ### Refs and citations
 
@@ -1331,6 +1348,8 @@ against the official client and against each real harness.
 - Coordination state uses explicit handles (`cursor`, `lease`, `version`). No session semantics.
 - A body argument is offered as a string of text. Ingress stores it and puts the hash in its place before `submit`, as ingress
   already stores bodies first, so a model never handles a hash it has to make.
+- A `labels` argument shows each label its team declares with the values it may take, as an `enum`, so a model picks from them,
+  and is left out where the team declares none (§7). The tool plane reads them with `session.labels`, a query kept to the runtime.
 - JSON replies, no SSE, no sessions; `GET` and `DELETE` return 405, and `server/discover` returns -32601. Claude Code and Codex, the
   HTTP clients that have met it, connect through `initialize`, Claude Code after that fallback. We do not claim the stateless 2026-07-28 revision, so a client that speaks
   only that revision cannot connect yet. Undeclared arguments return a tool result with `isError: true`, because clients forward them.

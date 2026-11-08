@@ -54,6 +54,16 @@ def _template(text: str) -> str:
 Template = Annotated[str, AfterValidator(_template)]
 """A preamble template, whose every slot is one the runtime fills."""
 
+
+def _once_each(values: tuple[str, ...]) -> tuple[str, ...]:
+    if twice := sorted({value for value in values if values.count(value) > 1}):
+        raise ValueError(f"a label takes each value once, and {', '.join(twice)} is given twice")
+    return values
+
+
+Values = Annotated[tuple[Name, ...], Field(min_length=1), AfterValidator(_once_each)]
+"""The values a label may take, in the order a model is shown them."""
+
 __all__ = [
     "AuthProfile",
     "Budget",
@@ -148,7 +158,8 @@ class Role(Model):
 class Team(Model):
     """Roles plus a topology. It says what may happen, never what happens next. `preamble` is the template of what every
     agent is told before its role's words, unless its role gives its own. `test` is what a runtime test of a commit
-    runs, if the team names one."""
+    runs, if the team names one. `labels` say what kinds of work it does: each label a name with the values it may
+    take, of which whoever adds a task or spawns an agent may give one for each label, and nothing outside them."""
 
     extensions: tuple[str, ...] = ()
     preamble: Template = PREAMBLE
@@ -157,6 +168,7 @@ class Team(Model):
     budget: Budget = Budget()
     topology: Topology = Topology()
     test: Test | None = None
+    labels: Annotated[Mapping[Name, Values], Sorted] = {}
 
     @field_validator("topology", mode="before")
     @classmethod

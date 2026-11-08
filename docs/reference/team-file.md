@@ -36,7 +36,8 @@ At the top level.
 
 Roles plus a topology. It says what may happen, never what happens next. `preamble` is the template of what every
 agent is told before its role's words, unless its role gives its own. `test` is what a runtime test of a commit
-runs, if the team names one.
+runs, if the team names one. `labels` say what kinds of work it does: each label a name with the values it may
+take, of which whoever adds a task or spawns an agent may give one for each label, and nothing outside them.
 
 | Key | Type | Default |
 |---|---|---|
@@ -47,6 +48,7 @@ runs, if the team names one.
 | `budget` | [Budget](#budget) | `{}` |
 | `topology` | [Topology](#topology) | `{}` |
 | `test` | [Test](#test) | none |
+| `labels` | lists of names, at least 1, by name | `{}` |
 
 ## Role
 

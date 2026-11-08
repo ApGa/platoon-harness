@@ -402,15 +402,14 @@ class Session:
         *,
         body: str | bytes | None = None,
         stays: bool | None = None,
+        labels: Mapping[str, str] | None = None,
         based_on: Sequence[str] = (),
     ) -> dict[str, Any]:
         """Start an agent in a role, and give its `ref`. With no `goal` and no `body` it starts idle until a message
         wakes it. `stays` says whether it is told to stay after its task for the next message, rather than to finish:
-        left out, its role decides, else it does not."""
-        stored = await self._stored(body)
-        return await self._do(
-            "agent.spawn", name=name, child_role=role, goal=goal, body=stored, stays=stays, based_on=based_on
-        )
+        left out, its role decides, else it does not. `labels` say what kind of work it is to do, by the team's."""
+        args = {"goal": goal, "body": await self._stored(body), "stays": stays, "labels": dict(labels or {})}
+        return await self._do("agent.spawn", name=name, child_role=role, **args, based_on=based_on)
 
     async def status(self, agent: str | None = None) -> dict[str, Any]:
         """How this session stands, or one agent."""
@@ -655,10 +654,17 @@ class Session:
     # Queues.
 
     async def task_add(
-        self, queue: str, gist: str, *, body: str | bytes | None = None, based_on: Sequence[str] = ()
+        self,
+        queue: str,
+        gist: str,
+        *,
+        body: str | bytes | None = None,
+        labels: Mapping[str, str] | None = None,
+        based_on: Sequence[str] = (),
     ) -> dict[str, Any]:
-        """Add a task to a queue."""
-        return await self._do("task.add", queue=queue, gist=gist, body=await self._stored(body), based_on=based_on)
+        """Add a task to a queue. `labels` say what kind of task it is, by the team's."""
+        args = {"gist": gist, "body": await self._stored(body), "labels": dict(labels or {})}
+        return await self._do("task.add", queue=queue, **args, based_on=based_on)
 
     async def task_claim(self, queue: str, *, task: str | None = None) -> dict[str, Any]:
         return await self._do("task.claim", queue=queue, task=task)

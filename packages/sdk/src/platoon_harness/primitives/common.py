@@ -36,6 +36,10 @@ BodyRef = Annotated[str, Field(pattern=BODY_REF)]
 Body = Annotated[BodyRef | None, Field(description="Anything longer than the gist.")]
 Seq = Annotated[int, Field(ge=0, lt=2**63)]
 BasedOn = Annotated[tuple[str, ...], Field(description="Refs this write rests on.")]
+Labels = Annotated[
+    dict[Name, Name],
+    Field(description="What kind of work this is, by your team's labels, each with one of its values."),
+]
 Injection = Literal["pull", "next-turn", "wake", "steer"]
 Policy = Literal["ask", "deny", "allow"]
 

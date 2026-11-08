@@ -41,11 +41,22 @@ def checks() -> list[str] | None:
 
 
 @pytest.fixture
+def labels() -> dict[str, list[str]]:
+    """The labels the session's team declares, each with the values it may take."""
+    return {}
+
+
+@pytest.fixture
 async def kernel(
-    folder: Path, clock: ManualClock, limits: dict[str, int], repo: dict[str, Any] | None, checks: list[str] | None
+    folder: Path,
+    clock: ManualClock,
+    limits: dict[str, int],
+    repo: dict[str, Any] | None,
+    checks: list[str] | None,
+    labels: dict[str, list[str]],
 ) -> AsyncIterator[Kernel]:
     opened = Kernel.open(folder, clock=clock, extensions=PRIMITIVES)
-    settings: dict[str, Any] = {"roles": ROLES, "limits": limits, "test": checks}
+    settings: dict[str, Any] = {"roles": ROLES, "limits": limits, "test": checks, "labels": labels}
     if repo is not None:
         settings["repo"] = {**repo, "tips": f"sha256:{await opened.put_body(b'')}"}
     result_of(await opened.submit(opened.runtime, "session.open", settings))

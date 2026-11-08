@@ -5837,6 +5837,7 @@ PRIMITIVES = (
         ops=[
             sessions.open_session,
             sessions.show_manifest,
+            sessions.show_labels,
             lifecycle.session_status,
             lifecycle.session_ending,
             metrics.session_metrics,
@@ -6141,11 +6142,13 @@ class Settings(Args):
     manifest: BodyRef | None = None
     repo: Repo | None = None
     test: tuple[str, ...] | None = None
+    labels: dict[Name, tuple[Name, ...]] = {}
 ```
 
 What a session states at open. `manifest` is a stored body. `repo` is None when the session's cwd is in no
 repository, and when a session opened before it was recorded, which is not observed. `test` is the command a
-runtime test of a commit runs, or None when the team names none.
+runtime test of a commit runs, or None when the team names none. `labels` are its team's labels, each with the
+values it may take, and none for a session opened before they were recorded, which had none.
 
 ### `platoon_harness.primitives.SHORT_LIMIT`
 
@@ -8542,13 +8545,14 @@ async def spawn(
     *,
     body: str | bytes | None = None,
     stays: bool | None = None,
+    labels: Mapping[str, str] | None = None,
     based_on: Sequence[str] = (),
 ) -> dict[str, Any]: ...
 ```
 
 Start an agent in a role, and give its `ref`. With no `goal` and no `body` it starts idle until a message
 wakes it. `stays` says whether it is told to stay after its task for the next message, rather than to finish:
-left out, its role decides, else it does not.
+left out, its role decides, else it does not. `labels` say what kind of work it is to do, by the team's.
 
 **`status`**
 
@@ -8838,11 +8842,17 @@ Find objects on a board. Results carry exact refs and the true total.
 
 ```python
 async def task_add(
-    self, queue: str, gist: str, *, body: str | bytes | None = None, based_on: Sequence[str] = ()
+    self,
+    queue: str,
+    gist: str,
+    *,
+    body: str | bytes | None = None,
+    labels: Mapping[str, str] | None = None,
+    based_on: Sequence[str] = (),
 ) -> dict[str, Any]: ...
 ```
 
-Add a task to a queue.
+Add a task to a queue. `labels` say what kind of task it is, by the team's.
 
 **`task_claim`**
 
@@ -9319,11 +9329,13 @@ class Team(Model):
     budget: Budget = Budget()
     topology: Topology = Topology()
     test: Test | None = None
+    labels: Annotated[Mapping[Name, Values], Sorted] = {}
 ```
 
 Roles plus a topology. It says what may happen, never what happens next. `preamble` is the template of what every
 agent is told before its role's words, unless its role gives its own. `test` is what a runtime test of a commit
-runs, if the team names one.
+runs, if the team names one. `labels` say what kinds of work it does: each label a name with the values it may
+take, of which whoever adds a task or spawns an agent may give one for each label, and nothing outside them.
 
 **`loads`**
 

@@ -13,6 +13,9 @@
 - code: "--body"
 - textbox "--body":
   - /placeholder: ""
+- code: "--labels"
+- textbox "--labels":
+  - /placeholder: ""
 - code: "--based-on"
 - textbox "--based-on":
   - /placeholder: ""

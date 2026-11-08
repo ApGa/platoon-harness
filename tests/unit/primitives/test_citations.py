@@ -530,7 +530,7 @@ async def test_the_maker_of_a_spawn_is_its_spawner_in_its_spawner_s_turn(kernel)
     added = of_type(kernel, "principal.added")[-1]
     assert (spawned.agent, spawned.turn, maker(spawned)) == ("lead", "t7", "agent:lead")
     assert spawned.context_version == of_type(kernel, "turn.started")[-1].context_version
-    assert added.agent == "bob" and spawned.v == 3
+    assert added.agent == "bob" and spawned.v == 4
     assert (await send(kernel, lead, "@bob", "hello"))["ref"] == "inbox/bob@1"
 
 

@@ -985,6 +985,7 @@ For example:
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
 * `--stays, --no-stays`: Whether it stays after its task for the next message. Left out, its role decides, else it does not.
+* `--labels`: What kind of work this is, by your team's labels, each with one of its values. As JSON.
 * `--based-on`: Refs this write rests on.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 
@@ -1795,6 +1796,7 @@ For example:
 * `--gist`: What readers see first, at most 280 characters. **[required]**
 * `--body`: Anything longer than the gist. --body-file reads it from a file.
 * `--body-file`: A file whose bytes are the body.
+* `--labels`: What kind of work this is, by your team's labels, each with one of its values. As JSON.
 * `--based-on`: Refs this write rests on.
 * `--key`: Name this command, so that running it again with the same key is one operation.
 

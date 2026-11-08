@@ -101,6 +101,7 @@ PRIMITIVES = (
         ops=[
             sessions.open_session,
             sessions.show_manifest,
+            sessions.show_labels,
             lifecycle.session_status,
             lifecycle.session_ending,
             metrics.session_metrics,

@@ -275,6 +275,7 @@ platoon_harness.primitives.REPORTS
 platoon_harness.primitives.Seen
 platoon_harness.primitives.SessionRecord
 platoon_harness.primitives.Settings
+platoon_harness.primitives.Settings.labels
 platoon_harness.primitives.Settings.test
 platoon_harness.primitives.SHORT_LIMIT
 platoon_harness.primitives.Span
@@ -462,6 +463,7 @@ platoon_harness.team.Capabilities
 platoon_harness.team.Command
 platoon_harness.team.Role
 platoon_harness.team.Team
+platoon_harness.team.Team.labels
 platoon_harness.team.team_check
 platoon_harness.team.Team.recipients(to)
 platoon_harness.team.Team.spawners(role)

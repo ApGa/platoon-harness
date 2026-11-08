@@ -189,10 +189,34 @@ def _field(field: dict[str, Any], teach: Callable[[str], str]) -> dict[str, Any]
     return shown
 
 
-def _input_schema(schema: dict[str, Any], teach: Callable[[str], str]) -> dict[str, Any]:
-    """An op's schema as a model should see it: no titles or class text, and each body offered as text."""
+def _either(values: list[str]) -> str:
+    *rest, last = values
+    return f"{', '.join(rest)} or {last}" if rest else last
+
+
+def _labelled(field: dict[str, Any], teach: Callable[[str], str], labels: Mapping[str, list[str]]) -> dict[str, Any]:
+    """An argument that takes labels, as a model is shown it: each label its team declares with the values it may
+    take, so that a model picks from them, in its schema and in words, which `ph` shows."""
+    said = "; ".join(f"{name}, one of {_either(values)}" for name, values in labels.items())
+    return {
+        "type": "object",
+        "description": f"{teach(field['description'])} Its labels: {said}.",
+        "properties": {name: {"type": "string", "enum": values} for name, values in labels.items()},
+        "additionalProperties": False,
+    }
+
+
+def _input_schema(
+    schema: dict[str, Any], teach: Callable[[str], str], labels: Mapping[str, list[str]]
+) -> dict[str, Any]:
+    """An op's schema as a model should see it: no titles or class text, each body offered as text, and `labels` with
+    its team's values, or left out where its team declares none, as no value could fill it."""
     shown = {keyword: value for keyword, value in schema.items() if keyword not in ("title", "description")}
-    fields = {name: _field(field, teach) for name, field in schema.get("properties", {}).items()}
+    fields = {
+        name: _labelled(field, teach, labels) if name == "labels" else _field(field, teach)
+        for name, field in schema.get("properties", {}).items()
+        if name != "labels" or labels
+    }
     return {**shown, "properties": fields, "additionalProperties": False}
 
 
@@ -208,6 +232,14 @@ def _held(kernel: Kernel, principal: Principal) -> list[dict[str, Any]]:
     return [op for op in outcome.result if op["tool"]]
 
 
+def _labels(kernel: Kernel) -> dict[str, list[str]]:
+    """The labels a session's team declares, each with the values it may take."""
+    outcome = kernel.query(kernel.runtime, "session.labels", {})
+    if outcome.refusal is not None:
+        raise Refused(outcome.refusal.code, outcome.refusal.detail)
+    return outcome.result
+
+
 def list_tools(kernel: Kernel, principal: Principal, surface: Surface = tool_name) -> list[dict[str, Any]]:
     """What this principal holds, as MCP tools. `title` keeps the op's name, which is what `ph` goes by.
 
@@ -215,12 +247,13 @@ def list_tools(kernel: Kernel, principal: Principal, surface: Surface = tool_nam
     """
     tools = _held(kernel, principal)
     teach = _teacher(surface, kernel.ops, {op["name"] for op in tools})
+    labels = _labels(kernel) if any("labels" in op["schema"].get("properties", {}) for op in tools) else {}
     return [
         {
             "name": tool_name(op["name"]),
             "title": op["name"],
             "description": teach(op["description"]),
-            "inputSchema": _input_schema(op["schema"], teach),
+            "inputSchema": _input_schema(op["schema"], teach, labels),
             "annotations": {"readOnlyHint": op["query"]},
         }
         for op in tools

@@ -363,6 +363,9 @@ readers = "all"
 
 [topology.groups.crew]
 roles = ["worker"]
+
+[labels]
+kind = ["search", "design"]
 """
 
 
@@ -382,6 +385,14 @@ async def test_roles_limits_and_until_reach_the_session(opened):
     assert (worker["stays"], worker["persistent"]) == (True, True)
     assert event.data["roles"]["lead"]["stays"] is None
     assert set(worker["tools"]) == {"task.*", "wait", "ops.list"}
+
+
+async def test_a_team_s_labels_reach_the_session_with_their_values_in_its_order(opened):
+    kernel, *_ = await opened(full_team())
+
+    event = events_of(kernel, "session.opened")[0]
+    assert (event.v, event.data["labels"]) == (3, {"kind": ["search", "design"]})
+    assert query(kernel, "session.labels") == {"kind": ["search", "design"]}
 
 
 async def test_a_role_keeps_its_own_policy_unless_one_is_stated(opened):

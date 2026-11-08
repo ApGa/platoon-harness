@@ -203,7 +203,15 @@ def _settings(
     limits = team.topology.limits.model_dump()
     until = team.topology.until or "settled"
     test = None if team.test is None else team.test.command
-    return {"roles": roles, "limits": limits, "until": until, "manifest": f"sha256:{body}", "repo": repo, "test": test}
+    return {
+        "roles": roles,
+        "limits": limits,
+        "until": until,
+        "manifest": f"sha256:{body}",
+        "repo": repo,
+        "test": test,
+        "labels": {name: list(values) for name, values in team.labels.items()},
+    }
 
 
 def _channel(name: str, channel: Any) -> dict[str, Any]:

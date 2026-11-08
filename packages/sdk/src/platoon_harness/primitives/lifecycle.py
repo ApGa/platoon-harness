@@ -35,6 +35,7 @@ from .common import (
     BodyRef,
     Exposed,
     Gist,
+    Labels,
     Name,
     Paging,
     cited,
@@ -67,7 +68,7 @@ from .reports import (
     Usage,
     record_gap,
 )
-from .sessions import Repo, SessionRecord
+from .sessions import Repo, SessionRecord, labelled
 from .tasks import Tasks, bury_if_spent
 from .waits import Waits, close_holding
 
@@ -276,6 +277,7 @@ class Spawn(Args):
             "does not."
         ),
     ] = None
+    labels: Labels = {}
     based_on: BasedOn = ()
 
 
@@ -322,6 +324,7 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
         raise Refused(
             "unsupported", f"{a.child_role} runs a one-shot harness, which ends with its turn: it cannot stay"
         )
+    labels = labelled(txn, a.labels)
     _admit(txn, depth, parent)
     reserve(txn, a.name, a.child_role, turn=bool(a.goal or a.body), agents=1.0)
     spawned = txn.emit(  # A spawn is its spawner's, in its spawner's turn, and the child's own events are its own.
@@ -343,8 +346,9 @@ def spawn(txn: Txn, a: Spawn) -> dict[str, Any]:
             "on_parent_exit": role.on_parent_exit,
             "delivery": role.delivery,
             "inbox_depth": role.inbox_depth,
+            "labels": labels,
         },
-        v=3,
+        v=4,
     )
     principal = {"id": f"agent:{a.name}", "role": a.child_role, "parent": parent, "scopes": role.tools}
     txn.emit(
