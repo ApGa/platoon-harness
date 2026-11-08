@@ -255,7 +255,7 @@ def _prose(text: str) -> str:
 
 
 def _anchors(titles: list[str]) -> list[str]:
-    """The anchor GitHub gives each heading, in order, a repeated one numbered."""
+    """The anchor GitHub gives each heading, in the page's order, a repeated one numbered by the headings before it."""
     seen: dict[str, int] = {}
     found = []
     for title in titles:
@@ -282,7 +282,10 @@ def python_reference(root: Path) -> str:
         dotted: next((step for step in reversed(found.through[1:]) if step in definitions), None)
         for dotted, found in definitions.items()
     }
-    anchors = dict(zip(["Contents", *modules, *named], _anchors(["Contents", *modules, *named]), strict=True))
+    headings = ["Contents"]
+    for module, names in modules.items():
+        headings += [module, *(f"{module}.{name}" for name in names)]
+    anchors = dict(zip(headings, _anchors(headings), strict=True))
 
     def mark(dotted: str) -> list[str]:
         return [f"**Experimental.** [STATUS](../STATUS.md): {EXPERIMENTAL[dotted]}."] if dotted in EXPERIMENTAL else []

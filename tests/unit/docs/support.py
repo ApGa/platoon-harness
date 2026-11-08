@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[3]
 FENCE = re.compile(r"^\s*(```|~~~)")
+HEADING = re.compile(r"^#{1,6}\s+(?P<title>.+?)\s*#*$")
 
 
 def tracked(*patterns: str) -> list[Path]:
@@ -29,3 +30,21 @@ def prose(path: Path) -> list[tuple[int, str]]:
         elif not fenced:
             lines.append((number, line))
     return lines
+
+
+def slug(title: str) -> str:
+    """The anchor GitHub gives a heading."""
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", title).replace("`", "")
+    return re.sub(r"[^\w\- ]", "", text.strip().lower()).replace(" ", "-")
+
+
+def headings(path: Path) -> dict[str, str]:
+    """Each heading's title by the anchor GitHub gives it, a repeated one numbered by the headings before it."""
+    found: dict[str, str] = {}
+    seen: dict[str, int] = {}
+    for _, line in prose(path):
+        if heading := HEADING.match(line):
+            name = slug(heading["title"])
+            found[f"{name}-{seen[name]}" if name in seen else name] = heading["title"]
+            seen[name] = seen.get(name, 0) + 1
+    return found

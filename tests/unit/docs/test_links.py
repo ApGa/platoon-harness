@@ -4,11 +4,10 @@ table of contents links every page, and the security guide links the design of r
 import re
 from pathlib import Path
 
-from .support import ROOT, prose, tracked
+from .support import ROOT, headings, prose, tracked
 
 CODE_SPAN = re.compile(r"`[^`]*`")
 LINK = re.compile(r"\]\((?P<target>[^)\s]+)(?:\s+\"[^\"]*\")?\)")
-HEADING = re.compile(r"^#{1,6}\s+(?P<title>.+?)\s*#*$")
 HTML_ANCHOR = re.compile(r"<a (?:id|name)=\"(?P<anchor>[^\"]+)\"")
 SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:")
 CONTENTS = ROOT / "docs" / "README.md"
@@ -16,22 +15,11 @@ INDEXED = ("docs/research/", "docs/rfcs/")
 """Folders with a README.md of their own, which the table of contents links in place of their pages."""
 
 
-def slug(title: str) -> str:
-    """The anchor GitHub gives a heading."""
-    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", title).replace("`", "")
-    return re.sub(r"[^\w\- ]", "", text.strip().lower()).replace(" ", "-")
-
-
 def anchors(path: Path) -> set[str]:
     """One per heading, a repeated one numbered as GitHub numbers it, and each `<a id>`."""
-    found: set[str] = set()
-    seen: dict[str, int] = {}
+    found = set(headings(path))
     for _, line in prose(path):
         found.update(match["anchor"] for match in HTML_ANCHOR.finditer(line))
-        if heading := HEADING.match(line):
-            name = slug(heading["title"])
-            found.add(f"{name}-{seen[name]}" if name in seen else name)
-            seen[name] = seen.get(name, 0) + 1
     return found
 
 

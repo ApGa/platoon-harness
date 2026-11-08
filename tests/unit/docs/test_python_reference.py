@@ -9,7 +9,7 @@ import pytest
 
 from platoon_harness_cli.reference import EXPERIMENTAL, python_reference
 
-from .support import ROOT
+from .support import ROOT, headings
 
 PAGE = ROOT / "docs" / "reference" / "python.md"
 LISTED = ROOT / "tests" / "public_api.txt"
@@ -51,6 +51,17 @@ def test_the_python_reference_is_made_again_from_the_public_names():
 
     assert page == python_reference(ROOT)
     assert sorted(name for name, owned in owners.items() if not owned & headings) == []
+
+
+def test_each_link_within_the_page_lands_on_the_heading_it_names():
+    """GitHub numbers a repeated anchor by the headings before it, so `platoon_harness.Session`, whose heading comes
+    before its module's, `platoon_harness.session`, takes the anchor without a number, and a link to the module takes
+    the one with."""
+    landing = headings(PAGE)
+    linked = re.findall(r"\[(`[\w.]+`)\]\(#([\w-]+)\)", PAGE.read_text())
+
+    assert ("`platoon_harness.session`", "platoon_harnesssession-1") in linked
+    assert [(text, anchor, landing.get(anchor)) for text, anchor in linked if landing.get(anchor) != text] == []
 
 
 def test_every_module_status_calls_experimental_is_marked_so():
