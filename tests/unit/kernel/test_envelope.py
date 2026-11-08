@@ -14,8 +14,8 @@ async def mark(kernel, type, stream, *, principal=None, agent=None, **data):
     return result_of(await kernel.submit(principal or kernel.runtime, "note.mark", args))
 
 
-def test_txn_is_exactly_me_now_view_emit_effect():
-    assert {name for name in dir(Txn) if not name.startswith("_")} == {"me", "now", "view", "emit", "effect"}
+def test_txn_is_exactly_me_now_view_gauges_emit_effect():
+    assert {name for name in dir(Txn) if not name.startswith("_")} == {"me", "now", "view", "gauges", "emit", "effect"}
 
 
 def test_ops_cannot_pass_stamped_fields():

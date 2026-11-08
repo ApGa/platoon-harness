@@ -3,19 +3,23 @@
 import asyncio
 import fcntl
 import logging
+import math
 import os
 import queue
+import resource
 import sqlite3
+import sys
 import threading
-import time
+from bisect import bisect_left
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter, process_time
 from typing import Any
 
 from .journal import Checkpointer, scrub_wal, truncate_wal
-from .model import JournalError, Refused
+from .model import Gauges, JournalError, Refused
 from .pulse import Pulse, settle
 
 log = logging.getLogger("platoon_harness.kernel")
@@ -24,6 +28,9 @@ BATCH_LIMIT = 64
 PRINCIPAL_LIMIT = 32
 SESSION_LIMIT = 1024
 RUNTIME_RESERVE = 256
+ACK_BOUNDS = tuple(0.00001 * 2 ** (step / 4) for step in range(96))
+"""The upper bounds, in seconds, of the buckets an ack's latency is counted in: a quarter octave apart from 10 µs to
+about two minutes, past which one more bucket takes the rest."""
 
 
 @dataclass(frozen=True)
@@ -31,6 +38,23 @@ class _Job:
     run: Callable[[sqlite3.Connection], Any]
     future: asyncio.Future[Any]
     owner: str | None
+    queued: float
+
+
+def _rank(counts: Sequence[int], share: float, slowest: float) -> float:
+    """The latency below which `share` of the counted acks fall: the bound of the bucket that holds it, or the slowest
+    ack where that is lower."""
+    wanted, seen = math.ceil(share * sum(counts)), 0
+    for bound, count in zip((*ACK_BOUNDS, math.inf), counts, strict=True):
+        seen += count
+        if seen >= wanted:
+            return min(bound, slowest)
+    return slowest
+
+
+def _peak_resident_bytes() -> int | None:
+    """The most memory this process has held, which Linux gives in KiB. Elsewhere the unit is unchecked."""
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024 if sys.platform == "linux" else None
 
 
 class Writer:
@@ -57,7 +81,14 @@ class Writer:
         self._jobs: queue.SimpleQueue[_Job | None] = queue.SimpleQueue()
         self._lock = threading.Lock()
         self._depth = 0
-        self._inflight: Counter[str] = Counter()
+        self._deepest = 0
+        self._in_flight: Counter[str] = Counter()
+        self._busy = 0
+        self._began = perf_counter()
+        self._first = pulse.head
+        self._commits = 0
+        self._acks = [0] * (len(ACK_BOUNDS) + 1)
+        self._slowest = 0.0
         self._batch_seconds = 0.001
         self._stopping = False
         self.failure: JournalError | None = None
@@ -67,7 +98,7 @@ class Writer:
 
     async def call[T](self, run: Callable[[sqlite3.Connection], T], *, owner: str | None) -> T:
         """Run `run` on the writer thread and return once its transaction is durable."""
-        job = _Job(run, asyncio.get_running_loop().create_future(), owner)
+        job = _Job(run, asyncio.get_running_loop().create_future(), owner, perf_counter())
         self._admit(job)
         return await job.future
 
@@ -81,20 +112,47 @@ class Writer:
             if self._stopping:
                 raise Refused("unavailable", "the kernel is closing")
             limit = SESSION_LIMIT + RUNTIME_RESERVE if reserved else SESSION_LIMIT
-            if self._depth >= limit or (not reserved and owner and self._inflight[owner] >= PRINCIPAL_LIMIT):
+            if self._depth >= limit or (not reserved and owner and self._in_flight[owner] >= PRINCIPAL_LIMIT):
+                self._busy += 1
                 raise Refused("busy", retry_after=(self._depth / BATCH_LIMIT + 1) * self._batch_seconds)
             self._depth += 1
+            self._deepest = max(self._deepest, self._depth)
             if owner:
-                self._inflight[owner] += 1
+                self._in_flight[owner] += 1
             self._jobs.put(job)
 
-    def _done(self, job: _Job) -> None:
+    def _done(self, job: _Job, answered: float) -> None:
+        latency = answered - job.queued
         with self._lock:
             self._depth -= 1
             if job.owner:
-                self._inflight[job.owner] -= 1
-                if not self._inflight[job.owner]:
-                    del self._inflight[job.owner]
+                self._in_flight[job.owner] -= 1
+                if not self._in_flight[job.owner]:
+                    del self._in_flight[job.owner]
+            self._acks[bisect_left(ACK_BOUNDS, latency)] += 1
+            self._slowest = max(self._slowest, latency)
+
+    def gauges(self) -> Gauges:
+        """What this writer has measured since it opened the journal, and what the process holding it has used."""
+        with self._lock:
+            depth, deepest, in_flight, busy = self._depth, self._deepest, dict(self._in_flight), self._busy
+            acks, slowest = list(self._acks), self._slowest
+        answered = sum(acks)
+        return Gauges(
+            seconds=perf_counter() - self._began,
+            events=self._pulse.head - self._first,
+            commits=self._commits,
+            depth=depth,
+            deepest=deepest,
+            in_flight=in_flight,
+            busy=busy,
+            acks=answered,
+            ack_p50=_rank(acks, 0.5, slowest) if answered else None,
+            ack_p99=_rank(acks, 0.99, slowest) if answered else None,
+            ack_max=slowest if answered else None,
+            cpu_seconds=process_time(),
+            peak_resident_bytes=_peak_resident_bytes(),
+        )
 
     def scrub(self) -> None:
         """Take erased bytes out of the WAL, or refuse `busy` while a reader holds them there."""
@@ -143,7 +201,7 @@ class Writer:
     def _commit(self, jobs: list[_Job]) -> None:
         """One batch, in one transaction. One that fails is no command's own, and what it left is unknown."""
         db = self._db
-        started = time.perf_counter()
+        started = perf_counter()
         results: list[Any] = []
         head = None
         try:
@@ -153,6 +211,7 @@ class Writer:
             sealed = self._seal(db)
             db.execute("COMMIT")
             head = sealed
+            self._commits += 1
         except BaseException as error:
             log.exception("batch of %d failed", len(jobs))
             self._roll_back()
@@ -161,14 +220,15 @@ class Writer:
                 self.failure = JournalError(f"{self._path}: a commit failed, so nothing more is recorded: {error}")
             self._pulse.close()
         self._answer(jobs, results, head)
-        self._batch_seconds = time.perf_counter() - started
+        self._batch_seconds = perf_counter() - started
 
     def _answer(self, jobs: list[_Job], results: list[Any], head: int | None) -> None:
         """Callers hear their acks before followers hear the head move, so what a caller does on its ack, such as ending
         live text an item replaced, is done before a follower on its loop looks. A command is out of flight before its
         caller hears, so one that sends again at once is not refused over what it has heard of."""
+        answered = perf_counter()
         for job in jobs:
-            self._done(job)
+            self._done(job, answered)
         woken = () if head is None else self._pulse.advance(head)
         acks = zip((job.future for job in jobs), results, strict=True)
         settle([*acks, *((waiter, None) for waiter in woken)])

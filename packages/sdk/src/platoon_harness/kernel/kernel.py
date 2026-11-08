@@ -44,6 +44,7 @@ from .model import (
     NAME_LIMIT,
     Delta,
     Event,
+    Gauges,
     JournalError,
     Outcome,
     Page,
@@ -317,7 +318,7 @@ class Kernel:
                 current = stream_version(db, target)
                 if current != command.expected_version:
                     raise Refused("conflict", {"expected": command.expected_version, "current": current})
-            txn = Txn(db, me, now, self._apply, command.native)
+            txn = Txn(db, me, now, self._apply, command.native, self.gauges)
             result = jsonable(operation.fn(txn, args))
             if len(canonical(result).encode()) > DATA_LIMIT:
                 raise Refused("invalid", f"result exceeds {DATA_LIMIT} bytes: store a body")
@@ -454,7 +455,8 @@ class Kernel:
                     raise Refused("unsupported", "this op is a command")
                 if operation.exposes and principal.kind == "agent":
                     raise Refused("unsupported", "an agent's read is a command, because it records exposure")
-                return command.answered(jsonable(operation.fn(Txn(db, me, self.clock.now()), decoded)))
+                txn = Txn(db, me, self.clock.now(), gauges=self.gauges)
+                return command.answered(jsonable(operation.fn(txn, decoded)))
         except Exception as error:
             return command.refused(self._as_refusal(error), target)
 
@@ -616,6 +618,11 @@ class Kernel:
     @property
     def read_only(self) -> bool:
         return self._writer is None
+
+    def gauges(self) -> Gauges | None:
+        """What this kernel has measured since it opened its journal for writing, as a runtime does as it starts, and
+        what its process has used. A read-only kernel measures nothing, so it has None."""
+        return None if self._writer is None else self._writer.gauges()
 
     def close(self) -> None:
         """Finish queued commands, checkpoint the WAL to empty, and let go of the lock. One a failed commit closed lets

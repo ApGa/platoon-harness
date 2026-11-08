@@ -221,7 +221,10 @@ answers only a command its journal answered under the same key, as any retry is 
 `follow`, which are not ops, raise `Refused`. `native` holds a backend's ids for one command, stamped on its events as evidence that
 no op reads, and a client draws by. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover(*drift)`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
-`push_delta(agent, text)`, `end_delta(agent, seq)`, `session_id`, `closed`, `failure` and `read_only`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
+`push_delta(agent, text)`, `end_delta(agent, seq)`, `session_id`, `closed`, `failure`, `read_only` and `gauges()`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
+`gauges()` is what the kernel has measured since it opened its journal for writing, the writer's depth, the commands in flight
+by principal, the writes refused `busy` and each write's ack latency, and what its process has used, as a `Gauges`; a read-only
+kernel measures nothing, so it has None (§16).
 `is_held(folder)` says whether a runtime holds a folder's lock, which is how anyone tells a session is live, `first(work, *rivals)`
 races awaitables and drops what lost, which is how anything here sleeps on two things, and `registry(extensions)` is the op table a
 kernel holding them has, its own ops among them, which a surface derives from before any session exists.
@@ -522,7 +525,8 @@ def claim(txn: Txn, a: Claim) -> Lease:
     ...
 ```
 
-`Txn` is what an op receives, and all an op receives: `me`, `now`, `view`, `emit`, `effect`. An op refuses by raising `Refused`,
+`Txn` is what an op receives, and all an op receives: `me`, `now`, `view`, `gauges`, `emit`, `effect`. `gauges()` reads what
+the kernel keeps in memory and the system keeps of its process, so an op that asks still waits on nothing. An op refuses by raising `Refused`,
 and checks a second object with `txn.view(Grants).authorize(txn.me, op, stream)`. `permits` asks the same question without
 refusing, and `Principals.select(me, relation)` lists who stands in a relation.
 

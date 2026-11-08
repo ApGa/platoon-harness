@@ -11,6 +11,7 @@ from .model import (
     DATA_LIMIT,
     GIST_LIMIT,
     Event,
+    Gauges,
     ModelRef,
     Outcome,
     Principal,
@@ -112,7 +113,7 @@ class Stamps(View):
 class Txn:
     """What an op receives, and all an op receives. Fixed for one command: `me` and `now`."""
 
-    __slots__ = ("_apply", "_db", "_fault", "_held", "_native", "me", "now")
+    __slots__ = ("_apply", "_db", "_fault", "_gauges", "_held", "_native", "me", "now")
 
     def __init__(
         self,
@@ -121,10 +122,12 @@ class Txn:
         now: float,
         apply: Callable[[Event], None] | None = None,
         native: Mapping[str, str] | None = None,
+        gauges: Callable[[], Gauges | None] | None = None,
     ):
         self._db = db
         self._apply = apply
         self._native = native
+        self._gauges = gauges
         self._held: tuple[Event, str] | None = None
         self._fault: BaseException | None = None
         self.me = me
@@ -133,6 +136,11 @@ class Txn:
     def view[V: View](self, view: type[V]) -> V:
         """Read a view inside this transaction."""
         return view(self._db)
+
+    def gauges(self) -> Gauges | None:
+        """What the kernel running this has measured of its writer and its process, as they stand now, or None from one
+        that holds no writer, which measures nothing."""
+        return None if self._gauges is None else self._gauges()
 
     def emit(
         self,

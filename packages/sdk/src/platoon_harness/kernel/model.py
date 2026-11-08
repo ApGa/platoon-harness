@@ -162,6 +162,34 @@ class Delta(BaseModel, frozen=True):
     ended: int | None = None
 
 
+class Gauges(BaseModel, frozen=True):
+    """What a kernel holding its journal for writing has measured since it opened it, as a runtime does as it starts,
+    and what the process holding it has used.
+
+    A write is what the writer takes: a command, a body or a rebuild. In `seconds` it committed `events` in `commits`
+    transactions, one fsync each. `depth` writes are queued or in the open transaction now, and at most `deepest` were;
+    `in_flight` counts the commands among them by principal, and `busy` the writes refused for want of room, which no
+    journal holds. `acks` writes were answered, each timed from joining the queue to its answer after the commit that
+    made it durable: `ack_p50` and `ack_p99` are read from buckets a quarter octave wide, so each is never below the
+    true one and at most 19% above it, or 10 µs, and each is None until a write has been answered. `cpu_seconds` is the
+    process's, user and system, since it started, and `peak_resident_bytes` the most memory it has held, None where the
+    system gives it in no unit checked here, which is anywhere but Linux."""
+
+    seconds: float
+    events: int
+    commits: int
+    depth: int
+    deepest: int
+    in_flight: dict[str, int]
+    busy: int
+    acks: int
+    ack_p50: float | None
+    ack_p99: float | None
+    ack_max: float | None
+    cpu_seconds: float
+    peak_resident_bytes: int | None
+
+
 class Principal(BaseModel, frozen=True):
     """An authenticated actor. The id is `runtime`, or `<kind>:<name>`."""
 

@@ -168,13 +168,55 @@ async def test_a_command_is_out_of_flight_before_its_caller_hears_of_it(kernel, 
     real, in_flight = writer.settle, []
 
     def settling(outcomes):
-        in_flight.append(sum(kernel._writer._inflight.values()))
+        gauges = kernel.gauges()
+        assert gauges is not None
+        in_flight.append(sum(gauges.in_flight.values()))
         real(outcomes)
 
     monkeypatch.setattr(writer, "settle", settling)
     result_of(await kernel.submit(kernel.runtime, "note.add", {}))
 
     assert in_flight == [0]
+
+
+async def test_the_writer_reports_its_depth_in_flight_and_ack_latency_by_public_names(folder, clock, gate, monkeypatch):
+    """`Kernel.gauges`: what is queued now and whose, the most there were, the writes refused `busy`, and how long each
+    write waited for its answer, a percentile read from the bucket that holds it. A read-only kernel has none."""
+    now = [100.0]
+    monkeypatch.setattr(writer, "perf_counter", lambda: now[0])
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes, gate.extension()])
+    fresh = kernel.gauges()
+    held = await hold_writer(kernel, gate)
+    tasks = [asyncio.create_task(kernel.submit(HUMAN, "note.silence", {})) for _ in range(PRINCIPAL_LIMIT)]
+    await asyncio.sleep(0)
+    assert refusal_of(await kernel.submit(HUMAN, "note.silence", {})) == "busy"
+    during = kernel.gauges()
+    now[0] = 100.003
+    gate.release.set()
+    await asyncio.gather(held, *tasks)
+    gate.entered.clear()
+    gate.release.clear()
+    now[0] = 200.0
+    held = await hold_writer(kernel, gate)
+    now[0] = 200.5
+    gate.release.set()
+    await held
+    after = kernel.gauges()
+    kernel.close()
+    closed = Kernel.open(folder, clock=clock, extensions=[notes, gate.extension()], read_only=True)
+
+    assert fresh is not None and during is not None and after is not None
+    assert (fresh.depth, fresh.in_flight, fresh.acks, fresh.events, fresh.commits) == (0, {}, 0, 0, 0)
+    assert fresh.ack_p50 is fresh.ack_p99 is fresh.ack_max is None
+    assert (during.depth, during.deepest, during.busy) == (PRINCIPAL_LIMIT + 1, PRINCIPAL_LIMIT + 1, 1)
+    assert during.in_flight == {"runtime": 1, HUMAN.id: PRINCIPAL_LIMIT}
+    assert (after.depth, after.in_flight, after.deepest, after.busy) == (0, {}, PRINCIPAL_LIMIT + 1, 1)
+    assert (after.acks, after.events, after.commits) == (PRINCIPAL_LIMIT + 2, PRINCIPAL_LIMIT + 2, 3)
+    assert after.seconds == 100.5
+    assert 0.003 <= after.ack_p50 < 0.003 * 2 ** (1 / 4) and after.ack_p99 == after.ack_max == 0.5
+    assert after.cpu_seconds > 0 and (after.peak_resident_bytes or 0) > 0
+    assert closed.gauges() is None
+    closed.close()
 
 
 async def test_runtime_principals_have_reserved_capacity(kernel, gate):

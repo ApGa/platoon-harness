@@ -151,6 +151,8 @@ platoon_harness.kernel.Filesystem
 platoon_harness.kernel.first
 platoon_harness.kernel.fold
 platoon_harness.kernel.DATA_LIMIT
+platoon_harness.kernel.Gauges
+platoon_harness.kernel.Gauges(*,seconds,events,commits,depth,deepest,in_flight,busy,acks,ack_p50,ack_p99,ack_max,cpu_seconds,peak_resident_bytes)
 platoon_harness.kernel.GIST_LIMIT
 platoon_harness.kernel.Grant
 platoon_harness.kernel.Grants
