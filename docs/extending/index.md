@@ -111,8 +111,9 @@ owns, and [architecture §14](../architecture.md#14-training) is its design.
 - **Names follow the law.** Ops are imperative, `<extension>.<verb>`, events are past tense, and a driver's name is the
   command you type ([the naming law](../architecture.md#naming-law)).
 - **Prove it.** `check_driver` and `check_extension`, from `platoon_harness.testing`, hold a driver and an extension to
-  what the SDK's own keep, and report every failure at once
-  ([conformance](drivers.md#conformance), [check it](extensions.md#11-check-it)). A skip is never a pass.
+  what the SDK's own keep, and report every failure their checks find at once, and a check that could not run as a
+  skip, saying why ([conformance](drivers.md#conformance), [check it](extensions.md#11-check-it)). A skip is never a
+  pass.
 
 [Architecture §3](../architecture.md#3-laws) states each law, with the test of its name.
 

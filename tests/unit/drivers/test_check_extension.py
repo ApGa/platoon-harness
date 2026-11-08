@@ -140,6 +140,57 @@ async def test_every_failure_comes_at_once(tmp_path):
     )
 
 
+@op("task.done", tool=True)
+def done(txn: Txn, a: Bare) -> None:
+    """Mark it done."""
+
+
+@op("ballot.counted", tool=True)
+def counted(txn: Txn, a: Bare) -> None:
+    """Count the votes."""
+
+
+class Tasks(View):
+    """A view by the name of the primitives' queue."""
+
+    schema = "CREATE TABLE v_ballot_tasks(id TEXT PRIMARY KEY) STRICT;"
+
+
+@pytest.mark.parametrize(
+    ("extension", "fault", "other"),
+    [
+        (Extension("task", ops=[done]), "names", "naming_law"),
+        (Extension("ballot", ops=[counted], views=[Tasks]), "naming_law", "names"),
+    ],
+)
+async def test_a_check_that_could_not_run_is_never_passed(tmp_path, extension, fault, other):
+    """The kernel stops loading an extension at its first fault, here a name a primitive holds before an op in the past
+    tense, and that op before a view of a primitive's name, so the other of `names` and `naming_law` did not finish,
+    and no view was live to compare with a rebuild: each is a skip, saying why. The checks that need no kernel run."""
+    result = await check_extension(extension, folder=tmp_path / "s", scenario=vote)
+
+    assert states(result) == {
+        fault: "failed",
+        other: "skipped",
+        "schemas": "failed",
+        "descriptions": "failed",
+        "public_api_only": "passed",
+        "rebuild_equals_live": "skipped",
+    }
+    assert result.get(other).reason == f"the kernel stopped loading it at a {fault} fault, so this did not finish"
+    assert result.get("rebuild_equals_live").reason.startswith("the kernel refuses to load it")
+    assert not (tmp_path / "s").exists()
+
+
+async def test_a_folder_no_kernel_can_open_is_refused_rather_than_read_as_a_check(tmp_path):
+    held = Kernel.open(tmp_path / "s")
+    try:
+        with pytest.raises(Refused, match="another runtime holds"):
+            await check_extension(Extension("ballot", ops=[cast]), folder=tmp_path / "s")
+    finally:
+        held.close()
+
+
 async def test_a_view_that_differs_from_its_rebuild_fails(tmp_path):
     Drifting.calls = 0
 

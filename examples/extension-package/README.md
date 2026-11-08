@@ -97,9 +97,9 @@ opens where the page's address names it, `#provenance=<ref>`.
 
 ## 5. Check it
 
-`check_extension`, from `platoon_harness.testing`, holds an extension to what a core primitive keeps to, every failure at
-once: see [Check it](../../docs/extending/extensions.md#11-check-it). This one passes, and the result names what no check
-runs, its preset: nothing in it says the topology `pair_review` returns is valid.
+`check_extension`, from `platoon_harness.testing`, holds an extension to what a core primitive keeps to, every failure its
+checks find at once: see [Check it](../../docs/extending/extensions.md#11-check-it). This one passes, and the result names
+what no check runs, its preset: nothing in it says the topology `pair_review` returns is valid.
 
 ## How the tests hold it
 

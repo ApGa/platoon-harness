@@ -296,8 +296,8 @@ come with the first extension that needs it, by an RFC
 ## 11. Check it
 
 `check_extension`, from `platoon_harness.testing`, loads an extension beside the SDK's own primitives and holds it to what
-they keep to, reporting every failure at once. A script, `check.py`, checks `ballot`, with a scenario that casts two votes
-on a live kernel:
+they keep to, reporting every failure its checks find at once, and a check that could not run as a skip, saying why. A
+script, `check.py`, checks `ballot`, with a scenario that casts two votes on a live kernel:
 
 <!-- check.py -->
 ```python
@@ -356,6 +356,9 @@ that failed and why.
 
 What it does not check:
 
+- **A second fault in loading.** The kernel stops loading an extension at its first fault, so where `names` or
+  `naming_law` fails, the other is a skip that says loading stopped short of it, as is `rebuild_equals_live`, since no
+  view was live. The other checks need no kernel, and run. Fix the fault and check again.
 - **Its daemons, its presets and its isolation.** It runs none, and names each in `unchecked`, saying what that leaves
   unknown: what a daemon does and which effects it performs, whether a preset's topology is valid, and whether an
   isolation confines. So a pass never reads as more than ran: the SDK's `bwrap` passes, and its result says that

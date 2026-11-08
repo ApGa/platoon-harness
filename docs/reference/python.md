@@ -9071,9 +9071,11 @@ only its own checks.
 async def check_extension(extension: Extension, *, folder: Path, scenario: Scenario | None = None) -> ExtensionChecks: ...
 ```
 
-Load an extension beside the primitives and report every problem at once, and each part no check runs.
-`scenario` runs some of it on a live kernel, so that its views can be compared with a rebuild. Without one that
-check is skipped, which is no pass.
+Load an extension beside the primitives and report every problem the checks find at once, and each part no check
+runs. `scenario` runs some of it on a live kernel in `folder`, so that its views can be compared with a rebuild. A
+check that could not run is skipped, saying why, which is no pass: `rebuild_equals_live` with no scenario or where
+the kernel refuses the extension, and, as the kernel stops loading at its first fault, the other of `names` and
+`naming_law` where one fails. A folder no kernel can open is refused, as `Kernel.open` refuses it.
 
 ### `platoon_harness.testing.check_harness`
 

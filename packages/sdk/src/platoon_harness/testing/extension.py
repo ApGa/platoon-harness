@@ -9,12 +9,13 @@ from typing import Any
 
 from platoon_harness import kernel as kernel_package
 from platoon_harness.drivers.levels import Check, Checks
-from platoon_harness.kernel import Extension, Kernel, ManualClock, Op, Refused
+from platoon_harness.kernel import Extension, Kernel, ManualClock, Op, Refused, registry
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.tools.surface import OP_NAMED
 from platoon_harness.topology import preset_name
 
 _JOURNAL = "journal.sqlite"
+_LOADING = ("names", "naming_law")
 
 Scenario = Callable[[Kernel], Awaitable[Any]]
 
@@ -82,7 +83,7 @@ def _private_uses(source: str) -> Iterator[str]:
                     yield f"{Path(source).name} imports {alias.name}, which the kernel does not publish"
 
 
-def _tool_problems(tool: Op, loaded: Iterable[str]) -> Iterator[str]:
+def _tool_problems(tool: Op) -> Iterator[str]:
     schema = tool.input.model_json_schema()
     if schema.get("additionalProperties") is not False:
         yield f"{tool.name} lets undeclared arguments through"
@@ -91,12 +92,12 @@ def _tool_problems(tool: Op, loaded: Iterable[str]) -> Iterator[str]:
         yield f"{tool.name} does not describe {', '.join(bare)}"
 
 
-def _description_problems(tool: Op, loaded: Iterable[str]) -> Iterator[str]:
+def _description_problems(tool: Op, known: Iterable[str]) -> Iterator[str]:
     text = tool.fn.__doc__ or ""
     if "Refused" not in text:
         yield f"{tool.name} does not say what a refusal means"
     for name in OP_NAMED.findall(text):
-        if "." in name and name not in loaded:
+        if "." in name and name not in known:
             yield f"{tool.name} names {name}, which is not an op"
 
 
@@ -115,30 +116,44 @@ def _verdict(name: str, problems: Iterable[str]) -> Check:
     return Check(name=name, state="failed", reason="; ".join(found)) if found else Check(name=name, state="passed")
 
 
-async def check_extension(extension: Extension, *, folder: Path, scenario: Scenario | None = None) -> ExtensionChecks:
-    """Load an extension beside the primitives and report every problem at once, and each part no check runs.
-    `scenario` runs some of it on a live kernel, so that its views can be compared with a rebuild. Without one that
-    check is skipped, which is no pass."""
-    tools = [operation for operation in extension.ops if operation.tool]
-    unchecked = tuple(_unchecked(extension))
+def _loading(extension: Extension) -> list[Check]:
+    """`names` and `naming_law`, as the kernel loads `extension` beside the primitives. It stops at its first fault, so
+    where it refuses, the check that fault is not of did not finish."""
     try:
-        kernel = Kernel.open(folder, clock=ManualClock(1000.0), extensions=(*PRIMITIVES, extension))
+        registry((*PRIMITIVES, extension))
     except Refused as refused:
-        reason = str(refused.refusal.detail)
-        names = Check(name="names", state="failed" if refused.refusal.code == "conflict" else "passed", reason=reason)
-        law = Check(name="naming_law", state="failed" if refused.refusal.code == "invalid" else "passed", reason=reason)
-        return ExtensionChecks(checks=(names, law), unchecked=unchecked)
-    checks = [Check(name="names", state="passed"), Check(name="naming_law", state="passed")]
-    checks.append(_verdict("schemas", (problem for tool in tools for problem in _tool_problems(tool, kernel.ops))))
-    descriptions = (problem for tool in tools for problem in _description_problems(tool, kernel.ops))
+        fault = "names" if refused.refusal.code == "conflict" else "naming_law"
+        failed = Check(name=fault, state="failed", reason=str(refused.refusal.detail))
+        unfinished = f"the kernel stopped loading it at a {fault} fault, so this did not finish"
+        return [failed if name == fault else Check(name=name, state="skipped", reason=unfinished) for name in _LOADING]
+    return [Check(name=name, state="passed") for name in _LOADING]
+
+
+async def check_extension(extension: Extension, *, folder: Path, scenario: Scenario | None = None) -> ExtensionChecks:
+    """Load an extension beside the primitives and report every problem the checks find at once, and each part no check
+    runs. `scenario` runs some of it on a live kernel in `folder`, so that its views can be compared with a rebuild. A
+    check that could not run is skipped, saying why, which is no pass: `rebuild_equals_live` with no scenario or where
+    the kernel refuses the extension, and, as the kernel stops loading at its first fault, the other of `names` and
+    `naming_law` where one fails. A folder no kernel can open is refused, as `Kernel.open` refuses it."""
+    tools = [operation for operation in extension.ops if operation.tool]
+    known = {*registry(PRIMITIVES), *(operation.name for operation in extension.ops)}
+    checks = _loading(extension)
+    loads = all(check.state == "passed" for check in checks)
+    checks.append(_verdict("schemas", (problem for tool in tools for problem in _tool_problems(tool))))
+    descriptions = (problem for tool in tools for problem in _description_problems(tool, known))
     checks.append(_verdict("descriptions", descriptions))
     private = (problem for source in sorted(_sources(extension)) for problem in _private_uses(source))
     checks.append(_verdict("public_api_only", private))
-    try:
-        checks.append(await _rebuild(kernel, folder, scenario))
-    finally:
-        kernel.close()
-    return ExtensionChecks(checks=tuple(checks), unchecked=unchecked)
+    if loads:
+        kernel = Kernel.open(folder, clock=ManualClock(1000.0), extensions=(*PRIMITIVES, extension))
+        try:
+            checks.append(await _rebuild(kernel, folder, scenario))
+        finally:
+            kernel.close()
+    else:
+        reason = "the kernel refuses to load it, so it has no live views to compare"
+        checks.append(Check(name="rebuild_equals_live", state="skipped", reason=reason))
+    return ExtensionChecks(checks=tuple(checks), unchecked=tuple(_unchecked(extension)))
 
 
 async def _rebuild(kernel: Kernel, folder: Path, scenario: Scenario | None) -> Check:

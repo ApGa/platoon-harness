@@ -1272,6 +1272,13 @@ named here is closed.
 
 ### Fixes
 
+- **`check_extension` reports a check that could not run as a skip, never a pass.** Where the kernel refused to load an
+  extension, its result held `names` and `naming_law` alone, the one the refusal was not of passed with the other's
+  reason, and no other check ran, so faults it would have found went unsaid. The kernel stops loading at its first
+  fault, so now the other of the two is a skip saying that loading stopped short of it, as is `rebuild_equals_live`,
+  and `schemas`, `descriptions` and `public_api_only`, which need no kernel, run and report. A folder no kernel can open,
+  one another runtime holds or on a network filesystem, is refused as `Kernel.open` refuses it, where it read as
+  `names` and `naming_law` passed and nothing else.
 - **An ended agent's folder keeps its record and no scratch or credential.** An agent's folder kept, after its end, its
   harness's `tmp` and the files its harness kept a credential in, so every copy of a session, which is its export, carried
   them. In the copies of the GPU runs' sessions some 45 of an agent folder's 56 files were Node's and pi's caches in `tmp`,
