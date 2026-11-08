@@ -280,6 +280,37 @@ Workers (codex, own worktrees) may message no one.
 Workers post to topic `nominations`; everyone reads it. Readers fetch it when they choose. Everyone shares board `inflight`. The program writes board `outcomes`; everyone reads it. Limits: live 8. Closes when the program closes it.
 ```
 
+Its program is `population`, from `platoon_harness.patterns`. It starts workers with your goal, as many at once as `live` allows,
+until it has started `attempts`, and records each one's outcome on `outcomes` once it has ended. Closing the session is the script's:
+
+```python
+from platoon_harness import Session
+from platoon_harness.patterns import population
+
+
+async def swarm(session: Session) -> dict[str, str]:
+    """Each worker's outcome, by its name, and the session closed. Run again on the session after a crash, it starts no
+    worker and records no outcome twice."""
+    outcomes = await population(session, "worker", "Make `pytest` pass, as TASK.md says.", attempts=32)
+    await session.submit("session.close", key="close")
+    return outcomes
+```
+
+A worker's outcome is one of five, which its worker is told beside its goal:
+
+- `contribute`: it made commits in its worktree and nominated nothing.
+- `nominate`: it sent one message to `#nominations` whose `based_on` cites one recorded commit, by the ref `repo.commit` gives for
+  its SHA, and committed nothing.
+- `abstain`: it did neither.
+- `invalid`: it did anything else.
+- `failed`: it ended any way but finishing. A worker whose turn ended with nothing more to come for it, as a failed turn leaves
+  one, is retired, and fails.
+
+Each is an entry on `outcomes` named for its worker, `<outcome>: <what>`, citing what it rests on, and the board takes no second.
+Every outcome counts against `attempts`, abstaining too, so a population that only abstains still ends. The population reads out
+no winner: choosing among the nominations is yours, from the board. Workers start as `worker-1`, `worker-2` and on. A population
+keeps nothing, so run `swarm` again on the session after a crash, with `Session.resume`, and it goes on from what the record holds.
+
 ## Mix presets
 
 Presets are a union, so write as many as you like, in any order. In TOML that means several tables under `[topology]`, plus any keys of

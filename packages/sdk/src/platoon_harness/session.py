@@ -22,7 +22,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Generator, Mapping, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Generator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, Self
 from uuid import uuid4
@@ -750,7 +750,7 @@ class Session:
         *,
         streams: Sequence[str] | None = None,
         follow: bool = False,
-    ) -> AsyncIterator[Event]:
+    ) -> AsyncGenerator[Event]:
         """Each event past `after` whose stream `match` globs, or `streams` names. Resume from any event's `seq`. With
         `follow` this goes on as the journal grows, until nothing more can come. It is a read plus a long-poll,
         in-process or not."""

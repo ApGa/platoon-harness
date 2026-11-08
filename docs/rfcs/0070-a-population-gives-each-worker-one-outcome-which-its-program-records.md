@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`topology/presets.py`](../../packages/sdk/src/platoon_harness/topology/presets.py), [`team.py`](../../packages/sdk/src/platoon_harness/team.py), [architecture section 6](../architecture.md#library-tier), [section 8](../architecture.md#8-topology) and [section 13](../architecture.md#13-workspaces), [RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md), [RFC 0048](0048-a-setting-nothing-carries-out-is-refused.md), [RFC 0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) and [RFC 0068](0068-a-program-is-a-script-that-owns-its-session.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's question on a readout, which is open |
-| Implementation | `refactor!: Give git-swarm live and a board for its program's outcomes` |
+| Implementation | `refactor!: Give git-swarm live and a board for its program's outcomes` and `feat: Run a population that gives each worker one outcome` |
 
 ## Summary
 

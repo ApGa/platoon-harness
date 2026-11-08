@@ -120,6 +120,16 @@ named here is closed.
   harness's own as `act(spec, call)`, where `call(tool, arguments)` calls a tool as a `Call` step does and returns its
   result, so the code can go on from each answer, and each of its calls goes under an id of its own, as a harness's own
   calls do. A stand-in whose next step rested on an answer had to override `ScriptedDriver`'s private methods.
+- **A population, git-swarm's program.** `platoon_harness.patterns.population(session, role, goal, attempts=...)`, called by a
+  script that owns its session as `program:<name>`, starts workers of `role` with `goal`, `worker-1`, `worker-2` and on, as many at
+  once as `max_live` allows, until it has started `attempts`, and gives each one outcome once it has ended and its stop has looked
+  at what it left: `contribute`, `nominate`, `abstain`, `invalid` or `failed`, each worker told beside its goal how its outcome is
+  read. The program records each as the worker's entry on board `outcomes`, citing what it rests on, and the board takes no
+  second. Every outcome counts against `attempts`, so a population that only abstains ends, and a worker whose turn ended with
+  nothing more to come for it is retired, and fails. Run again on the session after a crash, it starts no worker and records no
+  outcome that the record holds. It reads out no winner: choosing among the nominations is the person's, the default pending the
+  owner's ruling. The topologies guide's git-swarm section shows it. See
+  [RFC 0070](docs/rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md), a draft.
 - **A program, in the topologies guide.** Run a program from Python shows a script that starts its session as
   `program:<name>` under `until = "program"`, adds a task for each path under a key that says what it is for, starts a reviewer,
   and closes the session once each task is done, and says how to run it again on the session after a crash, adding nothing twice.

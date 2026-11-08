@@ -9,7 +9,7 @@ from typing import Any, get_args
 import pytest
 
 import platoon_harness
-from platoon_harness import annotations, bwrap, credit, runtime, session
+from platoon_harness import annotations, bwrap, credit, patterns, runtime, session
 from platoon_harness.runtime import (
     authority,
     control,
@@ -28,6 +28,7 @@ MODULES = {
     "annotations": annotations,
     "bwrap": bwrap,
     "credit": credit,
+    "patterns": patterns,
     "session": session,
     "runtime": runtime,
     "runtime.authority": authority,

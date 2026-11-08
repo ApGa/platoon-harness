@@ -603,8 +603,16 @@ check decides what it shows.
 
 ### Library tier
 
-`platoon_harness.patterns` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) uses the public API only: `scatter`, `gather`, `reduce`, `barrier`, `latch`, `semaphore`,
-`lock`, `request`, `vote`, `supervisor`, `population`, `verifier_generator`. These are compositions, never scheduler modes.
+`platoon_harness.patterns` uses the public API only. It holds `population`, git-swarm's program, and the rest of the tier is planned
+(see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)): `scatter`, `gather`, `reduce`, `barrier`, `latch`, `semaphore`,
+`lock`, `request`, `vote`, `supervisor`, `verifier_generator`. These are compositions, never scheduler modes.
+
+`population(session, role, goal, attempts=...)` starts workers of `role` as many at once as `max_live` allows, until `attempts` have
+started, and gives each one outcome once it has ended and its stop has looked at what it left: `contribute`, `nominate`, `abstain`,
+`invalid` or `failed`. The program records each as the worker's entry on board `outcomes`, which takes no second, citing what it
+rests on. Every outcome counts against `attempts`, and the population reads the record from its start on every run, so run again
+after a crash it starts no worker and records no outcome twice. It reads out no winner. See
+[RFC 0070](rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md).
 
 An episode **program** is a Python script that starts its session as `program:<name>` and drives it through the session's ops, so
 control flow never enters config. It keeps nothing that must survive a restart: run again on the session after a crash, it reads what

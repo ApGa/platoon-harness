@@ -182,6 +182,10 @@ platoon_harness.kernel.Txn
 platoon_harness.kernel.View
 platoon_harness.load_team
 platoon_harness.on
+platoon_harness.patterns.Outcome
+platoon_harness.patterns.Outcome[contribute,nominate,abstain,invalid,failed]
+platoon_harness.patterns.population
+platoon_harness.patterns.population.population(session,role,goal,*,attempts)
 platoon_harness.primitives.Agent
 platoon_harness.primitives.Agents
 platoon_harness.primitives.Approval
