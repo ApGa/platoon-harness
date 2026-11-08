@@ -88,6 +88,7 @@ amended or extended an RFC.
 | [0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) | A population gives each worker one outcome, which its program records | Draft |
 | [0071](0071-an-installed-extension-s-op-is-a-command.md) | An installed extension's op is a command | Draft |
 | [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Draft |
+| [0072](0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md) | ACP agents are driven by a first-party extension that names its own check | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.
