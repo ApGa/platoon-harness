@@ -1402,6 +1402,51 @@ async def test_copy_sends_the_chosen_line_s_text_as_osc_52_with_no_escape_in_it(
     assert notices[-1] == f"Sent the chosen line's {len(copied()[2])} characters as OSC 52: {terminal_s} {reading}"
 
 
+def osc52(written: list[str]) -> list[str]:
+    """What the app sent the terminal to put on its clipboard."""
+    sent = re.findall("\x1b\\]52;c;([A-Za-z0-9+/=]*)\x07", "".join(written))
+    return [base64.b64decode(said).decode() for said in sent]
+
+
+async def test_text_selected_with_the_mouse_is_copied_as_plain_text_without_what_decorates_it(root):
+    """A drag over the transcript selects its rows, and Ctrl+C copies what they say as plain text, as OSC 52: who says
+    it and their words as they read, with no border, mark, rule or indent, and a line cut short at the edge whole. In
+    the navigator, an agent's name and state, without its glyph. With nothing selected, it copies the chosen line."""
+    long = "a line far longer than the transcript is wide, " * 4
+    turns = [Say("on it, **really**"), Say(long), Say("done")]
+    async with attached(team(turns), root, size=(100, 32)) as (_, app, pilot):
+        written: list[str] = []
+        app._driver.write = written.append  # type: ignore[union-attr]
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda text: "on it, really" in text and "    done" in text)
+        transcript = app.screen.query_one(Transcript)
+        rows = [transcript.render_line(y).text for y in range(transcript.size.height)]
+        heading = max(y for y, row in enumerate(rows) if row.strip() == "@lead")
+
+        await pilot.mouse_down(Transcript, offset=(1, heading))
+        await pilot.hover(Transcript, offset=(1, heading + 3))
+        await pilot.mouse_up(Transcript, offset=(1, heading + 3))
+        await pilot.press("ctrl+c")
+        await drawn(pilot, lambda _: len(osc52(written)) == 1)
+        navigator = app.screen.query_one("#navigator", Rows)
+        named = next(y for y, row in enumerate(navigator.rows) if row.key == "@lead")
+        await pilot.mouse_down("#navigator", offset=(2, named + 1))
+        await pilot.hover("#navigator", offset=(30, named + 2))
+        await pilot.mouse_up("#navigator", offset=(30, named + 2))
+        await pilot.press("ctrl+c")
+        await drawn(pilot, lambda _: len(osc52(written)) == 2)
+        await pilot.click(Composer)
+        await pilot.press("ctrl+c")
+        await drawn(pilot, lambda _: len(osc52(written)) == 3)
+        notices = [notice.message for notice in app._notifications]
+
+    selected, named_as, line = osc52(written)
+    assert selected == f"@lead\non it, really\n{long.strip()}"
+    assert named_as.splitlines()[0] == "@lead" and named_as.splitlines()[1].startswith("idle · ")
+    assert line == "@lead  done"
+    assert f"Sent the {len(selected)} characters selected as OSC 52" in " ".join(notices)
+
+
 async def test_a_tab_clicked_shows_its_agent_as_alt_down_does(root):
     """Under 80 columns the team is tabs over the transcript, the agent in view filled with the accent, and a click on
     another tab shows that agent."""
@@ -1413,6 +1458,25 @@ async def test_a_tab_clicked_shows_its_agent_as_alt_down_does(root):
         tabs = screen.query_one("#strip").render_line(0).text
         await pilot.click("#strip", offset=(tabs.index("@w1") + 1, 0))
         await drawn(pilot, lambda _: screen.focus_on is not None and screen.focus_on.agent == "w1")
+
+
+async def test_the_navigator_s_edge_drags_to_its_width_as_alt_left_and_alt_right_do(root):
+    """A drag of the navigator's edge makes it end where the edge is dragged to, and Alt+← and Alt+→ narrow and widen
+    it, each within the widths it takes."""
+    async with attached(team(), root) as (_, app, pilot):
+        navigator = workspace(app).query_one("#navigator")
+        edge = workspace(app).query_one("#edge").region
+        await pilot.mouse_down(offset=(edge.x, edge.y))
+        await pilot.hover(offset=(edge.x + 10, edge.y))
+        await pilot.mouse_up(offset=(edge.x + 10, edge.y))
+        dragged = await drawn(pilot, lambda _: navigator.outer_size.width != 34) and navigator.outer_size.width
+        await pilot.press("alt+left")
+        await drawn(pilot, lambda _: navigator.outer_size.width == dragged - 4)
+        for _ in range(20):
+            await pilot.press("alt+right")
+        await drawn(pilot, lambda _: navigator.outer_size.width == 64)
+
+    assert dragged == 44, "the edge is dragged 10 cells right, and the navigator ends where it is dragged to"
 
 
 async def test_an_agent_that_comes_to_need_you_while_another_is_in_view_is_said_in_a_toast(root):

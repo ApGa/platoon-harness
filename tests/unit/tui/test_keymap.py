@@ -251,4 +251,4 @@ async def test_the_help_shows_every_key_of_the_table_its_typed_command_and_why_o
 
 
 def test_a_key_is_shown_as_it_is_typed():
-    assert [key.shown for key in keys("sessions")] == ["Enter", "n", "r", "s", "l", "t", "?", "p", "q"]
+    assert [key.shown for key in keys("sessions")] == ["Enter", "n", "r", "s", "l", "t", "c", "?", "p", "q"]

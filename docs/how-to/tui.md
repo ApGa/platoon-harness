@@ -75,7 +75,8 @@ looked for on, but an agent in an isolated workspace keeps its harness's state i
 `doctor` names is this terminal's, not that harness's. `r` resumes a session whose runtime has gone, after saying that it can spend money. `s` stops one as its owner
 would, after one confirmation, and it stays resumable. Enter opens one: live as a guest, or as read-only history when no
 runtime holds it, with `/resume` offered to resume it. `/detach` comes back here from a session opened here, which runs
-on. `l` looks again, `t` chooses a theme, `?` shows every key, `p` opens the palette and `q` quits. In a form, Enter goes to the next field,
+on. `l` looks again, `t` chooses a theme, `c` copies what you selected, `?` shows every key, `p` opens the palette and
+`q` quits. In a form, Enter goes to the next field,
 and from the last sends it.
 
 ## The workspace
@@ -133,8 +134,9 @@ columns it keeps the name and the counts. When an agent comes to need you while 
 it waits and the key that goes to it.
 
 The mouse does what a key does, and each key still does it: a click on a row of the navigator, or a tab of the strip under
-80 columns, shows that agent or channel, as Alt+↓ goes to it; a click on a line opens it, as Enter on the chosen line
-does; and the wheel scrolls, as PgUp and PgDn do.
+80 columns, shows that agent or channel, as Alt+↓ goes to it; a click on a line chooses it, as the arrows do, and a click
+on the chosen line opens it, as Enter does; the wheel scrolls, as PgUp and PgDn do; and a drag of the navigator's edge
+widens or narrows it, as Alt+→ and Alt+← do, from 24 columns to 64.
 
 ### The transcript
 
@@ -148,7 +150,7 @@ line once its body is read and blank too, or at once where it has none; one whos
 something, is drawn. A page read back above keeps the heading its first line had, so what is on screen does not move, and
 a long run read back says its speaker again where a page began.
 
-A line opens on demand, with Enter on the chosen line, `/open-line` from anywhere, or a click: its
+A line opens on demand, with Enter on the chosen line, `/open-line` from anywhere, or a click on the chosen line: its
 body as Markdown and code, or its gist whole, then where it came from, with a tool's whole name. Links are followed only to `http` and `https`. The
 transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
 was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each child
@@ -180,15 +182,23 @@ to following, or to the line it began from, or where reading back let that line 
 held. A ref is opened through `/provenance`'s form, not found. That `/find` finds words alone, with Ctrl+F its shortcut, is
 the default pending the owner's ruling.
 
-### Copy a line
+### Copy and paste
 
-`/copy` sends the chosen line's text to the terminal as OSC 52, the sequence a terminal may take as text for its
-clipboard: the line as the transcript shows it, who says it and its words, and while it is open, the text it opens on, its body as read, its gist
-whole or an approval's ask, as text and never as Markdown. While what it opens on is still being read, its gist goes in
-its place, which it says. Each control in it is shown as its escape, as on the screen, so what you paste acts on no
-terminal. It says how many characters it sent. Whether they reach the clipboard is the terminal's, which may take no
-OSC 52, or none past a length of its own: no real terminal has been measured, nor tmux or SSH between. That `/copy`
-copies the chosen line is the default pending the owner's ruling.
+A drag with the mouse selects text in the transcript, an open line's body, the inspector, the provenance panel and the
+lists, and Ctrl+C, or `/copy`, copies it as plain text: the words as they read, who says them, and no border, glyph,
+spinner, rule or indent, a line cut short at the edge whole, and each control shown as its escape, as on the screen. A
+double click selects all of a part, and a click elsewhere lets the selection go.
+
+With nothing selected, Ctrl+C or `/copy` copies the chosen line: the line as the transcript shows it, who says it and its
+words, and while it is open, the text it opens on, its body as read, its gist whole or an approval's ask, as text and never
+as Markdown. While what it opens on is still being read, its gist goes in its place, which it says. In the composer or a
+form's field, Ctrl+C copies what is selected there.
+
+Each is sent to the terminal as OSC 52, the sequence a terminal may take as text for its clipboard, and it says how many
+characters it sent. Whether they reach the clipboard is the terminal's, which may take no OSC 52, or none past a length of
+its own: no real terminal has been measured, nor tmux or SSH between. A terminal that takes no OSC 52 still selects
+natively with Shift held as you drag, and copies as it always does, what the screen shows, borders and glyphs among it.
+That `/copy` copies the chosen line, with nothing selected, is the default pending the owner's ruling.
 
 ### The composer
 
@@ -412,6 +422,7 @@ before the session's. `^` is Ctrl.
 | `F1` | `/help` | Show every key and typed command |
 | `^P` | `/palette` | Find a command, an op among them |
 | `^Q` | `/quit` | Quit: a session you are in runs on |
+| `^C` | `/copy` | Copy the text selected with the mouse, or else the chosen line, as OSC 52, which a terminal may put on the clipboard |
 
 ### The sessions screen
 
@@ -423,6 +434,7 @@ before the session's. `^` is Ctrl.
 | `s` | Stop a session's runtime as its owner would, keeping it resumable |
 | `l` | Look again for sessions and how each stands |
 | `t` | Choose a colour theme for this run |
+| `c` | Copy the text selected with the mouse, as OSC 52 |
 | `?` | Show every key and typed command |
 | `p` | Find a command, an op among them |
 | `q` | Quit: a session you are in runs on |
@@ -440,9 +452,10 @@ before the session's. `^` is Ctrl.
 | `Alt+↓` | `/next` | Show the next agent or channel |
 | `Alt+↑` | `/previous` | Show the previous agent or channel |
 | `^B` | `/navigator` | Show or hide the agents and channels |
+| `Alt+→` | `/wider` | Widen the agents and channels, as dragging their edge does |
+| `Alt+←` | `/narrower` | Narrow the agents and channels, as dragging their edge does |
 | `F2` | `/inspector` | Show or hide why the agent in view waits, and what it runs on |
 | `^O` | `/open-line` | Open or close the chosen line of the transcript |
-|  | `/copy` | Send the chosen line's text, each control as its escape, as OSC 52, which a terminal may put on the clipboard |
 | `PgUp` | `/page-up` | Scroll the transcript up |
 | `PgDn` | `/page-down` | Scroll the transcript down |
 | `^Home` | `/oldest` | Go to the start of the transcript, read back from the journal |

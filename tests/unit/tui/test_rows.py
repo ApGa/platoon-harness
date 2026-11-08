@@ -42,3 +42,21 @@ async def test_a_working_row_s_glyph_turns_while_animation_is_on_and_stands_stil
 
         assert turned <= set(SPINNER) and len(turned) > 1 and stopped
         assert rows._spinning is None and rows.render_line(0).text[0] == "●"
+
+
+async def test_a_selection_copies_a_row_s_words_without_what_leads_them_and_a_row_cut_short_whole():
+    app = Alone()
+    async with app.run_test(size=(20, 5)) as pilot:
+        rows = app.query_one(Rows)
+        rows.show(
+            [
+                Row(Content("● @lead"), "@lead", lead=2),
+                Row(Content("  idle · pi · reading a file far too long to show"), "@lead", lead=2),
+                Row(Content("channels")),
+            ]
+        )
+        await pilot.mouse_down(Rows, offset=(0, 0))
+        await pilot.hover(Rows, offset=(4, 2))
+        await pilot.mouse_up(Rows, offset=(4, 2))
+
+        assert app.screen.get_selected_text() == "@lead\nidle · pi · reading a file far too long to show\nchann"

@@ -532,21 +532,29 @@ class Naming(Alone):
 
 async def test_a_ref_in_a_line_s_text_opens_its_provenance():
     """A ref a line's words name is a link, standing apart from the words around it, so none is found in a link's
-    address: a click on it opens the provenance of the event it names, whatever lines it names of it, and a click on the
-    rest of the line opens the line."""
+    address: a click on it opens the provenance of the event it names, whatever lines it names of it. A click on the
+    rest of a line chooses it, and on a line chosen already, opens it."""
     words = "done, as board/notes/spec@3#L1-2 and inbox/you@1 say; https://x/inbox/you@1 is no ref"
     app = Naming()
     async with app.run_test(size=(120, 5)) as pilot:
         transcript = app.query_one(Transcript)
-        await transcript.show(Focus.of_agent("lead"), Journal([said(1, words)]), 1)  # type: ignore[arg-type]
-        assert shown(transcript) == ["@lead", f"    {words}"]
+        await transcript.show(Focus.of_agent("lead"), Journal([said(1, "first"), said(2, words)]), 2)  # type: ignore[arg-type]
+        assert shown(transcript) == ["@lead", "    first", f"    {words}"]
         for ref in ("board/notes/spec@3#L1-2", "inbox/you@1"):
-            await pilot.click(Transcript, offset=(shown(transcript)[1].index(ref) + len(ref) - 1, 1))
-        await pilot.click(Transcript, offset=(shown(transcript)[1].index("https://x/inbox") + 12, 1))
+            await pilot.click(Transcript, offset=(shown(transcript)[2].index(ref) + len(ref) - 1, 2))
+        await pilot.click(Transcript, offset=(shown(transcript)[2].index("https://x/inbox") + 12, 2))
+        await pilot.pause()
+        opened = transcript.blocks[1].open
+        await pilot.click(Transcript, offset=(4, 1))
+        await pilot.pause()
+        chosen, first_opened = transcript.chosen, transcript.blocks[0].open
+        await pilot.click(Transcript, offset=(4, 1))
         await pilot.pause()
 
     assert app.named == ["board/notes/spec@3", "inbox/you@1"]
-    assert transcript.blocks[0].open, "a click on words that name no ref opens the line"
+    assert opened, "a click on the words of the line chosen, which name no ref, opens it"
+    assert chosen is transcript.blocks[0] and not first_opened, "a click on another line chooses it"
+    assert transcript.blocks[0].open and not transcript.following
 
 
 async def test_find_waits_out_a_read_under_way_and_reads_back_each_page_once():

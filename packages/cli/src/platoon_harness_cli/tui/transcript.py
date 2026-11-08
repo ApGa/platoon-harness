@@ -20,6 +20,7 @@ from textual.content import Content
 from textual.geometry import Region, Size
 from textual.message import Message
 from textual.scroll_view import ScrollView
+from textual.selection import Selection
 from textual.strip import Strip
 from textual.style import Style
 
@@ -35,7 +36,7 @@ from ..output import safe
 from ..provenance import REF_IN_TEXT, shows
 from .approvals import rows_of
 from .keymap import bindings
-from .rows import strip_of
+from .rows import highlighted, selected, strip_of
 from .safe import SafeText, note
 
 PAGE = 256
@@ -441,7 +442,7 @@ class Transcript(ScrollView, can_focus=True):
     key starts it again. An agent's turns are cut where `spans` says, read as the agent is shown and again as each of
     its turns ends, and each cut is drawn once the window holds both calls it stands between. What an agent says in
     its turn with a gist of whitespace alone is read, and drawn as no line once its body is known to be blank too, as
-    one with no body is."""
+    one with no body is. Text selected with the mouse is copied as its words, without what decorates them."""
 
     BINDINGS = [*bindings("transcript"), *bindings("panel")]
     COMPONENT_CLASSES = {"transcript--chosen"}
@@ -1090,13 +1091,24 @@ class Transcript(ScrollView, can_focus=True):
             self._go_to(start if start in lines else lines[0])
 
     def on_click(self, event: events.Click) -> None:
-        """Open or close the line clicked, or on a ref its text names, open that ref's provenance."""
+        """Choose the line clicked, open or close it when it is chosen already, or on a ref its text names, open that
+        ref's provenance. A click that ends a drag selecting text does none of these."""
+        if self.text_selection is not None:
+            return
         if (ref := event.style.meta.get("ref")) is not None:
             self.post_message(self.Named(ref))
             return
         index = event.get_content_offset_capture(self).y + int(self.scroll_y)
-        if 0 <= index < len(self._rows) and self._rows[index][1] != SPACE:
-            self.toggle(self._rows[index][0])
+        if not 0 <= index < len(self._rows) or self._rows[index][1] == SPACE:
+            return
+        block = self._rows[index][0]
+        if block is self._chosen:
+            self.toggle(block)
+            return
+        self._stop_following()
+        self._chosen = block
+        self.refresh()
+        self.post_message(self.Moved())
 
     def _as_drawn(self, block: Block, width: int) -> Content:
         """A line as it is drawn: in from the left under its speaker, its mark, its words, and `▸` where it opens on a
@@ -1128,6 +1140,32 @@ class Transcript(ScrollView, can_focus=True):
             )
         return strip
 
+    def _words_of(self, index: int) -> tuple[str, int]:
+        """A row's words, and how many characters of what decorates them lead them: its speaker, its line's words past
+        its mark, its body past its indent, or what is being said now."""
+        if index >= len(self._rows):
+            tail = index - len(self._rows)
+            return (self._tail_lines[tail].text, 0) if tail < len(self._tail_lines) else ("", 0)
+        block, line = self._rows[index]
+        said = block.said
+        if line == SPACE:
+            return "", 0
+        if line == HEAD:
+            return (said.who.plain if said.who else ""), 0
+        if line > 0:
+            indent = self._indent(block) + 2
+            return self._body(block)[line - 1].text[indent:], indent
+        if said.rule:
+            return said.words.plain, 3
+        return said.words.plain, self._indent(block) + said.mark.cell_length
+
+    def get_selection(self, selection: Selection) -> tuple[str, str] | None:
+        """The words of the rows selected, without the marks, rules and indents that decorate them."""
+        return selected(selection, len(self._rows) + len(self._tail_lines), self._words_of), "\n"
+
+    def selection_updated(self, selection: Selection | None) -> None:
+        self.refresh()
+
     def render_line(self, y: int) -> Strip:
         index = y + int(self.scroll_y)
         width = self.scrollable_content_region.width
@@ -1137,4 +1175,7 @@ class Transcript(ScrollView, can_focus=True):
             strip = self._tail_lines[tail].crop_extend(0, width, self.rich_style).apply_style(self.rich_style)
         else:
             return Strip.blank(width, self.rich_style)
-        return strip
+        if (selection := self.text_selection) is not None:
+            screen = self.screen.get_component_rich_style("screen--selection")
+            strip = highlighted(strip, selection.get_span(index), screen)
+        return strip.apply_offsets(0, index)

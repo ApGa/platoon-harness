@@ -58,6 +58,11 @@ named here is closed.
   says in a turn with a gist of whitespace alone is drawn as no line once its body is read and blank too, as the page's
   chats leave it out. Before, each line led with its speaker, a tool's line showed its raw name and how it ended alone,
   Markdown showed its marks, and a model's blank text before a tool call was an empty line.
+- **Text selected with the mouse copied.** A drag selects text in the transcript, an open line's body, the inspector, the
+  provenance panel and the lists, and Ctrl+C or `/copy` copies it as plain text, as OSC 52, with no border, glyph, rule
+  or indent in it. Every mouse act has its keyboard twin: a click on a navigator row or a tab shows that agent, a click
+  on a line chooses it and a second opens it, and a drag of the navigator's edge widens it, as Alt+→ and Alt+← do. Before,
+  only `/copy` copied, and only the chosen line.
 - **A line copied in the terminal.** `/copy` sends the chosen line's text to the terminal as OSC 52: the line as the
   transcript shows it and, while it is open, the text it opens on, or its gist while that is still being read, which it
   says, each control shown as its escape, so what is pasted acts on no terminal. Whether it reaches the clipboard is the
@@ -1045,6 +1050,9 @@ named here is closed.
 
 ### Changes
 
+- **A click on a transcript line chooses it.** A click on the chosen line opens it, as Enter does. Before, a click opened
+  the line it was on.
+- **Ctrl+C and `/copy` copy a selection first.** With nothing selected, they copy the chosen line, as `/copy` did.
 - **`agent takeover` is `agent hold`, as it holds an agent's deliveries and no more.** The op `agent.hold`, the command
   `platoon-harness agent hold`, `Session.hold` and the gap `hold` replace `agent.takeover`, `agent takeover`,
   `Session.takeover` and the gap `takeover`, with no alias, and do what they did. A journal recorded before the rename names

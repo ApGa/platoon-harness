@@ -16,6 +16,7 @@ from textual.css.query import NoMatches
 from textual.message import Message
 from textual.screen import Screen
 from textual.style import Style
+from textual.widget import Widget
 from textual.widgets import Static
 
 from platoon_harness import Refused, Session
@@ -105,6 +106,33 @@ class Navigator(Rows):
     """The agents and channels, a row each, of which Enter shows the chosen one."""
 
     BINDINGS = bindings("panel")
+
+
+class Edge(Static):
+    """The navigator's edge, which dragging widens or narrows it."""
+
+    ALLOW_SELECT = False
+
+    class Dragged(Message):
+        def __init__(self, x: int) -> None:
+            super().__init__()
+            self.x = x
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        self.capture_mouse()
+        self.add_class("-dragged")
+
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        if self.app.mouse_captured is self:
+            self.post_message(self.Dragged(event.screen_x))
+
+    def on_mouse_up(self, event: events.MouseUp) -> None:
+        self.release_mouse()
+        self.remove_class("-dragged")
+
+
+NARROWEST, WIDEST = 24, 64
+"""How narrow and how wide the navigator may be made."""
 
 
 def _named(action: str) -> str:
@@ -198,6 +226,7 @@ class Workspace(Screen[None]):
         yield Static(id="banner")
         with Horizontal(id="body"):
             yield Navigator(id="navigator")
+            yield Edge(id="edge")
             with Vertical(id="focus"):
                 yield Static(id="strip")
                 yield Transcript(id="transcript")
@@ -1045,6 +1074,26 @@ class Workspace(Screen[None]):
     def action_navigator(self) -> None:
         self.toggle_class("navigator-shown" if self.size.width < 80 else "navigator-hidden")
 
+    def action_wider(self) -> None:
+        self._widen(4)
+
+    def action_narrower(self) -> None:
+        self._widen(-4)
+
+    def on_edge_dragged(self, dragged: Edge.Dragged) -> None:
+        """Make the navigator end where its edge is dragged to."""
+        navigator = self.query_one("#navigator")
+        self._set_width(navigator, dragged.x - navigator.region.x)
+
+    def _widen(self, by: int) -> None:
+        navigator = self.query_one("#navigator")
+        width = navigator.styles.width
+        self._set_width(navigator, (int(width.value) if width is not None else navigator.outer_size.width) + by)
+
+    def _set_width(self, navigator: Widget, width: int) -> None:
+        """Make the navigator `width` cells wide, within what it may be."""
+        navigator.styles.width = min(max(width, NARROWEST), WIDEST)
+
     async def action_show_row(self, key: str) -> None:
         """Show the agent or channel a tab names, as choosing its row in the navigator does."""
         if self.live is not None:
@@ -1056,7 +1105,7 @@ class Workspace(Screen[None]):
     def action_open_line(self) -> None:
         self.query_one(Transcript).toggle()
 
-    def action_copy_line(self) -> None:
+    def copy_line(self) -> None:
         """Send the chosen line's text to the terminal as OSC 52, each control shown as its escape, so pasting it acts
         on no terminal. Whether it reaches the clipboard is the terminal's."""
         chosen = self.query_one(Transcript).chosen

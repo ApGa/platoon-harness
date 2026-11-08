@@ -9,6 +9,7 @@ from textual.app import App, SystemCommand
 from textual.markup import escape
 from textual.screen import Screen
 from textual.theme import Theme
+from textual.widgets import Input, TextArea
 
 from .dialogs import Help
 from .keymap import bindings
@@ -42,6 +43,8 @@ Screen { layers: base overlay; }
 #body { height: 1fr; }
 #navigator { width: 34; border: round $panel; border-title-color: $foreground; padding: 0 1; }
 #navigator:focus { border: round $accent; }
+#edge { width: 1; pointer: ew-resize; }
+#edge:hover, #edge.-dragged { background: $accent 50%; }
 #focus { width: 1fr; border: round $panel; border-title-color: $foreground; border-subtitle-color: $accent; }
 #focus:focus-within { border: round $accent; }
 #transcript { height: 1fr; padding: 0 1; }
@@ -59,9 +62,9 @@ Workspace.medium #inspector { layer: overlay; dock: right; height: 100%; backgro
 #sessions { height: 1fr; border: round $accent; border-title-color: $foreground; padding: 0 1; }
 #said { height: auto; padding: 0 2; }
 Workspace.inspector-shown #inspector { display: block; }
-Workspace.narrow #navigator { display: none; }
+Workspace.narrow #navigator, Workspace.narrow #edge { display: none; }
 Workspace.narrow.navigator-shown #navigator { display: block; layer: overlay; dock: left; height: 100%; }
-Workspace.navigator-hidden #navigator { display: none; }
+Workspace.navigator-hidden #navigator, Workspace.navigator-hidden #edge { display: none; }
 Workspace.narrow #strip { display: block; }
 Workspace.short #dock, Workspace.short #banner, Workspace.short #strip { display: none; }
 Workspace.short #focus, Workspace.short #navigator, Workspace.short #inspector, Workspace.short #composer {
@@ -128,6 +131,23 @@ class TerminalUI(App[str | None], inherit_bindings=False):
         if self._choosing:
             self._choosing = False
             note(self.screen, f'The theme is {theme} for this run: `{THEME} = "{theme}"` in {settings()} keeps it.')
+
+    def action_copy(self) -> None:
+        """Copy, as OSC 52, which a terminal may put on the clipboard: what is selected in the field you type in, or
+        else the text selected with the mouse, or with none, in a session, the chosen line of the transcript."""
+        focused = self.focused
+        if isinstance(focused, TextArea | Input) and focused.selected_text:
+            focused.action_copy()
+            return
+        if selected := self.screen.get_selected_text():
+            self.copy_to_clipboard(selected)
+            said = f"Sent the {len(selected):,} characters selected as OSC 52: whether they reach your clipboard is "
+            note(self.screen, said + "your terminal's.")
+        elif isinstance(self.screen, Workspace):
+            self.screen.copy_line()
+        else:
+            said = "Nothing is selected, so nothing is copied: drag over text with the mouse to select it."
+            note(self.screen, said, severity="warning")
 
     def action_help(self) -> None:
         """Show every key, or leave the help when it is what shows."""
