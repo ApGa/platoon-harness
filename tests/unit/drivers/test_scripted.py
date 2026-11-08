@@ -1,7 +1,7 @@
 """ScriptedDriver: each step, its capabilities as data, and real MCP and model calls."""
 
 import json
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any
 
 import pytest
@@ -9,6 +9,7 @@ import pytest
 from platoon_harness import Session, Team
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
+    AgentSpec,
     ApprovalRequested,
     Capabilities,
     Delivery,
@@ -30,6 +31,7 @@ from platoon_harness.testing import (
     Ask,
     AskModel,
     Call,
+    Do,
     EndTurn,
     Exit,
     Fail,
@@ -458,6 +460,36 @@ async def test_scripted_driver_sends_each_tool_calls_id_so_each_op_joins_its_cal
         ("scripted/toolCallId", "call_2", 1),
     ]
     assert {found.call for found in made} == {f"{called.stream}@{called.version}"}
+
+
+async def test_a_do_step_s_code_goes_on_from_each_answer_under_ids_of_its_own(tmp_path):
+    """Code that claims until a claim is refused gets each task once, as its two identical claims in one turn go under
+    ids of their own, which their tool items hold, and are two claims. It reads the agent's spec, and its ops join no
+    model call, as none chose them."""
+    claimed: list[str] = []
+
+    async def act(spec: AgentSpec, call: Callable[[str, Mapping[str, Any]], Awaitable[Any]]) -> None:
+        while not (answer := await call("task_claim", {"queue": "tasks"}))["isError"]:
+            claimed.append(json.loads(answer["content"][0]["text"])["gist"])
+        claimed.append(spec.agent)
+
+    queue = {"kind": "queue", "writers": "all", "readers": "all", "delivery": "pull", "max_inflight": 2}
+    team = Team.model_validate(
+        {"roles": {"bob": {"harness": scripted([Do(act)])}}, "topology": {"channels": {"tasks": queue}}}
+    )
+    async with Session.start(team, root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        for name in ("one", "two"):
+            await session.task_add("tasks", name)
+        await session.send("@bob", "claim them all")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        claims = await of_type(session, "task.claimed")
+        made = [(await session.lineage(f"{event.stream}@{event.version}")).made for event in claims]
+
+    assert claimed == ["one", "two", "bob"]
+    anchors = [found.anchor and (found.anchor.key, found.anchor.id) for found in made]
+    assert [key for key, _ in anchors] == ["scripted/toolCallId"] * 2 and anchors[0] != anchors[1]
+    assert all(id.startswith("do-") for _, id in anchors) and [found.call for found in made] == [None, None]
 
 
 async def test_scripted_driver_joins_each_op_to_its_own_call_on_the_ids_fake_model_gives(tmp_path):

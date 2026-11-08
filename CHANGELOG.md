@@ -113,6 +113,10 @@ named here is closed.
   rests on, and says what a run with no keys cannot show: that the verifier cannot write, which only a real harness
   shows. A test runs the README's commands as it shows them, in a repository of its own. It has not run on real models.
   That it ships is the default, pending the owner's ruling on which Git examples ship.
+- **A scripted step that goes on from what a call answered.** `Do(act)`, a step of `ScriptedDriver`, runs code of the
+  harness's own as `act(spec, call)`, where `call(tool, arguments)` calls a tool as a `Call` step does and returns its
+  result, so the code can go on from each answer, and each of its calls goes under an id of its own, as a harness's own
+  calls do. A stand-in whose next step rested on an answer had to override `ScriptedDriver`'s private methods.
 
 - **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose
   harness cannot start fails, as the workspace showed, and the terminal UI now also says what `doctor`, run in that

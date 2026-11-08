@@ -469,6 +469,7 @@ platoon_harness.testing.check_extension
 platoon_harness.testing.check_harness
 platoon_harness.testing.Compact
 platoon_harness.testing.Compact()
+platoon_harness.testing.Do
 platoon_harness.testing.EndTurn
 platoon_harness.testing.ENVIRONMENT_TOOL
 platoon_harness.testing.ENVIRONMENT_TOOLS

@@ -4,10 +4,10 @@ Its tool calls are real MCP over `ToolBinding.url`, and an `AskModel` step is a 
 exercises the real tool plane, and conformance can read what it did from the model's log. A tool call the model chose
 goes under the id the model gave it, as `scripted/toolCallId`, so its op joins that model call as a harness's would,
 and one under an id it has sent already fails its turn, as its op would join the call that sent it first; a `Call`
-step, which no model chose, sends none. Given a gateway it launches
-sealed, which is the reference a training system's tests run on with no binary: the gateway's model under its bearer,
-the environment's tools beside ours, each named by the environment's server as `mcp__environment__<tool>`, and a
-`Compact` step that carries the gateway's compaction headers.
+step, which no model chose, sends none, and the code of a `Do` step sends an id of its own with each call. Given a
+gateway it launches sealed, which is the reference a training system's tests run on with no binary: the gateway's
+model under its bearer, the environment's tools beside ours, each named by the environment's server as
+`mcp__environment__<tool>`, and a `Compact` step that carries the gateway's compaction headers.
 """
 
 import asyncio
@@ -15,7 +15,7 @@ import itertools
 import json
 import uuid
 from collections import deque
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -102,6 +102,15 @@ class Call:
 
 
 @dataclass(frozen=True)
+class Do:
+    """Run code of the harness's own, as `act(spec, call)`: `spec` is the agent's, and `call(tool, arguments)` calls a
+    tool as a `Call` step does and returns its result, so what the code does next can rest on what each call answered.
+    Each call goes under an id of its own, as a harness's own calls do, so no two are one call."""
+
+    act: Callable[[AgentSpec, Callable[[str, Mapping[str, Any]], Awaitable[Any]]], Awaitable[None]]
+
+
+@dataclass(frozen=True)
 class Wait:
     """Hold the turn until a delivery comes in it, the way a harness sits blocked in a tool."""
 
@@ -154,7 +163,7 @@ class Compact:
     gave, and what was said gives way to that summary."""
 
 
-type Step = Say | Think | Call | Wait | EndTurn | Fail | Exit | Ask | Hang | AskModel | Compact
+type Step = Say | Think | Call | Do | Wait | EndTurn | Fail | Exit | Ask | Hang | AskModel | Compact
 
 
 class _Exiting(Exception):
@@ -296,6 +305,8 @@ class ScriptedDriver:
                     await self._report(Item(kind="thought", gist=text[:GIST_LIMIT], body=text))
                 case Call(tool=tool, arguments=arguments):
                     await self._call(tool, arguments)
+                case Do(act=act):
+                    await act(self._spec, self._call_anew)
                 case Wait():
                     while not self._heard_this_turn:
                         self._arrival.clear()
@@ -384,6 +395,10 @@ class ScriptedDriver:
         done = Item(kind="tool", phase="completed", gist=f"{tool} {outcome}"[:GIST_LIMIT], outcome=outcome)
         await self._report(done.model_copy(update={"native_id": native_id, "call_id": call_id}))
         return result
+
+    async def _call_anew(self, tool: str, arguments: Mapping[str, Any]) -> Any:
+        """A call of a `Do` step's code, under an id of its own."""
+        return await self._call(tool, arguments, native_id=f"do-{uuid.uuid4().hex}")
 
     async def _ask_model(self) -> None:
         while True:
