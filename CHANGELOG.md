@@ -1256,15 +1256,15 @@ named here is closed.
 
 - **An ended agent's folder keeps its record and no scratch or credential.** An agent's folder kept, after its end, its
   harness's `tmp` and the files its harness kept a credential in, so every copy of a session, which is its export, carried
-  them. The owner reports that in the copies of the GPU runs' sessions some 45 of an agent folder's 56 files were Node's and
-  pi's caches in `tmp`, and that pi's `auth.json` held the run's gateway credential, which is unverified here, where a sealed
-  pi's `auth.json` holds none. Now an agent's stop, whichever way it ended, removes its harness's `tmp`, whole, and the files
+  them. In the copies of the GPU runs' sessions some 45 of an agent folder's 56 files were Node's and pi's caches in `tmp`,
+  beside pi's `auth.json`, which no one read, and which a sealed pi leaves holding no credential. Now an agent's stop,
+  whichever way it ended, removes its harness's `tmp`, whole, and the files
   its driver names as credentials, even when a step before fails, and then tells its authority how it ended, which it does
   even when the removal fails. It keeps the rest, its harness's own transcripts and `stderr.log` among it, though pi's full
   text of a tool result it cut, which its transcript names by path, goes with `tmp`. A rest and the owner's stop remove
   nothing, as the agent comes back. What stays of them, what could not be removed and what a symlink an agent planted leads
   to, is said in the runtime's log. An agent that has not ended keeps them: one idle when its session closed, as a close ends
-  no agent, which is the default, pending the owner's ruling. So does an ended agent whose stop had not begun when its runtime
+  no agent, as the owner ruled. So does an ended agent whose stop had not begun when its runtime
   stopped, until a resume, so wait until your authority has heard of each end before you leave a session you will copy. See
   [RFC 0075](docs/rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft.
 - **A launch or a resume that needs a body a person redacted says so.** Nothing stands in for a body a harness must be

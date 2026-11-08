@@ -101,8 +101,8 @@ An agent's folder keeps its harness's scratch, its `tmp`, and the files where it
 the agent's stop has run once it ends: the stop removes them, and keeps the rest, as Credentials above says. `tmp` goes whole,
 with whatever its harness kept there, such as pi's full text of a tool result it cut for the model, which its transcript names
 by a path that then names nothing. An agent that has not ended keeps them: one in a session that stopped, which comes back on a
-resume, and one idle when its session closed or settled, as a close ends no agent. That a close removes none of them is the
-default, pending the owner's ruling, so a session never resumed, as a trainable one never is, keeps them for good. So does an
+resume, and one idle when its session closed or settled, as a close ends no agent. A close removes none of them, as the owner
+ruled, so a session never resumed, as a trainable one never is, keeps them for good. So does an
 ended agent whose stop had not begun when its runtime stopped, or that a killed runtime cut off, as it runs again only at a
 resume.
 

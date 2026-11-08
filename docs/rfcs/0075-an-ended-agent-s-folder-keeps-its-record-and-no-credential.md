@@ -6,7 +6,7 @@
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`drivers/__init__.py`](../../packages/sdk/src/platoon_harness/drivers/__init__.py), [`drivers/process.py`](../../packages/sdk/src/platoon_harness/drivers/process.py), [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [architecture sections 4](../architecture.md#4-session-folder-and-process-model), [7](../architecture.md#lifecycle), [9](../architecture.md#9-drivers) and [15](../architecture.md#15-security), [security.md](../security.md#retention), [RFC 0008](0008-driver-contract-and-wire.md), [RFC 0021](0021-what-a-harness-leaves-behind.md), [RFC 0045](0045-an-agent-s-process-is-not-its-identity.md), [RFC 0053](0053-a-gateway-admission-launches-sealed.md) and [RFC 0055](0055-the-export-is-the-session-as-it-ended.md) |
-| Discussion | The owner's request of 2026-11-08, from the copies of the sessions of the GPU runs, kept outside this repository. The request accepts no design: this one waits for the owner's acceptance |
+| Discussion | The owner's request of 2026-11-08, from the copies of the sessions of the GPU runs, kept outside this repository, and the owner's ruling of the same day on its open question. The request accepts no design: this one waits for the owner's acceptance |
 | Implementation | `fix: Remove an ended agent's scratch and the credential files its driver names`, and the fixes `fix: Tell an ended agent's authority even when removing its harness's files fails` and `fix: Say what an ended agent's stop leaves behind a symlink an agent planted` |
 
 ## Summary
@@ -25,12 +25,12 @@ sealed launch or an isolated agent a home or an agent directory of the harness's
 keeps it for as long as it is kept, and the folder is the export ([RFC 0055](0055-the-export-is-the-session-as-it-ended.md)), so
 every copy carries it.
 
-The owner reports that in the copies of the sessions of the GPU runs an agent's folder held some 56 files, of which some 45
-were Node's compile cache and pi's jiti cache under `agents/<name>/tmp`, and that pi's `auth.json` under `agents/<name>/pi`
-held the run's gateway credential, dead once the run had ended. That is the owner's measurement, unverified here. Here, one
-turn of pi 1.5.0 on FakeModel leaves 40 files in `tmp` and an `auth.json`, which pi makes as it starts, in its agent
-directory: a sealed launch's, `agents/<name>/pi`, or an isolated home's. Its sealed launch here leaves that file holding no
-credential, as `test_contract.py` shows no form of the bearer in any file, so why the runs' copies held one is unknown. RFC
+In the copies of the sessions of the GPU runs an agent's folder held some 56 files, of which some 45 were Node's compile cache
+and pi's jiti cache under `agents/<name>/tmp`, and pi's `auth.json` under `agents/<name>/pi`, which was taken for the run's
+gateway credential from its name alone: no one read it, and the copies are gone. Here, one turn of pi 1.5.0 on FakeModel leaves
+40 files in `tmp` and an `auth.json`, which pi makes as it starts, in its agent directory: a sealed launch's,
+`agents/<name>/pi`, or an isolated home's. Its sealed launch here leaves that file holding no credential, as `test_contract.py`
+shows no form of the bearer in any file, so the runs' copies most likely held none either. RFC
 0055 says the export holds no key, and the runtime removes its own token files at a clean stop, but nothing removed what a
 harness kept.
 
@@ -138,9 +138,9 @@ in its `TMPDIR` was not looked into.
 
 ## Open questions
 
-1. Whether a session's close removes the same of an agent that never ended, since a closed session runs no harness again. The
-   default is no, as an end is the one point where an agent is known never to come back, pending the owner's ruling, and a
-   different answer adds a step to the close and removes none of this. Under the default, a session that closes or settles with
+1. Whether a session's close removes the same of an agent that never ended, since a closed session runs no harness again. No,
+   as an end is the one point where an agent is known never to come back: the owner kept this default on 2026-11-08. So a
+   session that closes or settles with
    its agents idle keeps every one's scratch and credential files, and a trainable one keeps them for good, as it is never
    resumed: that may be the GPU runs' case, which this change then leaves as it was. A program that ends every agent and waits
    for its authority to hear of each, as the training guide says, leaves none.
