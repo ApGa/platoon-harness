@@ -841,10 +841,12 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   started, and one that exits in a turn leaves the gap `crash_window`, since a tool of its own can run on. A one-shot agent ends with
   its turn: `finished` if that turn `stopped`, and `failed` otherwise. An agent that does not stay finishes with a turn that stops on
   its own with nothing more to come for it (Agents that stay, above).
-  An ended agent's stop removes its harness's `TMPDIR` and each file its driver names in `DriverInfo.credentials` (§9), even when a
-  step before fails, and keeps the rest of its folder, its harness's own transcripts and `stderr.log` among it, so the export holds neither
-  (§14); what it could not remove it says in the runtime's log. A rest and the owner's stop remove nothing, as the agent comes
-  back. See [RFC 0075](rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft.
+  An ended agent's stop removes its harness's `TMPDIR`, whole, and each file its driver names in `DriverInfo.credentials` (§9), even
+  when a step before fails, and keeps the rest of its folder, its harness's own transcripts and `stderr.log` among it, so an export
+  taken once that stop has run, which its authority hears of last, holds neither (§14); what stays of them, as a symlink an agent
+  planted is not followed, it says in the runtime's log. A stop that has not begun when its runtime goes, or that a killed
+  runtime cut off, runs only at a resume. A rest and the owner's stop remove nothing, as the agent comes back. See
+  [RFC 0075](rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft.
 - **A parent hears of a child's end once its authority has.** The ended agent's `stop` tells the authority how it ended last, even
   when a step before fails, and nothing reaches its parent while that stop is under way: no wake, steer or notice is handed to it,
   and a `wait` it holds open in a call does not answer `released`, so neither its report, the notice of a wait that holds on its end
@@ -1995,10 +1997,10 @@ class AgentOutcome(Model):
   nobody. See [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) and
   [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md).
 - **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
-  no key in it, nor, once its agents have ended, their harnesses' scratch or a file a driver names as where its harness keeps a
-  credential (§7), read by producers and the training system through `Session.attach` once its runtime has stopped. A session started
-  trainable, or whose admit results name the backend's ids, is never resumed once it has run, as its keys went with its authority
-  and an admit a stop cut short named ids nobody knows (§4). See
+  no key in it, nor, once each ended agent's stop has run, which its authority hears of last, its harness's scratch or a file its
+  driver names as where its harness keeps a credential (§7), read by producers and the training system through `Session.attach`
+  once its runtime has stopped. A session started trainable, or whose admit results name the backend's ids, is never resumed
+  once it has run, as its keys went with its authority and an admit a stop cut short named ids nobody knows (§4). See
   [RFC 0055](rfcs/0055-the-export-is-the-session-as-it-ended.md).
 - **The contract is one test.** `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use
   of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority
@@ -2038,7 +2040,8 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
   guessed: bodies are for content, not for secrets. An agent reads a body only by the ref of an event it was handed or made.
 - **Secrets.** Config holds env var names, never values. `Secret` refuses serialization. Redaction covers values, their encoded forms, and URLs.
   No model-access credential reaches a log, event, artifact, export or resolved config. An agent's end removes each file its driver
-  names as where its harness keeps a credential in its folder (§7), so a session's folder holds none once its agents have ended.
+  names as where its harness keeps a credential in its folder (§7), so a session's folder holds none of the files its drivers name
+  once each ended agent's stop has run; an agent that has not ended keeps its own.
 - **Bodies and retention.** A body can be tombstoned while its hash survives, so the graph stays whole. A secret in a `gist` needs an
   offline rewrite that produces a new session.
 - **Plan logins.** We spawn the user's own harness under its own login and never read, copy or proxy a credential. Headless multi-agent on a plan

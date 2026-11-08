@@ -66,8 +66,9 @@ team holds it, whose yes covers what you were shown and nothing the file says si
 - **What a harness keeps.** A harness on your own login keeps its login where it always does, in your home, which nothing
   here touches. In an agent's folder, a sealed pi keeps an agent directory of its own, with its `auth.json`, and an isolated
   harness a home of its own, with its login files. Each driver names those files, and when the agent ends, finished, retired,
-  cancelled, failed or lost, its stop removes them, as it removes its harness's `tmp`. An agent put to rest, or in a session
-  that stops, keeps them, as its harness comes back on them. What the stop could not remove it says in the runtime's log
+  cancelled, failed or lost, its stop removes them, as it removes its harness's `tmp`, before its authority hears of the end.
+  An agent put to rest, or in a session that stops, keeps them, as its harness comes back on them. What stays of them the stop
+  says in the runtime's log: what could not be removed, and what a symlink an agent planted leads to, which is not followed
   ([RFC 0075](rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft).
 - **The owner's and the view token.** `owner.token`, a control credential, and `view.token`, which reads and never writes,
   are files in the session folder that only you can read, which each runtime writes fresh when it starts. A session a program
@@ -97,15 +98,19 @@ A session's folder, as [§4](architecture.md#4-session-folder-and-process-model)
 - `commits.bundle`, the commits the journal recorded.
 
 An agent's folder keeps its harness's scratch, its `tmp`, and the files where its harness keeps a credential only until
-the agent ends: its stop removes them, and keeps the rest, as Credentials above says. An agent that has not ended keeps them:
-one in a session that stopped, which comes back on a resume, and one idle when its session closed, as a close ends no agent.
-That a close removes none of them is the default, pending the owner's ruling.
+the agent's stop has run once it ends: the stop removes them, and keeps the rest, as Credentials above says. `tmp` goes whole,
+with whatever its harness kept there, such as pi's full text of a tool result it cut for the model, which its transcript names
+by a path that then names nothing. An agent that has not ended keeps them: one in a session that stopped, which comes back on a
+resume, and one idle when its session closed or settled, as a close ends no agent. That a close removes none of them is the
+default, pending the owner's ruling, so a session never resumed, as a trainable one never is, keeps them for good. So does an
+ended agent whose stop had not begun when its runtime stopped, or that a killed runtime cut off, as it runs again only at a
+resume.
 
 Outside it: a harness on your own login keeps its own transcripts where it always does, in your home; an agent's worktree or
 branch may stay in your repository, as [workspaces](how-to/workspaces.md#when-a-workspace-goes) says; and the root keeps what
 `doctor --check` found of each harness. The folder as it ended is the session's export ([RFC
-0055](rfcs/0055-the-export-is-the-session-as-it-ended.md)), so copying it copies all of the above, and once its agents have
-ended, none of their harnesses' scratch or credential files.
+0055](rfcs/0055-the-export-is-the-session-as-it-ended.md)), so copying it copies all of the above, and once each ended
+agent's stop has run, none of its harness's scratch or the files its driver names as credentials.
 
 ### Erasing a body
 

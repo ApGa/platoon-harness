@@ -6,7 +6,7 @@
 
 **Its "holds no key" is extended by [RFC 0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md)**, a draft,
 2026-11-08: each driver names where its harness keeps a credential in an agent's folder, and an agent's end removes those files
-and its harness's `TMPDIR`, so a session copied after its agents ended holds neither and keeps its record whole.
+and its harness's `TMPDIR`, so a session copied once each ended agent's stop has run holds neither and keeps its record.
 
 ## Summary
 
