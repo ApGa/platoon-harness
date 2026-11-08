@@ -22,12 +22,19 @@ REBOUND = "rebound.localhost"
 WebKit job runs, as WebKit has run nowhere yet."""
 
 
+ABORTED = "due to access control checks"
+"""What WebKit says, as an error of the page's, of a request of the page's own that a reload, a navigation or a cut
+network ended, though the page catches it. Chromium and Firefox run every test too, and report a request the page fails
+to catch in words of their own."""
+
+
 def watched(page: Page, *expected: str) -> list[str]:
     """What went wrong on a page: an exception, or an error or a warning on its console that matches none of
     `expected`, such as the line a browser logs for a request the test refused on purpose."""
     errors: list[str] = []
     page.on(
-        "pageerror", lambda error: errors.append(f"pageerror: {error}") if _unexpected(str(error), expected) else None
+        "pageerror",
+        lambda error: errors.append(f"pageerror: {error}") if _unexpected(str(error), (*expected, ABORTED)) else None,
     )
     page.on("console", lambda message: errors.append(message.text) if _wrong(message, expected) else None)
     return errors
