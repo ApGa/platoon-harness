@@ -559,3 +559,28 @@ async def test_find_waits_out_a_read_under_way_and_reads_back_each_page_once():
         assert not transcript.following
         assert befores == [701, 701, 445, 445, 189, 189], "a page is a read for each of the focus's globs"
         assert [block.first for block in transcript.blocks] == list(range(1, 701))
+
+
+def test_a_thread_holds_its_messages_alone_and_a_reply_goes_where_the_page_s_reply_goes():
+    """A thread is the message it began with and every message sent in it. A reply goes to the topic or the group a
+    message is on, or to the other of a direct exchange the person is in, a runtime's report standing for the agent it
+    is about, and nowhere for one between others."""
+
+    def sent(seq: int, stream: str, sender: str, **data: Any) -> Event:
+        return event(seq, stream, "message.sent", "words", {"sender": sender, "thread": None, **data})
+
+    began = Focus.of_thread(sent(3, "channel/notes", "@you"), "human:you")
+    replied = Focus.of_thread(sent(5, "inbox/lead", "@you", thread="channel/notes@3"), "human:you")
+    held = [sent(3, "channel/notes", "@you"), sent(5, "inbox/lead", "@you", thread="channel/notes@3")]
+    others = [sent(4, "channel/notes", "@lead"), event(6, "channel/notes", "item.recorded", "x", {"thread": "x"})]
+
+    assert began.thread == replied.thread == "channel/notes@3" and began.title == "Thread channel/notes@3"
+    assert all(began.holds(one) for one in held) and not any(began.holds(other) for other in others)
+
+    def to(stream: str, sender: str, **data: Any) -> str | None:
+        return Focus.of_thread(sent(1, stream, sender, **data), "human:you").to
+
+    assert [to("channel/notes", "@lead"), to("channel/+crew", "@lead")] == ["#notes", "+crew"]
+    assert [to("inbox/you", "@lead"), to("inbox/lead", "@you")] == ["@lead", "@lead"]
+    assert to("inbox/you", "runtime", subject="worker") == "@worker"
+    assert to("inbox/lead", "@worker") is None and to("inbox/you", "runtime") is None

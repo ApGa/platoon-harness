@@ -644,15 +644,25 @@ class Workspace(Screen[None]):
         """Why the composer cannot send now, or None when it can."""
         if live.runtime != "live":
             return f"history: {reach('resume')} resumes it to send"
+        if self.target is None and self.focus_on is not None and self.focus_on.thread is not None:
+            return "this thread is between others, and you are not in it, so it takes no message from you"
         if self.target is None:
             return f"{self.focus_on.title if self.focus_on else 'this'} takes no message: choose an agent or a topic"
         return None
+
+    def _replying(self) -> Event | None:
+        """The message what the composer sends answers: the one the thread in view was opened on, while the target is
+        that thread's."""
+        focus = self.focus_on
+        return focus.reply_to if focus is not None and focus.to is not None and self.target == focus.to else None
 
     def _chip(self, live: Live) -> Content:
         cannot = self._unsendable(live)
         if cannot is not None:
             return SafeText(cannot, "dim")
         parts: list[Any] = [("to: ", "dim"), SafeText(self.target or "", "bold reverse")]
+        if (replying := self._replying()) is not None:
+            parts += [("  replying to ", "dim"), SafeText(replying.data.get("sender", ""), "bold")]
         if self._queued is not None:
             ways = sorted({entry["delivery"] for entry in self._queued["entries"]})
             parts += [(f"  queued {self._queued['total']}: {', '.join(ways)}", "cyan")]
@@ -780,7 +790,7 @@ class Workspace(Screen[None]):
         text = composer.text.strip()
         if not text and self.attached is None:
             return
-        target = self.target
+        target, replying = self.target, self._replying()
         assert target is not None
         if text.startswith("/"):
             question = SafeText(
@@ -801,7 +811,7 @@ class Workspace(Screen[None]):
         if self.attached is not None:
             body = self.attached[1]
         try:
-            await live.session.send(target, gist, body=body)
+            await live.session.send(target, gist, body=body, reply_to=None if replying is None else shows(replying))
         except Refused as refused:
             note(self, str(refused), severity="error")
             return
@@ -1092,6 +1102,20 @@ class Workspace(Screen[None]):
             note(self, said, severity="warning")
             return
         self.app.push_screen(Provenance(live.session, answer["ref"]))
+
+    async def action_thread(self) -> None:
+        """Show the thread of the chosen line's message in the focus pane, where the composer replies to it."""
+        chosen = self.query_one(Transcript).chosen
+        if self.live is None:
+            return
+        if chosen is None or chosen.event.type != "message.sent":
+            said = (
+                "Only a message has a thread: choose a message's line of the transcript, which Tab reaches, with its "
+                "arrows. What an agent says in its turn is no message, nor is an approval."
+            )
+            note(self, said, severity="warning")
+            return
+        await self.show(Focus.of_thread(chosen.event, self.human))
 
     def action_who_reached_whom(self) -> None:
         """Show who reached whom in the session, in the provenance panel, each link following into its event's."""

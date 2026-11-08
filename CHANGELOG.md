@@ -13,6 +13,11 @@ named here is closed.
 
 ### New features
 
+- **Threads in the terminal.** `/thread` shows the thread of the chosen line's message in the focus pane, every message
+  sent in it on any inbox or channel, and the composer replies to that message where the page's Reply sends one: in
+  its topic or group, or back to the other of a direct exchange you are in, which the chip above it says. A message
+  between others takes no reply from you. Before, the terminal showed a reply only where it was sent, and could send
+  none.
 - **Words found in the terminal.** `/find`, or Ctrl+F, opens a form for words, filled in with the last ones found, and
   sent, it chooses the line before the chosen one whose words hold them, whatever their case and spacing, reading back
   from the journal a page at a time as scrolling up does, or says that none does and goes back to where it began. Ctrl+F

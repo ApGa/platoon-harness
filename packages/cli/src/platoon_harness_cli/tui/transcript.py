@@ -1,5 +1,5 @@
-"""The transcript: one agent's or one channel's journal, a line per event and a line opens on demand, read from the
-journal a page at a time and drawn a line at a time, with what an agent is saying now below it."""
+"""The transcript: one agent's, one channel's or one thread's journal, a line per event and a line opens on demand, read
+from the journal a page at a time and drawn a line at a time, with what an agent is saying now below it."""
 
 import asyncio
 import bisect
@@ -28,7 +28,7 @@ from platoon_harness.primitives import Span
 from .. import approvals
 from ..approvals import Ask
 from ..calls import UNJOINED, Join
-from ..provenance import REF_IN_TEXT
+from ..provenance import REF_IN_TEXT, shows
 from .approvals import rows_of
 from .keymap import bindings
 from .rows import CHOSEN, strip_of
@@ -56,10 +56,11 @@ _HIDDEN = frozenset(
 
 @dataclass(frozen=True)
 class Focus:
-    """What the focus pane shows: an agent or a channel, read from the journal as the events on the streams it names
-    and on those its globs take. `marks` are the streams a person's mark moves on as they read it, `agent` the one whose
-    live text shows below it, `children` the agents it had spawned when it was shown, and `to` the address a message
-    goes to, or None for a place that takes none."""
+    """What the focus pane shows: an agent, a channel or a thread, read from the journal as the events on the streams it
+    names and on those its globs take, and in a thread only its messages. `marks` are the streams a person's mark moves
+    on as they read it, `agent` the one whose live text shows below it, `children` the agents it had spawned when it
+    was shown, `to` the address a message goes to, or None for a place that takes none, `thread` the thread it shows,
+    and `reply_to` the message one sent from it answers."""
 
     title: str
     streams: tuple[str, ...] = ()
@@ -68,6 +69,8 @@ class Focus:
     agent: str | None = None
     children: frozenset[str] = frozenset()
     to: str | None = None
+    thread: str | None = None
+    reply_to: Event | None = None
 
     @classmethod
     def of_agent(cls, name: str, children: Iterable[str] = ()) -> "Focus":
@@ -95,32 +98,56 @@ class Focus:
         stream = f"inbox/{principal.partition(':')[2]}"
         return cls(f"@{principal.partition(':')[2]}", streams=(stream,), marks=(stream,))
 
+    @classmethod
+    def of_thread(cls, message: Event, person: str) -> "Focus":
+        """The thread `message` is in, or else begins: the message it began with and every message sent in it, on any
+        inbox or channel. A message sent from it answers `message`, where the page's Reply sends one: to the topic or
+        the group it is on, or to the other of a direct exchange `person` is in. One between others takes none."""
+        thread = message.data.get("thread") or shows(message)
+        to = _reply_address(message, person.partition(":")[2])
+        return cls(f"Thread {thread}", matches=("inbox/*", "channel/*"), to=to, thread=thread, reply_to=message)
+
     @property
     def key(self) -> str:
         return self.title
 
     def holds(self, event: Event) -> bool:
-        return event.stream in self.streams or any(fnmatchcase(event.stream, glob) for glob in self.matches)
+        if event.stream not in self.streams and not any(fnmatchcase(event.stream, glob) for glob in self.matches):
+            return False
+        if self.thread is None:
+            return True
+        return event.type == "message.sent" and self.thread in (shows(event), event.data.get("thread"))
+
+
+def _reply_address(message: Event, person: str) -> str | None:
+    """Where a reply to `message` goes, as the page's chats take one: the topic or the group it is on, or the other of a
+    direct exchange `person` is in, which for a runtime's report is the agent it is about, and nowhere for one between
+    others."""
+    kind, _, name = message.stream.partition("/")
+    if kind == "channel":
+        return _address(message.stream)
+    pair = {name, message.data.get("subject") or message.data.get("sender", "").removeprefix("@")}
+    other = next(iter(pair - {person}), None)
+    return f"@{other}" if kind == "inbox" and person in pair and other not in (None, "runtime") else None
 
 
 async def page_of(session: Session, focus: Focus, *, after: int = 0, before: int | None = None) -> Page:
     """A page of the events a focus holds: a read for each of its globs, the first with its streams, as a read takes
-    one glob, kept to what every read covered, so the next page, from its `cursor`, leaves nothing out."""
+    one glob, kept to what every read covered, so the next page, from its `cursor`, leaves nothing out, and to what the
+    focus holds, as a thread holds only its messages."""
     pages = [
         await session.page(
             after=after, before=before, streams=(focus.streams or None) if at == 0 else None, match=glob, limit=PAGE
         )
         for at, glob in enumerate(focus.matches or (None,))
     ]
-    if len(pages) == 1:
-        return pages[0]
     if before is None:
         cursor = min(page.cursor for page in pages)
         covered = {event.seq: event for page in pages for event in page.events if event.seq <= cursor}
     else:
         cursor = max(page.cursor for page in pages)
         covered = {event.seq: event for page in pages for event in page.events if event.seq >= cursor}
-    events = tuple(covered[seq] for seq in sorted(covered))
+    events = tuple(covered[seq] for seq in sorted(covered) if focus.holds(covered[seq]))
     return Page(events=events, cursor=cursor, head=max(page.head for page in pages))
 
 

@@ -1299,3 +1299,58 @@ async def test_find_goes_back_a_page_at_a_time_to_the_next_line_whose_words_matc
 
         moved = [event.type async for event in owner.events(head) if event.actor == "human:you"]
         assert moved == [], "finding did something"
+
+
+async def test_a_thread_opens_on_its_message_and_the_composer_replies_in_it(root):
+    """`/thread` shows the chosen line's message's thread, every message sent in it on any inbox or channel, and the
+    composer answers that message where the page's Reply sends one: in its channel, or back to whom it came from. What
+    an agent says in its turn is no message, and has no thread."""
+    asked = Call("message_send", {"to": "#notes", "gist": "a question on the plan", "reply_to": "channel/notes@1"})
+    told = Call("message_send", {"to": "@you", "gist": "and one for you"})
+    async with Session.start(with_notes(team([asked, told, Say("asked")])), name="s", root=root, cwd=root) as owner:
+        await in_state(owner, "lead", "idle")
+        assert (await owner.send("#notes", "the plan"))["ref"] == "channel/notes@1"
+        await owner.send("#notes", "unrelated")
+        await owner.send("@lead", "go")
+        await until(lambda: of_type(owner, "turn.ended"), owner)
+        app = TerminalUI("s")
+        async with app.run_test(size=(120, 32)) as pilot:
+            await drawn(pilot, lambda text: "@lead  asked" in text)
+            screen = workspace(app)
+            transcript = screen.query_one(Transcript)
+
+            await pilot.press(*"/thread", "enter")
+            said = await drawn(
+                pilot, lambda _: any("Only a message" in notice.message for notice in app._notifications)
+            )
+            assert "@lead" in said.splitlines()[1]
+
+            await show_notes(pilot)
+            await drawn(pilot, lambda text: "a question on the plan" in text)
+            transcript.focus()
+            await pilot.press("up", "up", "slash", *"thread", "enter")
+            text = await drawn(pilot, lambda text: "Thread channel/notes@1" in text)
+            assert "to: #notes  replying to @you" in text
+            assert [block.line.plain for block in transcript.blocks] == [
+                "@you → #notes  the plan",
+                "@lead → #notes  a question on the plan",
+            ]
+
+            await pilot.press(*"agreed", "enter")
+            await drawn(pilot, lambda text: "@you → #notes  agreed" in text)
+
+            await pilot.press("alt+up")
+            await drawn(pilot, lambda text: "and one for you" in text)
+            await pilot.press(*"/thread", "enter")
+            text = await drawn(pilot, lambda text: "Thread inbox/you@" in text)
+            assert "to: @lead  replying to @lead" in text
+            await pilot.press(*"thanks", "enter")
+            await drawn(pilot, lambda text: "@you → @lead  thanks" in text)
+
+        sent = [event for event in await of_type(owner, "message.sent") if event.actor == "human:you"]
+        replies = [(event.stream, event.gist, event.data["reply_to"], event.data["thread"]) for event in sent[3:]]
+        to_you = next(event for event in await of_type(owner, "message.sent") if event.gist == "and one for you")
+        assert replies == [
+            ("channel/notes", "agreed", "channel/notes@1", "channel/notes@1"),
+            ("inbox/lead", "thanks", shows(to_you), shows(to_you)),
+        ]

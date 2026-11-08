@@ -184,6 +184,13 @@ KEYMAP: tuple[Key, ...] = (
     ),
     Key(
         "",
+        "thread",
+        "thread",
+        "Show the thread of the chosen line's message, where the composer replies to it",
+        "workspace",
+    ),
+    Key(
+        "",
         "who_reached_whom",
         "reached",
         "Show who reached whom in the session: each pair of makers, each kind of edge apart with how it is known, and "

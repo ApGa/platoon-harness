@@ -84,7 +84,7 @@ that spawned an OpenHands worker, read back as history.*
 |---|---|
 | Header | Who is working, how many places need you, what is blocked or failed, what changed, as commits and paths uncommitted, `not measured` until the first look and `not observed` when the session's cwd is in no git repository, and each limit with what is spent against it, `?` where nobody could say, and how many turns nobody measured whole |
 | Navigator | Agents grouped by what you must do, Needs you, Working, Blocked, Idle, Done and Failed, as a tree by parent, with what each is on or waits for. Channels below, with how many lines you did not write lie past your mark, and a mark for a mention you have not read |
-| Focus pane | One agent or one channel at a time, so live text is never merged |
+| Focus pane | One agent, one channel or one thread at a time, so live text is never merged |
 | Inspector, `/inspector` | Why an agent waits, whether it rests with no process until its next message, its harness, model, login kind and levels, its workspace, with its branch, the commit it started from, a line on what an isolated one still reaches, and why its stop kept it, what it spent with labels, its gaps, and what the runtime refused you |
 | Dock | Each place you must act, from the `attention` view, with its actions. A place its agent's next turn settles, a lost turn, a wake past `max_hops`, a failure or a conflict of an agent's, offers Write to it, a mention Reply, and a dead task Add it again, each opening its op's form. An agent's conflict says to tell it, or to resolve it in your own checkout, never in its workspace, where a commit is recorded as the agent's. Your checkout's has no action, and says to resolve it there, a failure of no agent's that nothing tries it again, and a daemon that keeps failing where its traceback is and what starts it anew |
 | Composer | What you write, and above it whom it goes to and what waits for that agent |
@@ -137,6 +137,19 @@ ours. `/file` attaches a file as the message's body, and since a body keeps no n
 in the gist. Up and Down on the first and last lines recall what you sent or ran, over an empty draft and never over one
 being written, which a recalled message is once you edit it. Ctrl+D on an empty composer detaches, and with a draft it
 says why it does not.
+
+### Threads
+
+`/thread` shows the thread of the chosen line's message in the focus pane: the message it began with and every message
+sent in it, on any inbox or channel, read from the journal a page at a time as any focus is, and drawn as more come. A
+message's thread is the one it was sent in, or else the one it begins. The composer then replies to that message, where
+the page's Reply sends one ([web.md](web.md)): in the topic or group it is on, or in a direct exchange you are in, to
+the other, so a reply to what an agent sent you goes back to it. The chip above the composer says so,
+`to: #notes  replying to @ada`, and a message between others takes no reply from you, which the chip says too. What you
+send replies while the target is the thread's: retargeted to another with `@agent` or `#channel` at the start, it is a
+message as ever, in no thread. A thread moves no read mark, and a row chosen in the navigator leaves it. What an agent
+says in its turn and an approval are no message, so they have no thread, which `/thread` says. That threads are in
+milestone 4 is the default pending the owner's ruling.
 
 ### Act on the session
 
@@ -372,6 +385,7 @@ before the session's. `^` is Ctrl.
 | `^T` | `/tasks` | Show the tasks of the queue in view, or the entries of the board in view, each act opening its op's form |
 | `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths, each opening its diff |
 |  | `/provenance` | Show an event's provenance, by the ref you give, the chosen line's unless you give another: what it rests on, what came of it and whose work it reaches |
+|  | `/thread` | Show the thread of the chosen line's message, where the composer replies to it |
 |  | `/reached` | Show who reached whom in the session: each pair of makers, each kind of edge apart with how it is known, and each agent's unknowns, each link opening its event's provenance |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
 | `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent hold` holds its deliveries and no more |
@@ -463,7 +477,7 @@ before the session's. `^` is Ctrl.
 ## Not built yet
 
 Disabled where a control for it would be, or absent from the palette:
-threads, image input, harness slash commands, model and permission
+image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, copying a selection from
 the transcript, themes and notifications, and in provenance credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
 leases and credentials do not, so no control will offer it.
