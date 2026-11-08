@@ -68,6 +68,41 @@ async def test_only_the_sessions_link_opens_the_sessions_page_and_no_link_of_a_s
     assert spent.status == 401
 
 
+async def test_the_sessions_page_refuses_a_foreign_host_and_a_post_from_another_origin_or_none_and_starts_nothing(
+    page, tmp_path
+):
+    """It acts as you on every session here, so a rebinding name is refused 421, and a POST from another site, from
+    another port of loopback, as a session's page is served on, from `null` or with no `Origin` is refused 403, each
+    before its bearer is read: a start that holds its trust starts nothing, and an exchange spends no link."""
+    (tmp_path / "solo.toml").write_text(solo("saying"))
+    ours = await Browser(page).opened()
+    start = {"team": "solo.toml", "name": "s"}
+    start |= (await ours.request("POST", "/x/start", start)).json()["ask"]["answer"]
+    link = page.link()
+    secret = link.partition("#link=")[2]
+    rebound = f"rebound.localhost:{page.port}"
+    foreign = [{"Host": rebound, "Origin": f"http://{rebound}"}, {"Host": f"127.0.0.1:{page.port % 65535 + 1}"}]
+    origins = [
+        "http://evil.example",
+        f"http://127.0.0.1:{page.port % 65535 + 1}",
+        f"https://127.0.0.1:{page.port}",
+        "null",
+        None,
+    ]
+
+    hosts, posts = [], []
+    for route, body, token in (("/x/exchange", {}, secret), ("/x/start", start, ours.token)):
+        for headers in foreign:
+            hosts.append((await ours.request("POST", route, body, token=token, headers=headers)).status)
+        for origin in origins:
+            posts.append((await ours.request("POST", route, body, token=token, headers={"Origin": origin})).status)
+    hosts.append((await ours.request("GET", "/", headers={"Host": rebound})).status)
+    spent = await Browser(page).exchange(link)
+
+    assert hosts == [421] * 5 and posts == [403] * 10
+    assert spent.status == 200 and not (tmp_path / "sessions" / "s").exists()
+
+
 async def test_the_sessions_page_is_served_under_a_policy_that_lets_only_its_own_script_run(page):
     reply = await Browser(page).request("GET", "/")
     policy = reply.headers["content-security-policy"]
