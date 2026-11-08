@@ -392,9 +392,12 @@ The list of changes that start with an RFC is in [the RFC index](docs/rfcs/READM
 ## Releases
 
 The SDK and the command line release together, at one version. Below 1.0, as [CHANGELOG.md](CHANGELOG.md) says, a minor
-release may change the Python API, the team file or the command line, and a patch release only fixes bugs. Nothing is
-published or tagged yet. Only the owner tags or publishes, and the names, the tag and the trusted publisher a release
-would publish with are the owner's to rule on.
+release may change the Python API, the team file or the command line, and a patch release only fixes bugs. A first-party
+extension, a folder of `extensions/` such as `extensions/acp`, is a distribution of its own, on a version its
+`pyproject.toml` sets and a tag of its own, `platoon-harness-acp-vX.Y.Z`, and it requires the SDK of its own minor release
+alone ([RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md)). Nothing
+is published or tagged yet. Only the owner tags or publishes, and the names, the tags and the trusted publisher a
+release would publish with are the owner's to rule on.
 
 ### Cut a release
 
@@ -440,6 +443,7 @@ each push to `main`, as CI's other jobs run. Its `build` job runs:
 uv build --all-packages --no-sources
 uvx twine@7.0.0 check --strict dist/*
 uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
+uv run --isolated --no-project --with dist/platoon_harness_acp-*.whl --with dist/platoon_harness_sdk-*.whl python -I -c "import platoon_harness_acp"
 uv sync --locked
 uv run pytest -q -m slow tests/integration/test_installed.py
 ```
@@ -448,7 +452,8 @@ uv run pytest -q -m slow tests/integration/test_installed.py
 file the wheel needs fails here. `--no-sources` builds each as PyPI would, without the workspace's sources.
 `twine check --strict`, at the release the workflow pins, checks each distribution's metadata, and that its README renders as its PyPI description, failing
 on a warning too. `uvx` runs the command line from the two wheels in an environment of its own, installing only what
-their metadata requires, so a requirement only the workspace gave fails there. The workflow runs every step on Python
+their metadata requires, so a requirement only the workspace gave fails there, and `uv run --isolated` imports each
+first-party extension from its wheel and the SDK's alone, the same way. The workflow runs every step on Python
 3.12, the oldest the packages name, with `UV_PYTHON=3.12`.
 
 `tests/integration/test_installed.py`, slow tests, build the wheels again and install them in an environment of their

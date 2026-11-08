@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "platoon-harness-acp"
+# A first-party extension releases on a version and a tag of its own (RFC 0072).
+version = "0.1.0"
+description = "The ACP driver of platoon-harness: run an agent that speaks the Agent Client Protocol, such as OpenCode, as a harness of a team."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Apurva Gandhi" }]
+keywords = ["acp", "agent-client-protocol", "agents", "llm", "multi-agent", "opencode"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# The SDK of its own minor release, as the command line takes, and nothing else: ACP is spoken over the SDK's peer.
+dependencies = ["platoon-harness-sdk>=0.1,<0.2"]
+
+[project.urls]
+Homepage = "https://github.com/ApGa/platoon-harness"
+Documentation = "https://github.com/ApGa/platoon-harness/tree/main/docs/extending/drivers.md"
+Source = "https://github.com/ApGa/platoon-harness/tree/main/extensions/acp"
+Issues = "https://github.com/ApGa/platoon-harness/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/platoon_harness_acp"]
+
+[tool.uv.sources]
+platoon-harness-sdk = { workspace = true }

@@ -281,14 +281,14 @@ def test_nothing_has_a_private_api():
 
 
 def test_nothing_claims_mid_generation():
-    """Every doc, the root's Markdown and the packages' code, but for the folders whose dated research and verbatim
-    brief quote the phrase to forbid it; the law's own words and the rule in AGENTS.md that carries it out are no
-    claim."""
+    """Every doc, the root's Markdown and the code and Markdown of the packages and the first-party extensions, but for
+    the folders whose dated research and verbatim brief quote the phrase to forbid it; the law's own words and the rule
+    in AGENTS.md that carries it out are no claim."""
     root = Path(__file__).parents[3]
     excluded = ("docs/research", "docs/spec")
     not_claims = re.compile(r'Nothing claims mid-generation|Never say "exactly once" or "mid-generation"\.')
     texts = []
-    for pattern in ("packages/*/src/**/*.py", "*.md", "docs/**/*.md"):
+    for pattern in ("packages/*/src/**/*.py", "extensions/*/src/**/*.py", "*.md", "extensions/*/*.md", "docs/**/*.md"):
         found = sorted(root.glob(pattern))
         assert found, f"{pattern} matches nothing"
         texts += [path for path in found if not any(path.is_relative_to(root / folder) for folder in excluded)]
