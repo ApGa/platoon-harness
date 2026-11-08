@@ -396,36 +396,50 @@ def _version(ref: str) -> int:
 
 def _span(lineage: Answer, spans: Sequence[Answer]) -> list[Line]:
     """What a credit row on a model call is about: the whole span the call names, from its first call to it, with the
-    writes the record ties to its calls, and for a turn of one span why nothing cut it; or the span a call that names
-    none lies in; or none, for a call out of a turn."""
+    writes the record ties to its calls, and for an ended turn of one span why nothing cut it; or the span a call that
+    names none lies in; or none, for a call out of a turn. In a turn under way, what can still change of its span."""
     asked, who = lineage["event"]["ref"], _who(lineage["made"]["maker"])
     at = _version(asked)
     span = next((span for span in spans if _version(span["first"]) <= at <= _version(span["ref"])), None)
     if span is None:
         said = "it lies in no span, so no credit row on it is a span's: a span holds only calls reported in a turn"
         return [Line("", said)]
+    under_way, last = lineage["open"], span == spans[-1]
     if span["ref"] != asked:
         said = f"it names no span, so no credit row on it is a span's: it lies in the one {span['ref']} names"
-        return [Line("", said, span["ref"])]
-    turn, first = span["turn"], span["first"]
-    named = f"it names a span of {who}'s, so a credit row on it is the whole span's"
-    if first == asked:
-        lines = [Line("", f"{named}: this one model call, in turn {turn}")]
+        lines = [Line("", said, span["ref"])]
     else:
-        lines = [Line("", f"{named}: the model calls in turn {turn} from {first} to this one", first)]
-    lines += [Line("", f"one of the span's calls chose the write {write}", write) for write in span["writes"]]
-    if not span["writes"]:
-        lines.append(Line("", "the record ties no write to the span's calls"))
-    if len(spans) == 1:
-        lines.append(Line("", _whole(who, span["writes"])))
-    if lineage["open"]:
-        lines.append(Line("", "its turn had not ended, so a later report can still cut it again", warn=True))
+        turn, first = span["turn"], span["first"]
+        named = f"it names a span of {who}'s, so a credit row on it is the whole span's"
+        named = f"so far {named}" if under_way and last else named
+        if first == asked:
+            lines = [Line("", f"{named}: this one model call, in turn {turn}")]
+        else:
+            lines = [Line("", f"{named}: the model calls in turn {turn} from {first} to this one", first)]
+        lines += [Line("", f"one of the span's calls chose the write {write}", write) for write in span["writes"]]
+        if not span["writes"]:
+            lines.append(Line("", "the record ties no write to the span's calls"))
+        if len(spans) == 1 and not under_way:
+            lines.append(Line("", _whole(who, span["writes"])))
+    if under_way:
+        lines.append(Line("", _unended(last), warn=True))
     return lines
 
 
+def _unended(last: bool) -> str:
+    """What can still change of a span in a turn under way: the turn's last span takes each later call of it, which
+    then names it, and a later report can tie a write to one of its calls, which cuts it there."""
+    if last:
+        return (
+            "its turn had not ended, so a later call of it can still join this span and name it, and a later report "
+            "can still cut this span"
+        )
+    return "its turn had not ended, so a later report can still cut this span"
+
+
 def _whole(who: str, writes: Sequence[str]) -> str:
-    """Why nothing cut a turn of one span: a turn is cut after each call that chose a write the record ties to it, but
-    the last such call."""
+    """Why nothing cut an ended turn of one span: a turn is cut after each call that chose a write the record ties to
+    it, but the last such call."""
     if writes:
         return (
             "its turn is one span, as one call alone chose the writes the record ties to it, and a turn is cut after "

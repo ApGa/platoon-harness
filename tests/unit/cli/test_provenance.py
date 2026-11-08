@@ -424,8 +424,8 @@ async def test_estimates_that_differ_only_in_their_params_say_so(kernel):
 
 async def test_a_span_s_credit_row_is_said_to_be_the_whole_span_s_with_its_bounds(kernel):
     """A row on the model call that names a span is the whole span's, from its first call to that one, with the writes
-    the record ties to its calls; a call that names none says which span it lies in, one out of a turn lies in none, and
-    one in a turn still under way says that a later report can still cut it."""
+    the record ties to its calls; a call that names none says which span it lies in, and one out of a turn lies in
+    none."""
     await spanned(kernel)
     outside = await called(kernel, "c0")
     await start_turn(kernel, "w", "t1")
@@ -434,12 +434,10 @@ async def test_a_span_s_credit_row_is_said_to_be_the_whole_span_s_with_its_bound
     c3 = await called(kernel, "c3")
     two = await wrote(kernel, "c3", "two")
     await end_turn(kernel, "w")
-    await start_turn(kernel, "w", "t2")
-    c4 = await called(kernel, "c4")
     row = {**ESTIMATE, "scope": "local", "producer": "propagate", "value": 0.25}
 
     named, alone, inside = credit(kernel, c2, row), credit(kernel, c3), credit(kernel, c1)
-    under_way, out_of_a_turn = credit(kernel, c4), credit(kernel, outside)
+    out_of_a_turn = credit(kernel, outside)
 
     whole = "it names a span of @w's, so a credit row on it is the whole span's:"
     assert named[1:] == [
@@ -456,10 +454,48 @@ async def test_a_span_s_credit_row_is_said_to_be_the_whole_span_s_with_its_bound
         Line("", f"it names no span, so no credit row on it is a span's: it lies in the one {c2} names", c2),
         Line("", "no estimator has said anything of it"),
     ]
-    assert under_way[1] == Line("", f"{whole} this one model call, in turn t2")
-    assert under_way[-2] == Line("", "its turn had not ended, so a later report can still cut it again", warn=True)
     assert out_of_a_turn[1:] == [
         Line("", "it lies in no span, so no credit row on it is a span's: a span holds only calls reported in a turn"),
+        Line("", "no estimator has said anything of it"),
+    ]
+
+
+async def test_a_span_in_a_turn_under_way_says_a_later_call_can_join_it_and_a_later_report_cut_it(kernel):
+    """While its turn is under way, the turn's last span takes each later call of it, which then names it, so the call
+    that names that span names it only so far, and no reason a turn is one span is given before it ends; a later
+    report can tie a write to a call of any of its spans, which cuts that span there."""
+    await spanned(kernel)
+    await start_turn(kernel, "w", "t1")
+    c1 = await called(kernel, "c1")
+    alone = credit(kernel, c1)
+    c2 = await called(kernel, "c2")
+    joined, extended = credit(kernel, c1), credit(kernel, c2)
+    one = await wrote(kernel, "c2", "one")
+    await called(kernel, "c3")
+    await wrote(kernel, "c3", "two")
+    before_the_last = credit(kernel, c2)
+
+    whole = "it names a span of @w's, so a credit row on it is the whole span's:"
+    can_change = (
+        "its turn had not ended, so a later call of it can still join this span and name it, and a later report can "
+        "still cut this span"
+    )
+    assert alone[1:] == [
+        Line("", f"so far {whole} this one model call, in turn t1"),
+        Line("", "the record ties no write to the span's calls"),
+        Line("", can_change, warn=True),
+        Line("", "no estimator has said anything of it"),
+    ]
+    assert joined[1:] == [
+        Line("", f"it names no span, so no credit row on it is a span's: it lies in the one {c2} names", c2),
+        Line("", can_change, warn=True),
+        Line("", "no estimator has said anything of it"),
+    ]
+    assert extended[1] == Line("", f"so far {whole} the model calls in turn t1 from {c1} to this one", c1)
+    assert before_the_last[1:] == [
+        Line("", f"{whole} the model calls in turn t1 from {c1} to this one", c1),
+        Line("", f"one of the span's calls chose the write {one}", one),
+        Line("", "its turn had not ended, so a later report can still cut this span", warn=True),
         Line("", "no estimator has said anything of it"),
     ]
 

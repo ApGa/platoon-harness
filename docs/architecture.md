@@ -1546,8 +1546,8 @@ what its page left out, naming the command that reads on; and why a link opens n
 a tool item names the call its report names and opens what each command of its agent's under that item's id made. What an answer
 does not hold below its bound is said as not held there, never as never. Credit is shown only as each estimator's statement, by
 producer, version and params, never summed, and on a model call beside the span the call lies in, read from `spans`: a row on the
-call that names a span is said to be the whole span's, with its first call, its turn and its writes, and a turn of one span says
-why nothing cut it. A ref a message's text names, found by one pattern for both, is a link that opens that ref's own
+call that names a span is said to be the whole span's, with its first call, its turn and its writes, an ended turn of one span
+says why nothing cut it, and a turn under way says what a later call or report can still change of its spans. A ref a message's text names, found by one pattern for both, is a link that opens that ref's own
 provenance, saying it was opened from text, which records no link. See
 [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md).
 

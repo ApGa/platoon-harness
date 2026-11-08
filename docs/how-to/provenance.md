@@ -108,9 +108,11 @@ last words. [compatibility.md](../reference/compatibility.md), Provenance per ha
 
 The terminal's and the browser's provenance say it on a model call, under Credit and rewards: on the call that names a span, that a
 credit row on it is the whole span's, the calls of its turn from its first to this one, with each write the record ties to them,
-and on any other call, which span it lies in. A turn of one span says why nothing cut it: one call alone chose the writes the
-record ties to it, or the record ties none, as when the agent wrote nothing in it or its harness joins no tool call to the model
-call that chose it, as OpenHands and Codex do not, which makes each of their turns one span. The panel reads `spans` a page at a
+and on any other call, which span it lies in. An ended turn of one span says why nothing cut it: one call alone chose the
+writes the record ties to it, or the record ties none, as when the agent wrote nothing in it or its harness joins no tool call to
+the model call that chose it, as OpenHands and Codex do not, which makes each of their turns one span. While a turn is under way,
+its last span takes each call reported after it, which then names it, so the panel says its call names it so far, and a later
+report can still tie a write to a call and cut a span there, which the panel says too. The panel reads `spans` a page at a
 time, from the agent's first to the one that holds that turn's last span, so on an agent of many spans it takes a page for each 32
 before it.
 
