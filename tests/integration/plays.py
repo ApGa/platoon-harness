@@ -24,16 +24,23 @@ OFFLINE = 'auth.provider.env = ["OPENAI_BASE_URL", "OPENAI_API_KEY", "PI_OFFLINE
 """The one line a run on FakeModel adds to an example's team, so pi starts with no network, as tests reach none."""
 
 
-def provider(model: FakeModel, home: Path) -> dict[str, str]:
-    """The environment of a run on FakeModel: its endpoint and a dummy key, which `OFFLINE` hands on with pi's switch
-    for no network, and a home of the run's own, whose git config names who commits, as an agent's git reads only the
-    home's."""
+def homed(home: Path) -> dict[str, str]:
+    """A home of a run's own, whose git config names who commits, as the copy's first commit and an agent's git read
+    only the home's."""
     home.mkdir(parents=True, exist_ok=True)
     (home / ".gitconfig").write_text(
         "[user]\n\tname = Tester\n\temail = tester@example.invalid\n[init]\n\tdefaultBranch = main\n"
     )
+    return {"HOME": str(home)}
+
+
+def provider(model: FakeModel, home: Path) -> dict[str, str]:
+    """The environment of a run on FakeModel: its endpoint and a dummy key, which `OFFLINE` hands on with pi's switch
+    for no network, and a home of the run's own. The switch is `yes`, not `1`: every value an auth profile hands on is
+    masked as a secret wherever it is found, a short one inside the ids a report names too, which loses the agent, as
+    docs/STATUS.md records."""
     url = f"{model.url}/v1"
-    return {"OPENAI_BASE_URL": url, "OPENAI_API_KEY": "dummy-key", "PI_OFFLINE": "yes", "HOME": str(home)}
+    return {"OPENAI_BASE_URL": url, "OPENAI_API_KEY": "dummy-key", "PI_OFFLINE": "yes", **homed(home)}
 
 
 def on_fake_model(command: str) -> str:

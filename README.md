@@ -69,7 +69,8 @@ a queue and starts an OpenHands worker, which fixes a bug in a copy of [the samp
 with a test, writes a note on a board and reports back. Name a model at an endpoint that speaks OpenAI's Chat
 Completions, OpenRouter's or any provider's OpenAI-compatible URL, in the variables the team's auth profile names, such as
 `export OPENAI_BASE_URL=https://openrouter.ai/api/v1` and `export OPENAI_API_KEY=...` with your key. Then, with `pi` on
-your PATH, in a folder of yours, with MODEL the model as your endpoint names it:
+your PATH and git that knows your name and email, in a new, empty folder, with MODEL the model as your endpoint names
+it:
 
 ```console
 $ source path/to/platoon-harness/.venv/bin/activate

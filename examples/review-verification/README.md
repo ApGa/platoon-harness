@@ -34,7 +34,7 @@ The example has two files:
 
 ## 1. Check it
 
-Make a copy of the sample project, as a repository of its own, and work there:
+In a new, empty folder, make a copy of the sample project, as a repository of its own, and work there:
 
 ```console
 $ cp -r path/to/platoon-harness/examples/sample-project tally
@@ -91,25 +91,29 @@ From another shell, in the same repository:
 $ platoon-harness session show review
 $ platoon-harness repo test review --commit SHA
 $ platoon-harness view watch review --name changes
-$ platoon-harness message send review --to @verifier --reply-to inbox/you@1 --gist passed --based-on TESTED
+$ platoon-harness message send review --to @verifier --reply-to ASK --gist passed --based-on TESTED
 ```
 
-`session show` names the verifier's ask under needs you, as `needs you: mention inbox/you@1, Please test 4dde84429173
-...`: its ref, `inbox/you@1` here, which your answer replies to, and the commit, SHA here. `repo test` has the runtime
-run the team's test at that commit, as you, in a clean checkout of it, and record what it came to: the one step of the
-flow that no agent can take, which [Test a commit](../../docs/how-to/workspaces.md#test-a-commit) describes. It answers
-at once, with the `effect` it started, and the test runs after. `view watch` gives the changes view, in which the
-commit's row says what the test came to as `tests`, null until it has run and `passed` here, and the ref of its record
-as `tested`, TESTED here, such as `repo/<name>@4`, `<name>` being your repository's folder: while `tests` is null, run
-`view watch` again. Your message answers the ask, says what the test came to and cites its record, so the verdict, which
-cites your answer, rests on your test. The run then settles, and ends with `settled, exit 0` and a line for each agent,
-each finished with its last words, which are the model's own: the verifier's is its verdict.
+`session show` names the verifier's ask under needs you, with its ref, ASK here, which your answer replies to, and its
+words, which are the model's own and name the commit, SHA here, as in `needs you: mention inbox/you@1, Please test
+4dde84429173 ...` from a run on FakeModel. `repo test` has the runtime run the team's test at that commit, as you, in a
+clean checkout of it, and record what it came to: the one step of the flow that no agent can take, which [Test a
+commit](../../docs/how-to/workspaces.md#test-a-commit) describes. It answers at once, with the `effect` it started, and
+the test runs after. `view watch` gives the changes view, in which the commit's row says what the test came to as
+`tests`, null until it has run and `passed` here, and the ref of its record as `tested`, TESTED here, such as
+`repo/<name>@4`, `<name>` being your repository's folder: while `tests` is null, run `view watch` again. Your message
+answers the ask, says what the test came to and cites its record, so the verdict, which cites your answer, rests on your
+test. The run then settles, and ends with `settled, exit 0` and a line for each agent, each finished with its last
+words, which are the model's own: the verifier's is its verdict.
 
 A real model chooses its own steps, so a run can go otherwise: the reviewer may ask `repo.commit` again more often, and
-the verifier may word its ask differently, so read the SHA from what it says. A live run of this example is held to 60
-model calls and 40 minutes, your answer included, by `tests/live/test_examples.py`, which has not run yet:
+the verifier may word its ask differently, so read the SHA from what it says. The team's budget of 24 turns and 40
+minutes is what stops a runaway: no budget counts model calls, and one turn can make many.
+`tests/live/test_examples.py` fails a live run of this example that took more than 60 model calls, counted once the run
+has ended, or 40 minutes, your answer included, numbers no run has checked yet, as it has not run:
 [docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the
-`platoon-harness` commands on this page as shown, the run in one process and your steps beside it, on the real `pi` and
+`platoon-harness` commands on this page as shown, with `fake-model` for MODEL, and the run with one more `--set` line,
+which hands pi its switch for no network, the run in one process and your steps beside it, on the real `pi` and
 OpenHands against FakeModel, a loopback model that replies from a script, so the harnesses, the tools, git, the
 approvals and the team file are real and only the model is scripted. A session's name is taken once, so a second run
 needs another `--name`.
@@ -118,13 +122,13 @@ needs another `--name`.
 
 ```console
 $ platoon-harness task list review --queue to-verifier
-$ platoon-harness contributors review --ref task/to-verifier/1@3
+$ platoon-harness contributors review --ref VERDICT
 ```
 
-`task list` prints the verifier's task with its verdict as its `result`, and `task/to-verifier/1@3` is the verdict's ref:
-the task was added, claimed, then completed. `contributors` says whose work the record ties to the verdict, in the order
-reached, when each agent cites as its instructions ask: the verifier's own; the author, whose commit the look recorded as
-made in its worktree; the reviewer, who handed the commit on; you, whose answer the verdict cites; and the runtime,
-whose record of your test your answer cites. It is reachability in the record and never credit: it weighs and ranks
-nobody, and a citation is its agent's claim. [docs/how-to/provenance.md](../../docs/how-to/provenance.md) says how to
-read each answer.
+`task list` prints the verifier's task with its verdict as its `result`, and the verdict's ref as its `result_ref`,
+VERDICT here, such as `task/to-verifier/1@3` when the task was added, claimed, then completed. `contributors` says whose
+work the record ties to the verdict, in the order reached, when each agent cites as its instructions ask: the verifier's
+own; the author, whose commit the look recorded as made in its worktree; the reviewer, who handed the commit on; you,
+whose answer the verdict cites; and the runtime, whose record of your test your answer cites. It is reachability in the
+record and never credit: it weighs and ranks nobody, and a citation is its agent's claim.
+[docs/how-to/provenance.md](../../docs/how-to/provenance.md) says how to read each answer.

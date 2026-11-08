@@ -1,8 +1,10 @@
 """The examples as their pages run them, each in a copy of the sample project made as its page makes one, on its real
 `pi` and OpenHands against FakeModel, which plays each agent from `plays.py`: the harnesses, their tools and approvals,
-git and the team files are real, and only the model is scripted. Real models run them in `tests/live/test_examples.py`.
-The README's quickstart and the first session's guide run the mixed team as the example's page does. None of these
-shows what a real model would choose, which only a live run does."""
+git and the team files are real, and only the model is scripted. A run names `fake-model` for MODEL and adds one
+`--set` line, `plays.OFFLINE`, handing pi its switch for no network. The copy, `team check` and `team show` need no
+harness, so they are fast tests, and run as shown. Real models run the examples in `tests/live/test_examples.py`. The
+README's quickstart and the first session's guide run the mixed team as the example's page does. None of these shows
+what a real model would choose, which only a live run does."""
 
 import ast
 import asyncio
@@ -25,7 +27,7 @@ from platoon_harness.testing import FakeModel
 from ..unit.runtime.gitting import git
 from . import plays
 from .cli import ROOT, SECONDS, Cli, Done, finished, shown
-from .plays import cast, copied, on_fake_model, provider
+from .plays import cast, copied, homed, on_fake_model, provider
 
 pytestmark = pytest.mark.timeout(120)
 
@@ -131,23 +133,46 @@ def ran_tests(folder: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["python3", "-m", "unittest"], cwd=folder, capture_output=True, text=True, check=False)
 
 
+def ran_tests_at(cli: Cli, commit: str, folder: Path) -> subprocess.CompletedProcess[str]:
+    """The copy's tests, run at `commit` in a worktree of the copy's made at `folder`."""
+    bash(cli, f"git worktree add -q --detach {shlex.quote(str(folder))} {commit}")
+    return ran_tests(folder)
+
+
+CHECKED = {"mixed-team": (README, "may message"), "worktree-merge-queue": (WORKTREE, "merges")}
+CHECKED |= {"review-verification": (REVIEW, "to-reviewer"), "git-swarm": (SWARM, "may message no one")}
+"""Each example whose page checks a team file, and a text of the output that page says `team show` prints."""
+
+
+@pytest.mark.parametrize("example", CHECKED)
+async def test_each_example_s_copy_check_and_show_run_as_its_page_shows_them(tmp_path: Path, example: str):
+    """The copy, `team check` and `team show` as the page shows them, MODEL named, which need no harness, model or key,
+    so they run where no pi is, as on GitHub's runners: the check says `no problems`, and the show says what the page
+    says it does."""
+    page, holding = CHECKED[example]
+    check, show = shown(page, where="team check")
+
+    async with on_sample(tmp_path, page, homed(tmp_path / "home")) as cli:
+        checked, told = await typed(cli, check.replace("MODEL", plays.MODEL)), await typed(cli, show)
+
+    assert (checked.code, checked.stdout, told.stdout) == (0, "no problems\n", expected(page, holding)), checked.stderr
+
+
 @pytest.mark.slow
 @pytest.mark.timeout(400)
 async def test_the_mixed_team_fixes_issue_1_and_says_who_contributed_to_the_lead_s_answer(tmp_path: Path):
     """Its page's commands as it shows them, in a copy of the sample project, on the real `pi` and OpenHands against
-    FakeModel: the team checks and says what it allows; the person's job reaches the lead, the lead's task reaches
-    `fixer` by the queue, whose fix and test land in the copy, uncommitted, with the tests passing; its note goes on the
-    board and its report back by message, each write citing what it rests on; the session settles; and the page's
-    reads find the task, the note and the report, and whose work the record ties to the lead's answer."""
+    FakeModel: the person's job reaches the lead, the lead's task reaches `fixer` by the queue, whose fix and test land
+    in the copy, uncommitted, with the tests passing; its note goes on the board and its report back by message, each
+    write citing what it rests on; the session settles; and the page's reads find the task, the note and the report, and
+    whose work the record ties to the lead's answer."""
     needs("pi")
-    check, show = shown(README, where="team check")
     [run] = shown(README, where="--name tally ")
     reads = shown(README, where="task list")
     uses, reaching = shown(README, where="contributors")
 
     async with FakeModel() as model, on_sample(tmp_path, README, provider(model, tmp_path / "home")) as cli:
         cast(model, **plays.MIXED)
-        checked, told = await typed(cli, on_fake_model(check)), await typed(cli, show)
         ran = await run_on_fake_model(cli, run)
         listed, noted, messages = [await typed(cli, command) for command in reads]
         citing = json.loads((await typed(cli, uses)).stdout)["rows"]
@@ -157,7 +182,6 @@ async def test_the_mixed_team_fixes_issue_1_and_says_who_contributed_to_the_lead
         reached = await typed(cli, reaching.replace("REF", answer))
         events = await journal(cli, "tally")
 
-    assert (checked.code, checked.stdout, told.stdout) == (0, "no problems\n", expected(README, "may message")), checked
     assert ran.code == 0, ran.stderr[-2000:]
     ending = ran.stdout[ran.stdout.rindex("settled, exit 0") :].splitlines()
     assert sorted(line.split()[:2] for line in ending[1:]) == [["@fixer", "finished"], ["@lead", "finished"]], ending
@@ -242,9 +266,9 @@ async def test_the_first_session_s_steps_run_the_mixed_team_and_read_the_record_
 @pytest.mark.timeout(400)
 async def test_the_sdk_script_s_agents_each_fix_an_issue_on_a_branch_of_its_own_and_report_it(tmp_path: Path):
     """Its page's commands as it shows them, in a copy of the sample project, on OpenHands against FakeModel: the
-    script's two agents each commit their fix and its test on a branch of their own, where the tests pass, with your
-    checkout as it was; the script prints that the session settled and each one's report; and `session list`, `events`
-    and `git log` read it back by the name the script printed."""
+    script's two agents each commit their fix and its test on a branch of their own, where the copy's tests pass, with
+    your checkout as it was; the script prints that the session settled and each one's report; and `session list`,
+    `events` and `git log` read it back by the name the script printed."""
     page = SCRIPT / "README.md"
     [run] = [command for command in shown(page, where="run.py") if "run.py" in command]
     listing, reading, logging = shown(page, where="session list")
@@ -258,14 +282,16 @@ async def test_the_sdk_script_s_agents_each_fix_an_issue_on_a_branch_of_its_own_
         assert done.code == 0 and named, done.stderr[-2000:]
         listed, read = await typed(cli, listing), await typed(cli, reading.replace("NAME", named[1]))
         logged = bash(cli, logging.replace("NAME", named[1]))
+        branches = {agent: f"platoon-harness/{named[1]}/{agent}" for agent in plays.SCRIPT}
+        tested = {agent: ran_tests_at(cli, branch, tmp_path / agent).returncode for agent, branch in branches.items()}
 
     assert sorted(said) == [f"cents: {plays.CENTS}", f"comments: {plays.COMMENTS}"]
     assert named[1] in listed.stdout and read.code == 0 and "agent_finish" in read.stdout, read.stderr
     assert logged.split(maxsplit=1)[1] == "Read one digit of cents as tens of cents\n"
     for agent, path in (("cents", "tally/money.py"), ("comments", "tally/ledger.py")):
-        branch = f"platoon-harness/{named[1]}/{agent}"
-        changed = git("diff", "--name-only", f"{head.strip()}..{branch}", cwd=cli.folder).split()
+        changed = git("diff", "--name-only", f"{head.strip()}..{branches[agent]}", cwd=cli.folder).split()
         assert changed == sorted([path, path.replace("tally/", "tests/test_")]), changed
+    assert tested == {"cents": 0, "comments": 0}
     assert (git("rev-parse", "HEAD", cwd=cli.folder), git("status", "--porcelain", cwd=cli.folder)) == (head, "")
 
 
@@ -273,23 +299,26 @@ async def test_the_sdk_script_s_agents_each_fix_an_issue_on_a_branch_of_its_own_
 @pytest.mark.timeout(500)
 async def test_the_merge_queue_example_merges_one_fix_and_hands_the_other_its_conflict(tmp_path: Path):
     """Its page's commands as it shows them, in a copy of the sample project, on the real `pi` and OpenHands against
-    FakeModel: the team checks and says what it allows, and the run settles as the page says, one worker's branch
-    merged by a commit the look records as the merger's and the other's conflict in `CHANGELOG.md` in its task's
-    result, which its worker finishes with, the merger under Needs you while it rests on it. Git, the harnesses' tools
-    and their approvals are real, and only the model is scripted."""
+    FakeModel: the run settles as the page says, one worker's branch merged by a commit the look records as the
+    merger's, at which the copy's tests pass, and the other's conflict in `CHANGELOG.md` in its task's result, which its
+    worker finishes with, the merger under Needs you while it rests on it. Git, the harnesses' tools and their approvals
+    are real, and only the model is scripted."""
     needs("pi")
-    check, show = shown(WORKTREE, where="team check")
     [run] = shown(WORKTREE, where="--prompt-file")
     listing, showing = shown(WORKTREE, where="task list")
 
     async with FakeModel() as model, on_sample(tmp_path, WORKTREE, provider(model, tmp_path / "home")) as cli:
         cast(model, **plays.QUEUE)
-        checked, told = await typed(cli, on_fake_model(check)), await typed(cli, show)
         ran = await run_on_fake_model(cli, run, within=2 * RUN)
         listed, said = await typed(cli, listing), await typed(cli, showing)
         events = await journal(cli, "fixes")
+        merges = [
+            event["data"]
+            for event in events
+            if event["type"] == "repo.committed" and len(event["data"]["parents"]) == 2
+        ]
+        tested = [ran_tests_at(cli, merge["sha"], tmp_path / "merged").returncode for merge in merges]
 
-    assert (checked.code, checked.stdout, told.stdout) == (0, "no problems\n", expected(WORKTREE, "merges")), checked
     assert ran.code == 0, ran.stderr[-2000:]
     ending = [line.split(maxsplit=2) for line in ran.stdout[ran.stdout.rindex("settled, exit 0") :].splitlines()[1:]]
     reports = {name.removeprefix("@"): (state, words) for name, state, *words in ending}
@@ -305,7 +334,7 @@ async def test_the_merge_queue_example_merges_one_fix_and_hands_the_other_its_co
     }
     committed = [event["data"] for event in events if event["type"] == "repo.committed"]
     assert sorted(commit["made_in"] for commit in committed) == ["@ada", "@bob", "@merger"]
-    assert [commit["made_in"] for commit in committed if len(commit["parents"]) == 2] == ["@merger"]
+    assert [merge["made_in"] for merge in merges] == ["@merger"] and tested == [0]
     assert "needs you: conflict conflict/@merger, merge stopped on conflicts in 1 file, CHANGELOG.md" in said.stdout
 
 
@@ -313,22 +342,20 @@ async def test_the_merge_queue_example_merges_one_fix_and_hands_the_other_its_co
 @pytest.mark.timeout(500)
 async def test_the_review_example_s_verifier_reads_the_commit_and_a_person_s_test_is_its_evidence(tmp_path: Path):
     """Its page's commands as it shows them, in a copy of the sample project, on the real `pi` and OpenHands against
-    FakeModel: the team checks and says what it allows, and the run goes on while the verifier waits for you, as
-    `session show` says. Your test of the commit the verifier names, which the changes view says passed, and your
-    answer citing the test's record, let it finish: its verdict cites the commit, which it read through `repo.commit`,
-    as the reviewer's review does, having read it so too and with git in its snapshot, and your answer, so the record
-    ties the verdict to your test. A commit is recorded at the look after the author's turn, which the reviewer's turn
-    can begin before, and no wait wakes an agent once a commit is recorded, so the reviewer's model may wait a second
-    and ask again, a bounded retry on real time that its instructions ask of a real model too."""
+    FakeModel: the run goes on while the verifier waits for you, as `session show` says. Your test of the commit the
+    verifier names, which the changes view says passed, and your answer citing the test's record, let it finish: its
+    verdict cites the commit, which it read through `repo.commit`, as the reviewer's review does, having read it so too
+    and with git in its snapshot, and your answer, so the record ties the verdict to your test. A commit is recorded at
+    the look after the author's turn, which the reviewer's turn can begin before, and no wait wakes an agent once a
+    commit is recorded, so the reviewer's model may wait a second and ask again, a bounded retry on real time that its
+    instructions ask of a real model too."""
     needs("pi")
-    check, show = shown(REVIEW, where="team check")
     [run] = shown(REVIEW, where="--prompt-file")
     asking, testing, watching, answering = shown(REVIEW, where="repo test")
     listing, reaching = shown(REVIEW, where="contributors")
 
     async with FakeModel() as model, on_sample(tmp_path, REVIEW, provider(model, tmp_path / "home")) as cli:
         cast(model, **plays.REVIEWING)
-        checked, told = await typed(cli, on_fake_model(check)), await typed(cli, show)
         running = await started(cli, on_fake_model(run))
         assert running.stdout is not None and await asyncio.wait_for(running.stdout.readline(), SECONDS)
         following = await cli.start("events", "review", "--follow", "--json")
@@ -339,12 +366,13 @@ async def test_the_review_example_s_verifier_reads_the_commit_and_a_person_s_tes
         record = await journaled(following, lambda event: event["type"] == "repo.tested")
         rows = json.loads((await typed(cli, watching)).stdout)["rows"]
         [commit_row] = [row for row in rows if row["kind"] == "commit"]
-        answered = await typed(cli, answering.replace("TESTED", commit_row["tested"]))
+        answered = await typed(cli, answering.replace("ASK", ref(asked)).replace("TESTED", commit_row["tested"]))
         ran = await finished(running, within=RUN)
-        listed, reached = await typed(cli, listing), await typed(cli, reaching)
+        listed = await typed(cli, listing)
+        [verified] = json.loads(listed.stdout)["tasks"]
+        reached = await typed(cli, reaching.replace("VERDICT", verified["result_ref"]))
         events = await journal(cli, "review")
 
-    assert (checked.code, checked.stdout, told.stdout) == (0, "no problems\n", expected(REVIEW, "to-reviewer")), checked
     assert f"needs you: mention inbox/you@1, {asked['gist']}" in showed.stdout
     assert (tested.code, record["data"]["outcome"]) == (0, "passed"), tested.stderr
     assert (commit_row["tests"], commit_row["tested"]) == ("passed", ref(record))
@@ -368,7 +396,7 @@ async def test_the_review_example_s_verifier_reads_the_commit_and_a_person_s_tes
     verdict = [ref(commit), "task/to-verifier/1@1", ref(answer)]
     assert done["task/to-verifier/1"]["based_on"] == ends["verifier"]["based_on"] == verdict
     assert ends["verifier"]["data"]["gist"] == "Reviewed, and tested by you: passed"
-    assert [task["result"] for task in json.loads(listed.stdout)["tasks"]] == [ends["verifier"]["data"]["gist"]]
+    assert (verified["result"], verified["result_ref"]) == (ends["verifier"]["data"]["gist"], "task/to-verifier/1@3")
     assert [(row["maker"], row["first"]) for row in json.loads(reached.stdout)["rows"]] == [
         ("agent:verifier", "task/to-verifier/1@3"),
         ("agent:author", ref(commit)),
@@ -382,21 +410,18 @@ async def test_the_review_example_s_verifier_reads_the_commit_and_a_person_s_tes
 @pytest.mark.timeout(500)
 async def test_the_git_swarm_example_ends_with_each_worker_s_outcome_on_the_sample_project(tmp_path: Path):
     """Its page's commands as it shows them, in a copy of the sample project, its script on the real `pi` against
-    FakeModel: the team checks and says what it allows, and the script, which owns the session as `program:swarm`,
-    starts four workers, at most two at once, each in a worktree of its own, and ends with each one's outcome as the
-    program alone recorded it on `outcomes`: a contribution of `--json`, a test built on it by the SHA its outcome
-    records, where the tests pass, a nomination citing that commit, seen through `repo.commit`, and an abstention. The
-    script reads out no winner, and the commits stay on the workers' branches in the repository, with the checkout as it
-    was."""
+    FakeModel: the script, which owns the session as `program:swarm`, starts four workers, at most two at once, each in
+    a worktree of its own, and ends with each one's outcome as the program alone recorded it on `outcomes`: a
+    contribution of `--json`, a test built on it by the SHA its outcome records, where the tests pass, a nomination
+    citing that commit, seen through `repo.commit`, and an abstention. The script reads out no winner, and the commits
+    stay on the workers' branches in the repository, with the checkout as it was."""
     needs("pi")
-    check, show = shown(SWARM, where="team check")
     [run] = shown(SWARM, where="run.py")
     reads = shown(SWARM, where="board query")
 
     async with FakeModel() as model, on_sample(tmp_path, SWARM, provider(model, tmp_path / "home")) as cli:
         cast(model, **plays.SWARM)
         head = git("rev-parse", "HEAD", cwd=cli.folder)
-        checked, told = await typed(cli, on_fake_model(check)), await typed(cli, show)
         ran = await python_typed(cli, on_fake_model(run), within=2 * RUN)
         first, *said = ran.stdout.splitlines()
         session = re.fullmatch(r"session (\S+): settled", first)
@@ -404,10 +429,8 @@ async def test_the_git_swarm_example_ends_with_each_worker_s_outcome_on_the_samp
         queried, read, traced = [await typed(cli, command.replace("NAME", session[1])) for command in reads]
         events = await journal(cli, session[1])
         branch = f"platoon-harness/{session[1]}/worker-2"
-        bash(cli, f"git worktree add -q ../tested {branch}")
-        tested = ran_tests(tmp_path / "tested")
+        tested = ran_tests_at(cli, branch, tmp_path / "tested")
 
-    assert (checked.code, checked.stdout, told.stdout) == (0, "no problems\n", expected(SWARM, "may message no one"))
     live, most = set(), 0
     for event in events:
         if event["type"] == "agent.spawned":

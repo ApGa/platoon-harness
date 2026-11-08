@@ -6,8 +6,9 @@ whose work reached its answer, open it in the terminal UI and the browser, then 
 **Prerequisites:**
 
 - a checkout installed as [Install](install.md) says, by `uv sync`, which brings the SDK's `openhands` extra;
-- for steps 1 to 4, `pi` on your PATH, which needs no login here, git, `python3` 3.9 or later, and a model at an endpoint
-  that speaks OpenAI's Chat Completions, with a key for it: OpenRouter's, or any provider's OpenAI-compatible URL;
+- for steps 1 to 4, `pi` on your PATH, which needs no login here, git that knows your name and email, as
+  `git config user.name` and `git config user.email` say, `python3` 3.9 or later, and a model at an endpoint that speaks
+  OpenAI's Chat Completions, with a key for it: OpenRouter's, or any provider's OpenAI-compatible URL;
 - for step 5, the harnesses you use on your PATH, signed in as you usually are; its output here is from a machine with
   `claude` and `codex`.
 
@@ -18,7 +19,7 @@ Agents work where you start a session, so each step runs in a folder of yours, w
 
 [The mixed team](../../examples/mixed-team/README.md) is a [team](concepts.md#one-session-traced) of a pi lead and an
 OpenHands worker. Its job is issue 1 of [the sample project](../../examples/sample-project/README.md), a small Python
-package written for the examples, so make a copy of it, as a repository of its own:
+package written for the examples, so in a new, empty folder make a copy of it, as a repository of its own:
 
 ```console
 $ source path/to/platoon-harness/.venv/bin/activate
@@ -43,8 +44,8 @@ name on stderr at once, prints a line per event as the session journals it, and 
 The lead puts a task on a queue and starts a worker, `fixer`, which fixes the bug in your copy with a test, writes a
 note on a board and reports back, and the lead reads the note and finishes. The run ends with `settled, exit 0` and a
 line for each agent, `@fixer` and `@lead`, with how it ended and its last words, which are the model's own. It spends
-model calls on your key: a live run of this team is held to 40 model calls and 15 minutes, and a real model may take
-other steps than these, as [the mixed team](../../examples/mixed-team/README.md#2-run-it) says.
+model calls on your key, as many as its model takes: the team's budget of 16 turns and 20 minutes stops a runaway, and
+a real model may take other steps than these, as [the mixed team](../../examples/mixed-team/README.md#2-run-it) says.
 
 ## 2. Read it back
 

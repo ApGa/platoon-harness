@@ -101,9 +101,12 @@ named here is closed.
   commit with git in a snapshot of its own, and a pi verifier whose every command is refused; and
   [the GitSwarm population](examples/git-swarm/README.md) runs pi workers on a feature. A slow test runs each README's commands
   as shown on the real `pi` and OpenHands against FakeModel, which plays each agent, so the harnesses, their tools, git and
-  the team files are real and only the model is scripted, and a live test, `tests/live/test_examples.py`, runs each on the
-  model `PLATOON_HARNESS_LIVE_MODEL` names within the budget its README states, in model calls and wall time. No live run has
-  been made yet. That the examples run so is the owner's ruling of 2026-11-08.
+  the team files are real and only the model is scripted, a run naming `fake-model` for MODEL with one more `--set` line,
+  which hands pi its switch for no network. A fast test runs each copy, `team check` and `team show` as shown, which need
+  no harness, so GitHub's runners, which have no pi, run them. A live test, `tests/live/test_examples.py`, runs each on the
+  model `PLATOON_HARNESS_LIVE_MODEL` names and fails a run that took more model calls or minutes than its README states.
+  No budget counts model calls as they are made, so a team's own budget of turns and wall time is what stops a runaway,
+  as each README says. No live run has been made yet. That the examples run so is the owner's ruling of 2026-11-08.
 - **A sample project for the examples.** [examples/sample-project](examples/sample-project/README.md) is `tally`, a small
   Python package written for the examples, MIT, that splits shared expenses, with its own tests and an `ISSUES.md` of two
   defects and two feature requests, each example's job naming one. It runs on Python 3.9 or later, as an agent's `python3`
@@ -960,7 +963,8 @@ named here is closed.
   [RFC 0077](docs/rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md), a draft.
 - **Your first session and the README's quickstart run the mixed team on your model.** They copy the sample project, name
   the endpoint and key, and run the team as its README does, then read the closed session back, where they ran it with no
-  keys on scripted stand-ins. Each is run as shown by a slow test on FakeModel.
+  keys on scripted stand-ins. A slow test runs each as shown on FakeModel, the run naming `fake-model` for MODEL with one
+  more `--set` line, which hands pi its switch for no network.
 - **The GitSwarm script takes no `--plan-login`, and trusts its own team file.** Its workers reach their model through an
   auth profile, which is on no plan login, and the script loads the team file beside it with `trust_project`, as `--trust`
   trusts one, since that file's auth profile hands your key to each worker. See

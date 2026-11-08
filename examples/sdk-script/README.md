@@ -20,8 +20,8 @@ of the sample project on a branch of its own; wait for the session to settle, an
 
 ## 1. Run it
 
-Make a copy of [the sample project](../sample-project/README.md) as a repository of its own, and run the script there,
-with MODEL the model as your endpoint names it:
+In a new, empty folder, make a copy of [the sample project](../sample-project/README.md) as a repository of its own,
+and run the script there, with MODEL the model as your endpoint names it:
 
 ```console
 $ cp -r path/to/platoon-harness/examples/sample-project tally
@@ -37,10 +37,12 @@ and `comments`, with its report, in the model's own words. Each agent fixes its 
 checkout, and the branches stay in your repository. Its approvals allow, as nobody is there to answer one, so it runs
 commands as you, unasked, and a worktree is not a sandbox: what runs there can reach anything you can.
 
-A live run of the script is held to 30 model calls and 15 minutes, by `tests/live/test_examples.py`, which has not run
-yet: [docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the
-commands on this page as shown, on OpenHands against FakeModel, a loopback model that replies from a script, so the
-harness, the tools and the team are real and only the model is scripted.
+The team's budget of 8 turns and 15 minutes is what stops a runaway: no budget counts model calls, and one turn can
+make many. `tests/live/test_examples.py` fails a live run of the script that took more than 30 model calls, counted once
+the run has ended, or 15 minutes, numbers no run has checked yet, as it has not run:
+[docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the commands on
+this page as shown, with `fake-model` for MODEL, on OpenHands against FakeModel, a loopback model that replies from a
+script, so the harness, the tools and the team are real and only the model is scripted.
 
 ## 2. Read the script
 

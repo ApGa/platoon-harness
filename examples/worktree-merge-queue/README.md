@@ -36,7 +36,7 @@ The example has two files:
 
 ## 1. Check it
 
-Make a copy of the sample project, as a repository of its own, and work there:
+In a new, empty folder, make a copy of the sample project, as a repository of its own, and work there:
 
 ```console
 $ cp -r path/to/platoon-harness/examples/sample-project tally
@@ -83,11 +83,14 @@ Whichever worker adds its task first is merged first. The workers and the merger
 checkout. A session's name is taken once, so a second run needs another `--name`.
 
 A real model chooses its own steps, so a run can go otherwise: a worker may write its line in another place, and then
-both branches merge, or the merger may try to resolve a conflict its instructions leave for you. A live run of this
-example is held to 80 model calls and 25 minutes, by `tests/live/test_examples.py`, which has not run yet:
-[docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the
-`platoon-harness` commands on this page as shown, on the real `pi` and OpenHands against FakeModel, a loopback model
-that replies from a script, so the harnesses, the tools, git and the team file are real and only the model is scripted.
+both branches merge, or the merger may try to resolve a conflict its instructions leave for you. The team's budget of
+24 turns and 25 minutes is what stops a runaway: no budget counts model calls, and one turn can make many.
+`tests/live/test_examples.py` fails a live run of this example that took more than 80 model calls, counted once the run
+has ended, or 25 minutes, numbers no run has checked yet, as it has not run: [docs/STATUS.md](../../docs/STATUS.md) says
+what has run live. `tests/integration/test_examples.py` runs the `platoon-harness` commands on this page as shown, with
+`fake-model` for MODEL, and the run with one more `--set` line, which hands pi its switch for no network, on the real
+`pi` and OpenHands against FakeModel, a loopback model that replies from a script, so the harnesses, the tools, git and
+the team file are real and only the model is scripted.
 
 ## 3. Read it back
 

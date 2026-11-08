@@ -387,13 +387,17 @@ primitive, needs:
 An example is a folder of `examples/`: a `README.md` that states the goal, what it needs, the steps and what to expect,
 with the files a person runs and nothing else, no stand-in of a harness or a model among them. One that runs a team runs
 it on a real model the person names, at an endpoint that speaks OpenAI's Chat Completions, which a role's auth profile
-hands its harness as `OPENAI_BASE_URL` and `OPENAI_API_KEY`, and works on a copy of
-[the sample project](examples/sample-project/README.md), whose issues list names each job. Each has a slow test in `tests/integration/test_examples.py` that runs its README's
-commands as shown on its real pi or OpenHands against `FakeModel`, which plays each agent from
-`tests/integration/plays.py`, so the harness, the tools and the team file are real and only the model is scripted, and a
-live test in `tests/live/test_examples.py` that runs it on a real model within the budget its README states, in model
-calls and wall time. Its files import nothing from the tests and reach the SDK by the names `tests/public_api.txt` lists
-alone, which tests there hold. A cost a README quotes comes from a run that was made.
+hands its harness as `OPENAI_BASE_URL` and `OPENAI_API_KEY`, and works on a copy of [the sample
+project](examples/sample-project/README.md), whose issues list names each job. Each has a slow test in
+`tests/integration/test_examples.py` that runs its README's commands as shown, with `fake-model` for MODEL and, beside a
+run's settings, the one line `plays.OFFLINE` that hands pi its switch for no network, on its real pi or OpenHands
+against `FakeModel`, which plays each agent from `tests/integration/plays.py`, so the harness, the tools and the team
+file are real and only the model is scripted. A fast test there runs its copy, `team check` and `team show` as shown,
+which need no harness, so CI's runners, which have no pi, run them. Each has a live test in
+`tests/live/test_examples.py` that runs it on a real model and fails a run that took more model calls or minutes than
+its README states; no budget counts model calls as they are made, so the team's own budget of turns and wall time is
+what stops a runaway. Its files import nothing from the tests and reach the SDK by the names `tests/public_api.txt`
+lists alone, which tests there hold. A cost a README quotes comes from a run that was made.
 
 ## The docs' images
 

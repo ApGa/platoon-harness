@@ -36,7 +36,8 @@ The example has two files:
 
 ## 1. Check it
 
-Make a copy of the sample project, as a repository of its own, and work there, with the checkout's environment active:
+In a new, empty folder, make a copy of the sample project, as a repository of its own, and work there, with the
+checkout's environment active:
 
 ```console
 $ source path/to/platoon-harness/.venv/bin/activate
@@ -78,9 +79,9 @@ credential: a client that attaches only reads. It ends with a line with the sess
 `session 20261108-110931-468d3828: settled`, then a line for each worker with its outcome as `outcomes` records it: the
 outcome, then the commit's short SHA and subject for a contribution or a nomination, or the worker's own words for an
 abstention, such as `worker-1: contribute: 6faf7ad0b9f8 Add --json`. The session's name and each SHA differ from run to
-run, and each outcome is what that worker's model chose. Each waits for the outcome it rests on. Each worker works on the
-branch `platoon-harness/<session>/<worker>`, in a worktree in the session's folder, made at your HEAD: nothing of it is
-in your checkout, and the branches stay in your repository.
+run, and each outcome is what that worker's model chose. Each worker works on the branch
+`platoon-harness/<session>/<worker>`, in a worktree in the session's folder, made at your HEAD: nothing of it is in your
+checkout, and the branches stay in your repository.
 
 If the script dies, its session stops with it, resumable: `population` keeps nothing, so a script that runs it again on
 the session, with `Session.resume` in place of `Session.start`, starts no worker and records no outcome twice, as
@@ -88,12 +89,15 @@ the session, with `Session.resume` in place of `Session.start`, starts no worker
 `platoon-harness session resume`, a person's, refuses the session, naming this way.
 
 A real model chooses its own outcome: whether a worker builds on a peer's commit, nominates or abstains, how often one
-does something else, which is invalid, and how many turns each takes. A live run of this example is held to 60 model
-calls and 25 minutes, by `tests/live/test_examples.py`, which has not run yet: [docs/STATUS.md](../../docs/STATUS.md)
-says what has run live. `tests/integration/test_examples.py` runs the commands on this page as shown, on the real `pi`
-against FakeModel, a loopback model that replies from a script, so the harness, the tools, git and the team file are real
-and only the model is scripted: there, one worker contributes `--json`, a second builds a test on it by the SHA its
-outcome records, a third nominates that commit and the fourth abstains.
+does something else, which is invalid, and how many turns each takes. The team's budget of 16 turns and 25 minutes is
+what stops a runaway: no budget counts model calls, and one turn can make many. `tests/live/test_examples.py` fails a
+live run of this example that took more than 60 model calls, counted once the run has ended, or 25 minutes, numbers no
+run has checked yet, as it has not run: [docs/STATUS.md](../../docs/STATUS.md) says what has run live.
+`tests/integration/test_examples.py` runs the commands on this page as shown, with `fake-model` for MODEL, and the script
+with one more `--set` line, which hands pi its switch for no network, on the real `pi` against FakeModel, a loopback
+model that replies from a script, so the harness, the tools, git and the team file are real and only the model is
+scripted: there, one worker contributes `--json`, a second waits for that outcome and builds a test on it by the SHA it
+records, a third nominates that commit and the fourth abstains.
 
 ## 3. Read it back, and choose
 

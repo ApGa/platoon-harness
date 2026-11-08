@@ -17,7 +17,8 @@ template asks each agent to do, and afterwards the record says whose work reache
 - `pi` on your PATH, which needs no login here;
 - a model at an endpoint that speaks OpenAI's Chat Completions, and a key for it: OpenRouter's, or any provider's
   OpenAI-compatible URL;
-- git, and `python3` 3.9 or later on your PATH, which the worker runs the sample project's tests on.
+- git that knows your name and email, as `git config user.name` and `git config user.email` say, since the copy's
+  first commit is yours, and `python3` 3.9 or later on your PATH, which the worker runs the sample project's tests on.
 
 The example has two files:
 
@@ -28,7 +29,7 @@ The example has two files:
 
 ## 1. Check it
 
-Make a copy of the sample project, as a repository of its own, and work there:
+In a new, empty folder, make a copy of the sample project, as a repository of its own, and work there:
 
 ```console
 $ cp -r path/to/platoon-harness/examples/sample-project tally
@@ -69,11 +70,14 @@ each agent, `@lead` and `@fixer`, with how it ended and its last words, which ar
 stays in your copy, uncommitted: `git diff` shows it, and `python3 -m unittest` runs its test.
 
 A real model chooses its own steps, so a run can go otherwise: it may name its worker differently, read more files
-before it acts, or take more turns. A live run of this example is held to 40 model calls and 15 minutes, by
-`tests/live/test_examples.py`, which has not run yet: [docs/STATUS.md](../../docs/STATUS.md) says what has run live.
-`tests/integration/test_examples.py` runs the commands of sections 1, 2 and 4 as shown, on the real `pi` and OpenHands
-against FakeModel, a loopback model that replies from a script, so the harnesses, the tools and the team file are real and
-only the model is scripted.
+before it acts, or take more turns. The team's budget of 16 turns and 20 minutes is what stops a runaway: no budget
+counts model calls, and one turn can make many. `tests/live/test_examples.py` fails a live run of this example that took
+more than 40 model calls, counted once the run has ended, or 15 minutes, numbers no run has checked yet, as it has not
+run: [docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the
+commands of sections 1, 2 and 4 as shown, with `fake-model` for MODEL, and the run with one more `--set` line, which
+hands pi its switch for no network, on the real `pi` and OpenHands against FakeModel, a loopback model that replies from
+a script, so the harnesses, the tools and the team file are real and only the model is scripted. Section 5's swap is not
+tested.
 
 The run names its session `tally`, and a name is taken once: a second run named `tally` is refused, with exit 64, so give
 it another `--name`, and use that name in the steps below.
