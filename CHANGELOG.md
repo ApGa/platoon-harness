@@ -41,6 +41,10 @@ named here is closed.
   ran two commands, two `cat`s and two calls of ours at once, OpenHands each two in turn, as our worker keeps its SDK's
   `tool_concurrency_limit` at 1, and Claude Code two commands it asked approvals for in turn and the rest at once, which
   [the compatibility page](docs/reference/compatibility.md#tool-calls-at-once) records.
+- **A turn's cuts drawn in the terminal UI.** An agent's transcript draws a line where each span of a turn but its last
+  ends, as `spans` cuts it, under what the span's calls made and above the next span's first call, naming the span by
+  its last call, which `/provenance` on the line opens. The cuts are read as the agent is shown and again as each of its
+  turns ends. Before, only `platoon-harness spans` showed where a turn was cut.
 - **A span's credit row said to be the whole span's.** On a model call, the terminal's provenance panel and the page's
   Provenance pane say under Credit and rewards which span the call lies in, read from `spans`: on the call that names a
   span, that a credit row on it is the whole span's, from its first call to this one in its turn, with each write the

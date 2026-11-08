@@ -1749,7 +1749,10 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   drawn, a read for each glob, kept to what every read covered. A child's spawn is drawn under the call that made it, the
   tool item of its spawner's whose `native_id` its anchor holds, whichever of the two came first, by the join in `calls.py`,
   which the page's Tool activity is to share, and a call leaves the window with the spawns under it. A spawn that joins no
-  call the transcript holds is drawn where the journal has it, saying it joins no known call.
+  call the transcript holds is drawn where the journal has it, saying it joins no known call. An agent's turns are drawn
+  cut where `spans` says, read as the agent is shown and again as each of its turns ends: a cut stands at the first call
+  of the span after it and shows the last call of the span it ends, whose provenance says its credit row is the whole
+  span's, and is drawn once the window holds both calls.
   Live text follows below it, one tail for the agent in view,
   which goes with the runtime that said it. Unread counts, of lines the person did not write, and read mentions come from the
   person's marks. Untrusted text crosses one `SafeText` boundary, and a lint bans handing a label-like widget anything not

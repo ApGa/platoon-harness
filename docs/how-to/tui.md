@@ -103,7 +103,11 @@ was on screen stays where it was. `/oldest` reads it from the journal's first li
 child it spawned began and ended, inside the turn that spawned it, the spawn under the line of the tool call that made
 it, even when its harness reported that call after the spawn. A spawn whose call no line holds is drawn where the journal
 has it, saying it joins no known call, as OpenHands' and an `exec` harness's are: their calls come through the shim and
-`ph`, each under an id of its own, which none of their items holds. The transcript also shows each approval the agent
+`ph`, each under an id of its own, which none of their items holds. A turn that `spans` cuts is drawn cut, a line
+`── span … ends ──` where each span but its last ends, under what its calls made and above the first call of the next,
+naming the span by its last call, which the line shows: `/provenance` on it says that a credit row on that call is the
+whole span's. A turn's last span ends with the turn. The cuts are read as the agent is shown and again as each of its turns
+ends, so a turn under way is drawn cut once it has ended. The transcript also shows each approval the agent
 asked for, which opens on the whole of what it asks, as `/ask` does, then who answered it: you or another person, and
 through what, `tui` or `browser`, or the role's policy. One nobody answered before its turn ended went moot with the turn,
 which no event records, so no answer is drawn under it, and the dock no longer lists it. Below the lines is what the

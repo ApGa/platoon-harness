@@ -9,14 +9,14 @@ from pathlib import Path
 import pytest
 
 from platoon_harness import Session, Team
-from platoon_harness.testing import Call, Say
+from platoon_harness.testing import AskModel, Call, FakeModel, Say, ToolCall
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.transcript import Focus, Transcript
 
-from ..runtime.support import in_state, of_type, scripted, until
+from ..runtime.support import Gateways, in_state, of_type, scripted, until
 from .support import drawn, workspace
 
 pytestmark = pytest.mark.timeout(60)
@@ -216,3 +216,44 @@ async def test_provenance_reads_a_session_s_history_as_it_reads_a_live_one(root)
         text = await asked(pilot, ASKED)
 
     assert f"declared {ANSWERED} message.sent by @lead" in text and "@you: made it" in text
+
+
+async def test_a_turn_s_cut_opens_the_span_it_ends_whose_row_is_the_whole_span_s(root):
+    """A worker that completes two tasks in one turn, a model call for each, on a scripted harness whose calls a model
+    chose: its transcript is cut where the first task's span ends, and the cut opens that span's last call, whose
+    credit row is the whole span's."""
+    queue = {"kind": "queue", "writers": "all", "readers": "all", "delivery": "pull"}
+    roles = {"w": {"harness": scripted([AskModel()])}}
+    queued = Team.model_validate({"roles": roles, "topology": {"channels": {"tasks": queue}}})
+    replies: list[ToolCall | str] = []
+    for number in (1, 2):
+        replies += [
+            ToolCall("task_claim", {"queue": "tasks"}, id=f"claim-{number}"),
+            ToolCall("task_complete", {"queue": "tasks", "gist": f"task {number} done"}, id=f"done-{number}"),
+        ]
+    model = FakeModel(*replies, "both are done")
+    async with model, Session.start(queued, name="s", root=root, cwd=root, authority=Gateways(model)) as owner:
+        await in_state(owner, "w", "idle")
+        for number in (1, 2):
+            await owner.task_add("tasks", f"task {number}")
+        await owner.send("@w", "two tasks are open")
+        await until(lambda: of_type(owner, "turn.ended"), owner)
+        (first, second) = (await owner.spans("@w")).spans
+        app = TerminalUI("s")
+        async with app.run_test(size=(140, 40)) as pilot:
+            await workspace(app).show(Focus.of_agent("w"))
+            cut = f"── span {first.ref} ends ──"
+            text = await drawn(pilot, lambda text: cut in text and "both are done" in text)
+            await choose(pilot, app, cut)
+            await pilot.press("p")
+            await drawn(pilot, lambda text: f"Provenance of {first.ref}" in text and "Credit and rewards" in text)
+            said_of = said(app)
+
+    drawn_in_order = [line.strip() for line in text.splitlines()]
+    at = next(index for index, line in enumerate(drawn_in_order) if cut in line)
+    assert "task_complete completed" in drawn_in_order[at - 1] and "task_claim completed" in drawn_in_order[at + 1]
+    assert text.count("── span ") == 1, "a turn's last span ends with the turn, which draws no cut"
+    whole = f"it names a span of @w's, so a credit row on it is the whole span's: the model calls in turn {first.turn}"
+    assert f"{whole} from {first.first} to this one" in said_of
+    assert f"one of the span's calls chose the write {first.writes[0]}" in said_of
+    assert second.first not in said_of

@@ -1,6 +1,7 @@
 """The transcript: one agent's or one channel's journal, a line per event and a line opens on demand, read from the
 journal a page at a time and drawn a line at a time, with what an agent is saying now below it."""
 
+import bisect
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from typing import Any
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.segment import Segment
-from textual import events
+from textual import events, work
 from textual.cache import LRUCache
 from textual.content import Content
 from textual.geometry import Region, Size
@@ -20,6 +21,7 @@ from textual.strip import Strip
 
 from platoon_harness import Refused, Session
 from platoon_harness.kernel import Delta, Event, Page
+from platoon_harness.primitives import Span
 
 from .. import approvals
 from ..approvals import Ask
@@ -175,6 +177,11 @@ def _answered(data: dict[str, Any]) -> Content:
     return Content.assemble(("✓ " if allowed else "✗ ", "green" if allowed else "red"), said, who, via)
 
 
+def _cut(span: str) -> Content:
+    """Where a span ends and the next of its turn begins, naming the span by its last call."""
+    return Content.assemble(("── span ", "dim"), SafeText(span, "dim"), (" ends ──", "dim"))
+
+
 def _spawned(event: Event, joined: bool) -> Content:
     """A child's spawn: under the call that made it, or where the journal has it, saying it joins no known call."""
     line = Content.assemble(("  ↳ ", "dim"), SafeText(" ".join(event.gist.split())))
@@ -199,8 +206,9 @@ def _item(agent: str, data: dict[str, Any], gist: Content, more: Any) -> Content
 @dataclass(eq=False)
 class Block:
     """One line: `first`, the seq of the event that began it, which is where it stands; the event it shows, which a
-    tool call's end takes over from its start; and what opening it shows: its body, read when first opened, or its
-    gist whole, or for an approval's request, its `ask`, read when first opened."""
+    tool call's end takes over from its start, and a cut, standing at the next span's first call, is the last call of
+    the span it ends; and what opening it shows: its body, read when first opened, or its gist whole, or for an
+    approval's request, its `ask`, read when first opened."""
 
     first: int
     event: Event
@@ -256,7 +264,8 @@ class Transcript(ScrollView, can_focus=True):
     """A focus's journal: a window of frozen lines read from the journal a page at a time as the person scrolls, either
     way, drawn through an LRU of strips keyed by width, and below them `tail`, what the agent in view is saying now,
     which the screen keeps. Following is one state, kept here: reading up stops it, and the newest line or the follow
-    key starts it again."""
+    key starts it again. An agent's turns are cut where `spans` says, read as the agent is shown and again as each of
+    its turns ends, and each cut is drawn once the window holds both calls it stands between."""
 
     BINDINGS = [*bindings("transcript"), *bindings("panel")]
     DEFAULT_CSS = "Transcript { overflow-x: hidden; }"
@@ -278,6 +287,10 @@ class Transcript(ScrollView, can_focus=True):
         self._tools: dict[str, Block] = {}
         self._join: Join[Block] = Join()
         self._children: set[str] = set()
+        self._calls: dict[str, Event] = {}
+        self._cuts: dict[str, str] = {}
+        self._cut_at: dict[str, Block] = {}
+        self._spans_from: tuple[str | None, Span | None] = (None, None)
         self._before = 0
         self._after: int | None = None
         self._paging = False
@@ -303,7 +316,9 @@ class Transcript(ScrollView, can_focus=True):
     async def show(self, focus: Focus, session: Session, through: int) -> None:
         """Show a focus as the journal holds it through `through`, newest first, and follow from there."""
         self.focus_on, self._session, self.through = focus, session, through
+        self._cuts, self._spans_from = {}, (None, None)
         self._begin(before=through + 1, after=None)
+        self._read_spans()
         await self.page_back()
 
     def _begin(self, *, before: int, after: int | None) -> None:
@@ -311,24 +326,29 @@ class Transcript(ScrollView, can_focus=True):
         None, which is following. A page read for an earlier beginning is not put in."""
         self._shown += 1
         self._blocks, self._rows, self._tools, self._join, self._chosen = [], [], {}, Join(), None
+        self._calls, self._cut_at = {}, {}
         self._children = set(self.focus_on.children) if self.focus_on else set()
         self._before, self._after = before, after
         self.following, self.unseen = after is None, 0
         self._layout()
 
     def take(self, events: Iterable[Event]) -> int:
-        """Add what the follower read past `through`, and say how many lines that drew."""
-        added = []
+        """Add what the follower read past `through`, and say how many lines that drew. A turn of the agent in view
+        that ends has its cuts read."""
+        added, ended = [], False
         for event in events:
             if event.seq <= self.through:
                 continue
             self.through = event.seq
             if self.focus_on is None or not self.focus_on.holds(event):
                 continue
+            ended |= event.type in ("turn.ended", "turn.lost") and event.stream == f"turn/{self.focus_on.agent}"
             if self._after is not None:  # The newest lines were let go, and are read again as the person comes down.
                 self.unseen += self._line(event) is not None
             elif (block := self._block(event)) is not None:
                 added.append(block)
+        if ended:
+            self._read_spans()
         self._blocks += added
         if added:
             self._draw(added)
@@ -340,9 +360,9 @@ class Transcript(ScrollView, can_focus=True):
         self._layout()
         return len(added)
 
-    def _span(self, block: Block) -> tuple[int, int]:
-        """The first and last seq of what a line goes with: from a tool's start to its end, and a call with the spawns
-        drawn under it."""
+    def _extent(self, block: Block) -> tuple[int, int]:
+        """The first and last seq of what a line goes with: from a tool's start to its end, a call with the spawns
+        drawn under it, and a cut from the last call of the span it ends."""
         call = self._join.call_of(block) or block
         seqs = (call.first, call.event.seq, *(spawn.first for spawn in self._join.spawns_of(call)))
         return min(seqs), max(seqs)
@@ -354,9 +374,9 @@ class Transcript(ScrollView, can_focus=True):
         excess = len(self._blocks) - WINDOW
         if excess <= 0:
             return
-        reach = max(self._span(block)[1] for block in self._blocks[:excess])
+        reach = max(self._extent(block)[1] for block in self._blocks[:excess])
         while excess < len(self._blocks) - 1 and self._blocks[excess].first <= reach:
-            reach = max(reach, self._span(self._blocks[excess])[1])
+            reach = max(reach, self._extent(self._blocks[excess])[1])
             excess += 1
         gone = set(self._blocks[:excess])
         rows = next(index for index, (block, _) in enumerate(self._rows) if block not in gone)
@@ -373,10 +393,10 @@ class Transcript(ScrollView, can_focus=True):
         if excess <= 0:
             return
         cut = len(self._blocks) - excess
-        reach = min(self._span(block)[0] for block in self._blocks[cut:])
+        reach = min(self._extent(block)[0] for block in self._blocks[cut:])
         while cut > 1 and self._blocks[cut - 1].first >= reach:
             cut -= 1
-            reach = min(reach, self._span(self._blocks[cut])[0])
+            reach = min(reach, self._extent(self._blocks[cut])[0])
         gone = self._blocks[cut:]
         del self._blocks[cut:]
         self._rows = self._rows[: len(self._rows) - sum(len(self._lines_of(block)) for block in gone)]
@@ -384,9 +404,13 @@ class Transcript(ScrollView, can_focus=True):
         self._after, self.following = self._blocks[-1].first, False
 
     def _keep_held(self) -> None:
+        """Forget what the window let go: a call is read again with the lines about it."""
         held = set(self._blocks)
         self._tools = {native: block for native, block in self._tools.items() if block in held}
         self._join.keep(held)
+        self._cut_at = {start: block for start, block in self._cut_at.items() if block in held}
+        newest = self.through if self._after is None else self._after
+        self._calls = {ref: call for ref, call in self._calls.items() if self._before <= call.seq <= newest}
 
     def draw(self, tail: Tail) -> None:
         """Lay out again after `take`, with what the agent in view is saying now, at most once a frame."""
@@ -411,7 +435,10 @@ class Transcript(ScrollView, can_focus=True):
     def _block(self, event: Event) -> Block | None:
         """A new line for an event, or None: for one with no line, and for a tool call's end, which its start's line
         becomes when the two name one call. A start read again is the line it began already. A spawn joins the call
-        that made it, whichever of the two came first, and is drawn under it."""
+        that made it, whichever of the two came first, and is drawn under it. A model call of the agent in view is kept,
+        and the first of a span is where the span before it ends, cut once that span's last call is held too."""
+        if event.type == "model.called":
+            return self._cut_before(event)
         line = self._line(event)
         if line is None:
             return None
@@ -432,6 +459,58 @@ class Transcript(ScrollView, can_focus=True):
             self._forget(spawn)
             spawn.line = _spawned(spawn.event, joined=True)
         return block
+
+    def _cut_before(self, call: Event) -> Block | None:
+        """The cut a model call of the agent in view stands at, when it begins a span after another of its turn and
+        that span's last call is held, as a new line, or None."""
+        if self.focus_on is None or call.stream != f"turn/{self.focus_on.agent}":
+            return None
+        ref = f"{call.stream}@{call.version}"
+        self._calls[ref] = call
+        end = self._calls.get(self._cuts.get(ref, ""))
+        if end is None or ref in self._cut_at:
+            return None
+        block = self._cut_at[ref] = Block(call.seq, end, _cut(f"{end.stream}@{end.version}"))
+        return block
+
+    def _cut_where_held(self) -> None:
+        """Draw each cut whose calls the window holds and that is not drawn yet, as one read back or one `spans` said
+        only now, where it stands."""
+        drawn = False
+        for start in self._cuts:
+            if start in self._calls and (block := self._cut_before(self._calls[start])) is not None:
+                bisect.insort(self._blocks, block, key=lambda held: held.first)
+                drawn = True
+        if drawn:
+            self._relayout()
+
+    @work(group="spans", exclusive=True)
+    async def _read_spans(self) -> None:
+        """Read where the agent in view's turns are cut, from the start of the last page read, as only its latest turn
+        can be cut again, and draw each cut the window holds."""
+        focus, session = self.focus_on, self._session
+        if focus is None or focus.agent is None or session is None:
+            return
+        after, before = began = self._spans_from
+        cuts: dict[str, str] = {}
+        try:
+            while True:
+                page, began = await session.spans(f"@{focus.agent}", after=after), (after, before)
+                for span in page.spans:
+                    if before is not None and before.turn == span.turn:
+                        cuts[span.first] = before.ref
+                    before = span
+                if page.cursor is None:
+                    break
+                after = page.cursor
+        except Refused as refused:
+            note(self, f"the cuts of {focus.title}'s turns are not drawn: {refused}", severity="warning")
+            return
+        if focus is not self.focus_on:
+            return
+        self._cuts |= cuts
+        self._spans_from = began
+        self._cut_where_held()
 
     def _rows_of(self, blocks: Iterable[Block]) -> list[tuple[Block, int]]:
         """The rows lines are drawn in: each where its first event stands, but a spawn joined to a call, drawn under
@@ -500,6 +579,7 @@ class Transcript(ScrollView, can_focus=True):
             self._place(None)
         elif rows:
             self._place(self.scroll_y + rows)
+        self._cut_where_held()
         if (
             self._before
             and len(self._blocks) < WINDOW

@@ -7,6 +7,7 @@ from typing import Any
 from textual.app import App, ComposeResult
 
 from platoon_harness.kernel import Event, Page
+from platoon_harness.primitives import Span, Spans
 from platoon_harness_cli.tui import transcript as transcript_module
 from platoon_harness_cli.tui.transcript import Focus, Transcript
 
@@ -61,9 +62,9 @@ def spawned(seq: int, name: str, native: dict[str, str] | None) -> Event:
 
 
 class Journal:
-    """`Session.page` over a list of events, with the kernel's cursor rule and a focus's streams or glob, and
-    `Session.get_body` over `bodies`. `reading` runs as each page is asked for, and `held` holds the first page until it
-    is set."""
+    """`Session.page` over a list of events, with the kernel's cursor rule and a focus's streams or glob,
+    `Session.get_body` over `bodies` and `Session.spans` as `cut`, one page of them. `reading` runs as each page is
+    asked for, and `held` holds the first page until it is set."""
 
     def __init__(
         self,
@@ -76,6 +77,7 @@ class Journal:
         self.reading = reading
         self.held = held
         self.bodies = bodies or {}
+        self.cut: list[Span] = []
         self.asked = asyncio.Event()
 
     async def page(self, *, after=0, before=None, streams=None, match=None, limit=256) -> Page:
@@ -96,6 +98,10 @@ class Journal:
 
     async def get_body(self, ref: str, *, limit: int | None = None) -> bytes:
         return self.bodies[ref][:limit]
+
+    async def spans(self, agent: str, *, after: str | None = None) -> Spans:
+        head = self.events[-1].seq
+        return Spans(agent=agent, spans=tuple(self.cut), total=len(self.cut), cursor=None, head=head, open=False)
 
 
 class Alone(App[None]):
@@ -416,3 +422,70 @@ async def test_a_window_s_edge_takes_a_call_with_the_spawns_drawn_under_it_and_r
             "@lead  m6",
             "@lead  m7",
         ]
+
+
+def called(seq: int) -> Event:
+    return event(seq, "turn/lead", "model.called", "lead called a model", {"call_id": f"c{seq}"})
+
+
+def span(first: int, last: int, *writes: str) -> Span:
+    """A span of `lead`'s turn `t1`, by the seqs of its first call and its last, which are their versions here."""
+    return Span(ref=f"turn/lead@{last}", first=f"turn/lead@{first}", turn="t1", writes=writes)
+
+
+async def test_a_turn_s_cuts_are_drawn_where_its_spans_end(monkeypatch):
+    """A cut stands at the first call of the span after it, so it is drawn under what the calls before it made, and it
+    names the span it ends by its last call, which it shows. A turn's last span ends with the turn, which says so
+    itself. Cuts are read as the agent is shown and again as each turn of its ends, and one whose two calls come on
+    pages read back apart is drawn once, where it stands."""
+    turn = [
+        event(1, "turn/lead", "turn.started", "turn t1 started", {"turn": "t1"}),
+        called(2),
+        tool(3, "started", "task_complete", id="done-1"),
+        tool(4, "completed", "task 1 done", id="done-1"),
+        called(5),
+        tool(6, "started", "task_complete", id="done-2"),
+        tool(7, "completed", "task 2 done", id="done-2"),
+        called(8),
+        said(9, "both are done"),
+    ]
+    ended = event(10, "turn/lead", "turn.ended", "turn t1 ended: stopped", {"reason": "stopped"})
+    cut = [span(2, 2, "task/q/1@3"), span(5, 8, "task/q/2@3")]
+    journal = Journal([*turn, ended])
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), journal, 9)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+        under_way = [line.strip() for line in drawn(transcript)]
+        journal.cut = cut
+        transcript.take([ended])
+        await app.workers.wait_for_complete()
+        followed = [line.strip() for line in drawn(transcript)]
+        (shown,) = [block for block in transcript.blocks if "ends" in block.line.plain]
+    monkeypatch.setattr(transcript_module, "PAGE", 3)
+    app = Alone()
+    async with app.run_test(size=(80, 1)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), journal, 10)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+        held = list(transcript._calls)
+        transcript.following = False
+        while transcript._before:
+            await transcript.page_back()
+        read_back = [line.strip() for line in drawn(transcript)]
+
+    assert under_way == ["── turn ──", "✓ task 1 done", "✓ task 2 done", "@lead  both are done"]
+    assert (
+        followed
+        == read_back
+        == [
+            "── turn ──",
+            "✓ task 1 done",
+            "── span turn/lead@2 ends ──",
+            "✓ task 2 done",
+            "@lead  both are done",
+        ]
+    )
+    assert (shown.first, f"{shown.event.stream}@{shown.event.version}") == (5, "turn/lead@2")
+    assert held == ["turn/lead@8", "turn/lead@5"], "the page holding the cut's last call is read after its spans"
