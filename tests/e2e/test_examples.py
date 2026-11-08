@@ -18,11 +18,11 @@ from platoon_harness_cli.tui.app import TerminalUI
 from ..integration import plays
 from ..integration.cli import ROOT, shown
 from ..integration.plays import MODEL, OFFLINE, cast, copied, provider
-from ..recorded import record, restored
+from ..recorded import IMAGES, record, restored
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.tui.support import drawn
 from .support import SECONDS, chat, opened, serving
-from .test_page_images import IMAGES, page_images
+from .test_page_images import page_images
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(300)]
 

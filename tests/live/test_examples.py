@@ -2,13 +2,18 @@
 with MODEL the model `PLATOON_HARNESS_LIVE_MODEL` names, at the endpoint `OPENAI_BASE_URL` names, on the key
 `OPENAI_API_KEY` holds, which every role's auth profile hands its harness. Set `PLATOON_HARNESS_LIVE=1` and those three
 to run them, and say what ran. A real model chooses its own steps, so each test holds an example to what its page
-promises of any model, and to the budget its page states, in model calls counted from the journal and in wall time.
+promises of any model, and fails a run that took more model calls than its docstring states, counted from the journal
+once the run has ended, or more time. No budget counts model calls as they are made, so the team's own budget of turns
+and wall time is what stops a runaway, and a run can spend past the number before its test fails. The six together
+state 310 calls; the docs' images need only the mixed team's, 40.
 
 `PLATOON_HARNESS_RECORD`, naming `tests/fixtures/sessions/mixed-team`, has the mixed team's run recorded there for the
-docs' images, as CONTRIBUTING.md says.
+docs' images, as CONTRIBUTING.md says, once the run has passed every check of its test, and never from an endpoint on
+loopback, where FakeModel serves.
 """
 
 import asyncio
+import ipaddress
 import json
 import os
 import re
@@ -16,10 +21,12 @@ import shutil
 import socket
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import pytest
 
 from ..integration.cli import ROOT, SECONDS, finished, shown
+from ..integration.plays import homed
 from ..integration.test_examples import (
     FIRST,
     README,
@@ -32,6 +39,7 @@ from ..integration.test_examples import (
     on_sample,
     python_typed,
     ran_tests,
+    ref,
     started,
     typed,
 )
@@ -52,13 +60,28 @@ MINUTE = 60.0
 
 
 def yours(home: Path) -> dict[str, str]:
-    """The environment of a live run: your endpoint and key, and a home of the run's own, whose git config names who
-    commits, so no setting of yours takes part."""
-    home.mkdir(parents=True, exist_ok=True)
-    (home / ".gitconfig").write_text(
-        "[user]\n\tname = Tester\n\temail = tester@example.invalid\n[init]\n\tdefaultBranch = main\n"
-    )
-    return {name: os.environ[name] for name in ("OPENAI_BASE_URL", "OPENAI_API_KEY")} | {"HOME": str(home)}
+    """The environment of a live run: your endpoint and key, and a home of the run's own, so no setting of yours takes
+    part."""
+    return {name: os.environ[name] for name in ("OPENAI_BASE_URL", "OPENAI_API_KEY")} | homed(home)
+
+
+def recording() -> Path | None:
+    """The folder `PLATOON_HARNESS_RECORD` names, if it names one, which a run is recorded into for the docs' images:
+    refused, before the run spends anything, while `OPENAI_BASE_URL` is on loopback, where FakeModel serves, as the
+    docs show a real model's session."""
+    into = os.environ.get("PLATOON_HARNESS_RECORD")
+    if not into:
+        return None
+    host = urlsplit(os.environ["OPENAI_BASE_URL"]).hostname or ""
+    try:
+        loopback = host == "localhost" or ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = False
+    if loopback:
+        pytest.fail(
+            f"the docs' session is a real model's, and {host} is loopback, where FakeModel serves", pytrace=False
+        )
+    return Path(into)
 
 
 def on_your_model(command: str) -> str:
@@ -87,13 +110,21 @@ async def test_the_mixed_team_fixes_issue_1_on_a_real_model(tmp_path: Path):
     `tally/money.py` uncommitted; then, if `PLATOON_HARNESS_RECORD` names a folder, the closed session is recorded
     there, with every local path, the host, the endpoint and the key replaced."""
     [run] = shown(README, where="--name tally ")
+    into = recording()
 
     async with on_sample(tmp_path, README, yours(tmp_path / "home")) as cli:
         ran = await finished(await started(cli, on_your_model(run)), within=15 * MINUTE)
         listed = await typed(cli, "platoon-harness task list tally --queue tasks")
         events = await journal(cli, "tally")
     print(stated(events), flush=True)
-    if into := os.environ.get("PLATOON_HARNESS_RECORD"):
+
+    assert ran.code == 0 and "settled, exit 0" in ran.stdout, ran.stderr[-2000:]
+    assert [task["state"] for task in json.loads(listed.stdout)["tasks"]] == ["done"]
+    assert "board/notes/fix-1" in {event["stream"] for event in events if event["type"] == "board.posted"}
+    assert "tally/money.py" in git("status", "--porcelain", cwd=cli.folder)
+    assert ran_tests(cli.folder).returncode == 0
+    assert calls(events) <= 40
+    if into is not None:
         private = {
             str(cli.folder): "/path/to/tally",
             str(tmp_path): "/path/to/run",
@@ -103,14 +134,7 @@ async def test_the_mixed_team_fixes_issue_1_on_a_real_model(tmp_path: Path):
             os.environ["OPENAI_BASE_URL"]: "<endpoint>",
             os.environ["OPENAI_API_KEY"]: "<key>",
         }
-        record(tmp_path / "state" / "sessions" / "tally", Path(into), private)
-
-    assert ran.code == 0 and "settled, exit 0" in ran.stdout, ran.stderr[-2000:]
-    assert [task["state"] for task in json.loads(listed.stdout)["tasks"]] == ["done"]
-    assert "board/notes/fix-1" in {event["stream"] for event in events if event["type"] == "board.posted"}
-    assert "tally/money.py" in git("status", "--porcelain", cwd=cli.folder)
-    assert ran_tests(cli.folder).returncode == 0
-    assert calls(events) <= 40
+        record(tmp_path / "state" / "sessions" / "tally", into, private)
 
 
 @pytest.mark.timeout(int(20 * MINUTE))
@@ -186,20 +210,16 @@ async def test_the_review_example_s_verdict_rests_on_your_test_on_a_real_model(t
         authored = [event for event in await journal(cli, "review") if event["type"] == "repo.committed"]
         tested = await typed(cli, f"platoon-harness repo test review --commit {authored[-1]['data']['sha']}")
         result = await journaled(following, lambda event: event["type"] == "repo.tested", within=5 * MINUTE)
-        cited = f"{result['stream']}@{result['version']}"
-        answer = f"--gist {result['data']['outcome']} --based-on {cited}"
+        answer = f"--gist {result['data']['outcome']} --based-on {ref(result)}"
         replied = await typed(
-            cli, f"platoon-harness message send review --to @verifier --reply-to inbox/you@1 {answer}"
+            cli, f"platoon-harness message send review --to @verifier --reply-to {ref(asked)} {answer}"
         )
         ran = await finished(running, within=10 * MINUTE)
         events = await journal(cli, "review")
     print(stated(events), flush=True)
 
     assert (tested.code, replied.code, ran.code) == (0, 0, 0), ran.stderr[-2000:]
-    assert (
-        result["data"]["outcome"] == "passed"
-        and f"{authored[-1]['stream']}@{authored[-1]['version']}" in asked["based_on"]
-    )
+    assert result["data"]["outcome"] == "passed" and ref(authored[-1]) in asked["based_on"]
     assert "verifier" in {event["agent"] for event in events if event["type"] == "agent.finished"}
     assert calls(events) <= 60
 

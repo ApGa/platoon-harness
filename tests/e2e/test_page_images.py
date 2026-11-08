@@ -10,13 +10,10 @@ from pathlib import Path
 import pytest
 from playwright.async_api import Browser, expect
 
-from ..recorded import RECORDED, finish_of, restored
+from ..recorded import IMAGES, RECORDED, finish_of, restored
 from .support import SECONDS, chat, opened, serving
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
-
-IMAGES = ("web-chat.png", "web-provenance.png")
-"""The page's images, by the names the docs give them."""
 
 
 async def page_images(browser: Browser, root: Path, name: str, answer: str, into: Path) -> list[Path]:

@@ -117,9 +117,12 @@ named here is closed.
 - **The docs' images can come from a real example's session.** A live run of the mixed team records its closed session where
   `PLATOON_HARNESS_RECORD` names, `tests/fixtures/sessions/mixed-team` for the docs, as its manifest and its journal's events
   and bodies in text, with every local path, the host, the endpoint and the key replaced, and refused while the repository's
-  privacy scan catches anything. The terminal UI's snapshot tests and a browser test that writes the page's images draw from
-  it, as CONTRIBUTING.md says. No live run has recorded it yet, so those tests skip, and the docs keep the images of scripted
-  sessions they show now.
+  privacy scan catches anything. It records only a run that passed each check of its test, and never from an endpoint on
+  loopback, where FakeModel serves. The terminal UI's snapshot tests draw its layout at each size, its review and the
+  provenance of the lead's answer from it, and a browser test the page's images, as CONTRIBUTING.md says; the patch's
+  screenshot stays a scripted session's, as a recording keeps no repository to read it from. Once a recording is there, a
+  test asks for the screenshots it draws and for captions that say so. No live run has recorded it yet, so those tests
+  skip, and the docs keep the images of scripted sessions they show now.
 - **A driver names where its harness keeps credentials.** `DriverInfo.credentials` is where, beneath the folder its spec
   names, a harness keeps a credential, as relative paths that cannot leave that folder, which an agent's end removes: pi its
   `auth.json` and `mcp-auth.json` in a sealed launch's agent directory and in an isolated home's, Codex its `auth.json` and

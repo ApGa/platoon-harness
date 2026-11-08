@@ -1,6 +1,7 @@
-"""The workspace's layout at each size the guide names, as snapshots, on a session's history so nothing moves: a session
-of scripted harnesses, whose snapshots the docs show, and the mixed team's session as a live run of it recorded it,
-which no live run has recorded yet."""
+"""The workspace's layout at each size the guide names, the review and the provenance panel, as snapshots, on a
+session's history so nothing moves: a session of scripted harnesses, and the mixed team's session as a live run of it
+recorded it, which no live run has recorded yet. The docs show the recorded session's snapshots once there is one, and
+the scripted session's until then."""
 
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -26,17 +27,28 @@ from ..primitives.test_provenance import ask, scenario
 from ..runtime.gitting import commit, repository, working
 from ..runtime.support import in_state, of_type, until
 from .support import drawn
+from .test_provenance import choose
 
 SIZES = {"wide": (120, 32), "medium": (90, 28), "narrow": (70, 24), "slim": (52, 20), "short": (100, 14)}
 SNAPSHOTS = Path(__file__).parent / "__snapshots__" / "test_snapshots"
 ASSETS = Path(__file__).parents[3] / "docs" / "assets"
-SCREENSHOTS = {
+SCRIPTED_SNAPSHOTS = {
     **{f"tui-{size}.svg": f"test_the_workspace_s_layout_at_each_size[{size}].raw" for size in SIZES},
     "tui-review.svg": "test_review_lists_what_changed.raw",
     "tui-patch.svg": "test_the_review_draws_a_patch.raw",
     "tui-provenance.svg": "test_the_provenance_panel_draws_each_link_with_how_it_is_known.raw",
 }
-"""Each screenshot the docs show, in docs/assets, by the snapshot below that it is a copy of."""
+"""Each screenshot the docs show, in docs/assets, by the snapshot below that draws it from a scripted session."""
+RECORDED_SNAPSHOTS = {
+    **{f"tui-{size}.svg": f"test_the_recorded_mixed_team_s_layout_at_each_size[{size}].raw" for size in SIZES},
+    "tui-review.svg": "test_the_recorded_mixed_team_s_review_lists_what_changed.raw",
+    "tui-provenance.svg": "test_the_recorded_mixed_team_s_provenance_of_the_lead_s_answer.raw",
+}
+"""Each screenshot the snapshot below draws from the mixed team's recorded session: all but the patch, which is read
+from git when it opens, and a recording keeps no repository."""
+SCREENSHOTS = SCRIPTED_SNAPSHOTS | (RECORDED_SNAPSHOTS if RECORDED.exists() else {})
+"""Each screenshot the docs show, in docs/assets, by the snapshot below that it is a copy of: the recorded session's
+once a live run has recorded one, and the scripted session's until then, and for the patch."""
 
 
 async def split(spec: AgentSpec, call: Callable[[str, Mapping[str, Any]], Awaitable[Any]]) -> None:
@@ -105,6 +117,28 @@ def test_the_recorded_mixed_team_s_layout_at_each_size(snap_compare, recorded, s
         await drawn(pilot, lambda text: answer[:30] in " ".join(text.split()))
 
     assert snap_compare(TerminalUI(recorded), terminal_size=SIZES[size], run_before=ready)
+
+
+def test_the_recorded_mixed_team_s_review_lists_what_changed(snap_compare, recorded):
+    async def listed(pilot) -> None:
+        await drawn(pilot, lambda text: "uncommitted" in text)
+        await pilot.press("alt+d")
+        await drawn(pilot, lambda text: "What changed" in text and "tally/money.py" in text)
+
+    assert snap_compare(TerminalUI(recorded), terminal_size=(120, 32), run_before=listed)
+
+
+def test_the_recorded_mixed_team_s_provenance_of_the_lead_s_answer(snap_compare, recorded):
+    finish = finish_of(RECORDED, "lead")
+    answer, said = f"{finish['stream']}@{finish['version']}", finish["data"]["gist"][:30]
+
+    async def asked(pilot) -> None:
+        await drawn(pilot, lambda text: said in " ".join(text.split()))
+        await choose(pilot, pilot.app, said)
+        await pilot.press("slash", *"provenance", "enter")
+        await drawn(pilot, lambda text: f"Provenance of {answer}" in text and "Credit and rewards" in text)
+
+    assert snap_compare(TerminalUI(recorded), terminal_size=(120, 48), run_before=asked)
 
 
 WHEN = 1_700_000_000

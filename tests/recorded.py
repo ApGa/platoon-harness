@@ -23,6 +23,8 @@ from .unit.test_no_internal_references import hits
 ROOT = Path(__file__).parents[1]
 RECORDED = ROOT / "tests" / "fixtures" / "sessions" / "mixed-team"
 """The mixed team's session, as a live run of it records it, which the docs' images draw."""
+IMAGES = ("web-chat.png", "web-provenance.png")
+"""The page's images, by the names the docs give them, which only a recorded session draws."""
 NAME = "tally"
 """The name a recorded session goes by when it is made again."""
 _JOURNAL = "journal.json"
