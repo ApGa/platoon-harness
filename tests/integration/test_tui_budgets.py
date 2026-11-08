@@ -1,6 +1,7 @@
 """The terminal UI's budgets, from section 7.9 of tui-expectations.md: event-loop lag at 100 agents with one live
 stream, an append at a large history, and resident memory. Short runs on a loaded shared host, so the numbers are
-printed and the bounds are the research's own."""
+printed and the bounds are the research's own. And an attach to the journal of the Scale case, held to a budget twice
+what docs/reference/scale.md publishes."""
 
 import asyncio
 import statistics
@@ -17,12 +18,16 @@ from platoon_harness_cli.tui.transcript import WINDOW, Focus, Transcript
 
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.tui.support import drawn, workspace
-from .scripts import inside
+from . import scale
+from .scripts import MEMBERS, inside
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(180)]
 
 LAG = 0.050
 APPEND = 0.060
+ATTACH = 0.9
+"""The longest an attach may take to draw a session of 100,000 events, the roster and the first agent's transcript:
+twice the most docs/reference/scale.md says was measured."""
 
 
 @pytest.fixture(autouse=True)
@@ -136,3 +141,22 @@ async def test_an_append_at_a_large_history_stays_in_budget_and_memory_stays_bou
     assert len(transcript.blocks) == WINDOW
     assert p99(appends) < APPEND
     assert held - at_window < (at_window - before) / 2, "memory grew past the window"
+
+
+@pytest.mark.timeout(1800)
+async def test_the_tui_attaches_to_a_100000_event_journal_within_its_budget(tmp_path):
+    """The Scale case's run, then the terminal UI attached to it, until it draws every member idle and the first one's
+    transcript to its last turn."""
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    guest = await Session.start(scale.team(), name="s", root=tmp_path, cwd=cwd, detach=True)
+    rounds = await scale.drive(guest)
+    app = TerminalUI("s")
+    began = time.monotonic()
+    async with app.run_test(size=(120, 40)) as pilot:
+        last = f"round {len(rounds)} is under way"
+        await drawn(pilot, lambda text: f"Idle ({MEMBERS})" in text and last in text)
+        attached = time.monotonic() - began
+    await guest.leave()
+    print(f"attached to {rounds[-1].metrics.head} events in {attached:.2f} s")
+    assert attached < ATTACH

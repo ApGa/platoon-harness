@@ -22,6 +22,7 @@ from platoon_harness.testing import (
     AskModel,
     Call,
     Compact,
+    Do,
     Exit,
     Hang,
     Say,
@@ -190,6 +191,46 @@ def _gone(db: Any) -> int:
     raise sqlite3.OperationalError("disk I/O error")
 
 
+MEMBERS = 100
+"""How many members a ring of them has, `member-1` to `member-100`, as a role of that count names its agents."""
+
+
+def _answered(result: Any) -> Any:
+    """What a tool's result says. One that failed fails the turn, saying why."""
+    if result.get("isError"):
+        raise RuntimeError(result["content"][0]["text"])
+    return json.loads(result["content"][0]["text"])
+
+
+class Member(ScriptedDriver):
+    """One of a ring of members, each turn at work as a team's member is: it tells the next member its news, waits to
+    hear from the one before, reads what that one said and revises its notes citing it, adds a task and does one, and
+    tells the person. It keeps no tool's result, as it runs inside the runtime whose memory is measured."""
+
+    def __init__(self) -> None:
+        super().__init__(itertools.repeat([Do(self._work), Say("done")]))
+        self._version: int | None = None
+
+    async def _work(self, spec: AgentSpec, call: Any) -> None:
+        self.results.clear()
+        me = spec.agent
+        number = int(me.rpartition("-")[2])
+        after, before = (f"member-{(number + step) % MEMBERS + 1}" for step in (0, -2))
+        await call("message_send", {"to": f"@{after}", "gist": f"news from {me}"})
+        await call("wait", {"from": [f"@{before}"], "hold": 60})
+        cited = [entry["ref"] for entry in _answered(await call("message_read", {}))["entries"]]
+        notes = {"board": "notes", "name": me, "gist": f"what {me} found", "based_on": cited}
+        if self._version is None:
+            posted = _answered(await call("board_post", notes))
+        else:
+            posted = _answered(await call("board_revise", {**notes, "expected_version": self._version}))
+        self._version = posted["version"]
+        await call("task_add", {"queue": "work", "gist": f"a task from {me}", "based_on": [posted["ref"]]})
+        await call("task_claim", {"queue": "work"})
+        await call("task_complete", {"queue": "work", "gist": f"done by {me}"})
+        await call("message_send", {"to": "@you", "gist": f"{me} has news"})
+
+
 FRAGILE = Capabilities(persistent=True, boundaries={"turn"}, tool_paths={"mcp-http"}, interrupt=True)
 LISTENING = [[Call("wait", {"from": ["@you"], "timeout": 60})], [Call("agent_finish", {"gist": "heard you"})]]
 SPAWNING = [[Call("agent_spawn", {"name": "w", "child_role": "bob", "goal": "Work on it."}), Hang()]]
@@ -222,6 +263,7 @@ HARNESSES = {
     "listening": lambda: ScriptedDriver(LISTENING),
     "returning": lambda: Returning([[Hang()]]),
     "deaf": lambda: Deaf([[Hang()]]),
+    "member": Member,
     "planned": lambda: OnAPlan(itertools.repeat([Say("done")])),
     "hostile": lambda: ScriptedDriver([[Say(HOSTILE)]]),
     "streaming": lambda: Streaming(itertools.repeat([Say("")])),
