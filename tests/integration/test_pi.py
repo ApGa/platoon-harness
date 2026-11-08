@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import signal
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +62,7 @@ from platoon_harness.tools import PREAMBLE, delivery_heading
 from ..unit.drivers.support import Heard, running
 from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import in_state, of_type, until
-from . import clients, worktrees
+from . import clients, parallel, worktrees
 from .scripts import TOLD, following_up, strings
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
@@ -1100,3 +1101,22 @@ async def test_a_pi_compaction_cut_after_its_first_call_reports_each_call_it_mad
     assert [call.response_id is None for call in compacting] == [False, True]
     assert [call.call_id for call in reported] == [call.response_id for call in compacting]
     assert not heard.of(Compacted)
+
+
+async def test_several_agents_run_their_shell_tools_at_once(tmp_path, monkeypatch):
+    """Three agents' `bash` calls, each of which ends only once all three are running."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
+        await parallel.agents_run_their_shell_tools_at_once(team, tmp_path, model, shell)
+
+
+@pytest.mark.timeout(300)
+async def test_what_one_response_runs_at_once(tmp_path, monkeypatch):
+    """Two commands that run a script, two `cat`s and two calls of a query of ours, each two in one response, ran at
+    once."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
+        ours = partial(tool, "meet_arrive")
+        measured = await parallel.what_one_response_runs_at_once(team, tmp_path, model, shell, ours)
+
+    assert measured == parallel.AtOnce(script=True, read=True, query=True)

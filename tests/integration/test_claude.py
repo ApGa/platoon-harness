@@ -52,7 +52,7 @@ from platoon_harness_cli.provenance import Line
 from ..unit.drivers.support import Heard
 from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import in_state, of_type, until
-from . import clients, worktrees
+from . import clients, parallel, worktrees
 from .scripts import TOLD, following_up, strings
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
@@ -759,3 +759,26 @@ async def test_claude_resumes_in_its_worktree(tmp_path, monkeypatch):
     async with FakeModel(*worktrees.replies(shell)) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
         await worktrees.commits_is_killed_and_resumes_in_its_worktree(team, tmp_path, repo)
+
+
+async def test_several_agents_run_their_shell_tools_at_once(tmp_path, monkeypatch):
+    """Three agents' Bash calls, each of which ends only once all three are running."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
+        await parallel.agents_run_their_shell_tools_at_once(team, tmp_path, model, shell)
+
+
+def arrive(id: str) -> ToolCall:
+    """A call of our query `meet.arrive` under the id `id`."""
+    return ToolCall("mcp__ph__meet_arrive", {}, id=id)
+
+
+@pytest.mark.timeout(300)
+async def test_what_one_response_runs_at_once(tmp_path, monkeypatch):
+    """Of two calls in one response, two commands that run a script, each of which it asked an approval for, ran in
+    turn, and two `cat`s, which it asked none for, and two calls of a query of ours ran at once."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
+        measured = await parallel.what_one_response_runs_at_once(team, tmp_path, model, shell, arrive)
+
+    assert measured == parallel.AtOnce(script=False, read=True, query=True)

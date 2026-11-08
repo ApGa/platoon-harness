@@ -63,7 +63,7 @@ from platoon_harness.tools import PREAMBLE, delivery_heading
 from ..unit.drivers.support import Heard
 from ..unit.runtime import support
 from ..unit.runtime.support import in_state, of_type, until
-from . import clients
+from . import clients, parallel
 from .scripts import TOLD, strings
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(300)]
@@ -904,3 +904,29 @@ async def test_openhands_reports_the_environment_s_finish_and_think_as_tool_call
         ("tool", phase, f"call_{tool}") for tool in ("finish", "think") for phase in ("started", "completed")
     ]
     assert [item.body for item in heard.of(Item) if item.kind == "message"] == ["done"]
+
+
+def terminal(command: str) -> ToolCall:
+    return ToolCall("terminal", {"command": command})
+
+
+async def test_several_agents_run_their_shell_tools_at_once(tmp_path, monkeypatch):
+    """Three agents' `terminal` calls, each of which ends only once all three are running."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
+        await parallel.agents_run_their_shell_tools_at_once(team, tmp_path, model, terminal)
+
+
+def arrive(id: str) -> ToolCall:
+    """A call of our query `meet.arrive` under the id `id`."""
+    return ToolCall("meet_arrive", {}, id=id)
+
+
+async def test_what_one_response_runs_at_once(tmp_path, monkeypatch):
+    """Two commands that run a script, two `cat`s and two calls of a query of ours, each two in one response, ran in
+    turn: none of them met the other."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, approvals="allow")
+        measured = await parallel.what_one_response_runs_at_once(team, tmp_path, model, terminal, arrive)
+
+    assert measured == parallel.AtOnce(script=False, read=False, query=False)

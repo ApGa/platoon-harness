@@ -6,6 +6,7 @@ import os
 import shutil
 import signal
 import subprocess
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +55,7 @@ from platoon_harness.tools import PREAMBLE
 from ..unit.drivers.support import Heard
 from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import in_state, of_type, until
-from . import clients, worktrees
+from . import clients, parallel, worktrees
 from .scripts import TOLD, following_up, strings
 
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(120)]
@@ -805,3 +806,34 @@ async def test_codex_resumes_in_its_worktree(tmp_path, monkeypatch):
     async with FakeModel(*worktrees.replies(gated)) as model:
         team = keyed(tmp_path / "home", model, monkeypatch)
         await worktrees.commits_is_killed_and_resumes_in_its_worktree(team, tmp_path, repo)
+
+
+async def used_once(team: Team, root: Path) -> None:
+    """Start one app-server on a home first, as several started at once on a home never used before fail to open its
+    state database."""
+    async with Session.start(team, root=root / "once", cwd=root) as session:
+        await in_state(session, "bob", "idle")
+
+
+UNSANDBOXED = {"approvals": "allow", "sandbox": "danger-full-access"}
+"""A role whose commands can reach the meeting on loopback: `workspace-write` refuses a command an internet socket."""
+
+
+async def test_several_agents_run_their_shell_tools_at_once(tmp_path, monkeypatch):
+    """Three agents' `exec_command` calls, each of which ends only once all three are running."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, **UNSANDBOXED)
+        await used_once(team, tmp_path)
+        await parallel.agents_run_their_shell_tools_at_once(team, tmp_path, model, shell)
+
+
+@pytest.mark.timeout(300)
+async def test_what_one_response_runs_at_once(tmp_path, monkeypatch):
+    """Two commands that run a script, two `cat`s and two calls of a query of ours, each two in one response, ran at
+    once."""
+    async with FakeModel() as model:
+        team = keyed(tmp_path / "home", model, monkeypatch, **UNSANDBOXED)
+        ours = partial(tool, "meet_arrive")
+        measured = await parallel.what_one_response_runs_at_once(team, tmp_path, model, shell, ours)
+
+    assert measured == parallel.AtOnce(script=True, read=True, query=True)
