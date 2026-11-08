@@ -129,8 +129,9 @@ does. The ground truth is the command the check has the model ask to run. A fail
 ### 7. The wire
 
 `body` and `cut` are optional fields of the `approval.requested` frame within protocol 2. A program that leaves them out still
-asks, with its ask unknown, and nothing it sends or reads changes. Nothing is released yet, so no runtime that refuses the fields
-exists outside this repository.
+asks, with its ask unknown, and its frames are read as before, but it fails `approval_shows_its_ask`, so it is not `operational`
+until it sends the ask, as one that loses a denial is not. Nothing is released yet, so no runtime that refuses the fields exists
+outside this repository.
 
 ## The hard parts
 
@@ -180,6 +181,10 @@ exists outside this repository.
    none in milestone 4, as no harness's honouring of them is verified, and the whole ask is shown before anyone answers. Any of
    them would change what an answer carries, not what a request asks, so it would remove nothing M1 builds. Needed before
    milestone 4 closes.
+2. Should `approval_shows_its_ask` count toward `operational`? M1 counts it, beside `approval_answered` and `denial_holds`, which
+   milestone 4's plan did not say: a driver whose approvals hide what they ask, or a wire program that sends no body, is then not
+   `operational`. A result kept before the check existed lacks it, and is not taken as failing it. Needed before this RFC is
+   accepted.
 
 ## Evidence
 

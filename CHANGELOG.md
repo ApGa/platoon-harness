@@ -28,9 +28,9 @@ named here is closed.
   `Ask(gist, body)` scripts one, and the approval its own tool asks for carries the tool's name and input. `check_driver`'s new
   `approval_shows_its_ask` has the harness ask about a command of some 5 KiB with letters outside ASCII and passes when the
   approval's body holds it whole, as it was written, which each driver keeps as themselves in the JSON it writes, and
-  `operational` is unmet when it fails, as when `denial_holds` does. An approval said only its first 280 characters, so a person
-  allowed a long command or an edit having read part of it. Neither client shows the body yet. See
-  [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
+  `operational` is unmet when it fails, as when `denial_holds` does, so a driver or wire program that sends no body is not
+  `operational`. An approval said only its first 280 characters, so a person allowed a long command or an edit having read part of
+  it. Neither client shows the body yet. See [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
 - **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose
   harness cannot start fails, as the workspace showed, and the terminal UI now also says what `doctor`, run in that
   terminal, finds of that harness, in the words `doctor` prints: not on PATH, or its version, the kind of its login and

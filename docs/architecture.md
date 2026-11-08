@@ -1213,13 +1213,15 @@ Absence means unsupported, as in ACP.
 ### 9.4 Levels
 
 `levels(capabilities, profile, conformance)` is a pure function giving `operational`, `observable` and `trainable`, each `met`,
-`unmet` or `unverified` with reasons, journaled in `agent.started` beside `declared` and `verified`. A `Profile` is how one agent runs:
-its driver and observed harness version, its login, whether its tools were seen, and whether its role lets its harness start
+`unmet` or `unverified` with reasons, journaled in `agent.started` beside `declared` and `verified`. A `Profile` is how one agent
+runs: its driver and observed harness version, its login, whether its tools were seen, and whether its role lets its harness start
 agents of its own, as opaque ones cost `trainable` only then. Its access says its login: `gateway` exactly when its access is a
 gateway, which is never a plan login, `key` when it was given variables, and otherwise what the harness says it is signed in on.
-`trainable` needs a gateway login, a driver that declares `sealed`, our tools seen, and a kept result whose
-`ready_with_pinned_model`, `tool_in_first_request`, `call_ids_reported` and two sealed checks passed. No driver can claim a level:
-the host commits all of this through `agent.start`, and a report has no field for it.
+`operational` is unmet when a check it stands on fails, `approval_answered`, `denial_holds` and `approval_shows_its_ask` among
+them, so a driver whose approvals carry no ask is not `operational`. `trainable` needs a gateway login, a driver that declares
+`sealed`, our tools seen, and a kept result whose `ready_with_pinned_model`, `tool_in_first_request`, `call_ids_reported` and two
+sealed checks passed. No driver can claim a level: the host commits all of this through `agent.start`, and a report has no field
+for it.
 
 ### 9.5 Mappings
 
