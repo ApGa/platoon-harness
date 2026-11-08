@@ -1,5 +1,6 @@
 """The look on real git under `tmp_path`: what it finds, whose each commit is, what it reads of a workspace's state,
-and that it changes nothing. Then the look through a session: after each turn, one at a time, and at a stop."""
+and that it changes nothing. Then the look through a session: after each turn, one at a time in a workspace and at
+once across workspaces, and at a stop."""
 
 import asyncio
 import json
@@ -18,7 +19,7 @@ from platoon_harness.runtime.git import GitError
 from platoon_harness.testing import Hang
 
 from .gitting import Working, commit, git, repository, working
-from .support import harness, in_state, of_type, scripted, until
+from .support import SECONDS, harness, in_state, of_type, scripted, until
 from .test_workspaces import made
 
 pytestmark = pytest.mark.timeout(60)
@@ -577,7 +578,15 @@ async def test_a_look_that_fails_records_the_gap_and_its_agent_works_on(repo, tm
     assert status["state"] == "idle"
 
 
-async def test_looks_run_one_at_a_time(repo, tmp_path, monkeypatch):
+def after_the_shared_one(entered: list[str]) -> bool:
+    """Whether each look of an agent's own workspace came after a look of the shared one of its own probe's, as no
+    earlier look of an agent's took that one."""
+    own = [index for index, where in enumerate(entered) if where != "shared"]
+    return all(entered[:index].count("shared") > count for count, index in enumerate(own))
+
+
+async def test_looks_of_one_workspace_run_one_at_a_time(repo, tmp_path, monkeypatch):
+    """Both probes look at the shared workspace first, and the second waits while the first one's look at it is held."""
     entered: list[str] = []
     inside, gate = threading.Event(), threading.Event()
     real = host.look
@@ -605,7 +614,37 @@ async def test_looks_run_one_at_a_time(repo, tmp_path, monkeypatch):
         await looked(session, 2)
 
     assert held_back == ["shared"]
-    assert entered in (["shared", "ada", "shared", "bob"], ["shared", "bob", "shared", "ada"])
+    assert sorted(entered) == ["ada", "bob", "shared", "shared"] and after_the_shared_one(entered)
+
+
+async def test_looks_of_two_workspaces_run_at_once_each_after_the_shared_one(repo, tmp_path, monkeypatch):
+    """ada's and bob's first looks at their own workspaces each wait until both are in, which one look at a time in a
+    session would never let happen, and each probe looks at the shared workspace first: a commit made in your checkout
+    before their workspaces were, which both rest on, is recorded before either one's own."""
+    meeting = threading.Barrier(2, timeout=SECONDS)
+    entered: list[str] = []
+    real = host.look
+
+    def met(root: Path, **options: Any) -> Any:
+        where = "shared" if root == repo else root.parent.name
+        entered.append(where)
+        if where != "shared" and entered.count(where) == 1:
+            meeting.wait()
+        return real(root, **options)
+
+    monkeypatch.setattr(host, "look", met)
+    team = team_of(harness=working(lambda cwd: commit(cwd, f"{cwd.parent.name}.txt")))
+    async with Session.start(team, name="s", root=tmp_path, cwd=repo) as session:
+        await in_state(session, "lead", "idle")
+        yours = commit(repo, "yours.txt")
+        await session.spawn("ada", "worker", "work")
+        await session.spawn("bob", "worker", "work")
+        await looked(session, 2)
+        found = await committed(session)
+
+    assert after_the_shared_one(entered) and sorted(entered) == ["ada", "bob", "shared", "shared"]
+    assert found[0].data["sha"] == yours and found[0].data["made_in"] is None
+    assert sorted(event.data["made_in"] for event in found[1:]) == ["@ada", "@bob"]
 
 
 async def stops(session: Session) -> list[Any]:

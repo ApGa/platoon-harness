@@ -8,6 +8,7 @@ import logging
 import os
 import shutil
 import socket
+from collections import defaultdict
 from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
 from functools import partial
 from pathlib import Path
@@ -167,7 +168,7 @@ class Host:
         self._access: dict[str, Access] = {}
         self._described: dict[str, DriverInfo] = {}
         self._closing = False
-        self._looking = asyncio.Lock()
+        self._looking: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._tips: list[str] | None = None
         self._acts: dict[str, Callable[[Effect], Awaitable[Any]]] = {
             "admit": self._admit,
@@ -666,49 +667,52 @@ class Host:
         return Path(repo.top) if where == "shared" else agent_folder(self._folder, where[1:]) / "workspace"
 
     async def _look(self, agent: str, cause: int | None, places: Sequence[str]) -> None:
-        """Look at each of `places`, one look at a time in the session, and record what is new in pages, the shared
-        workspace first, so that a worker whose base holds its new commits finds them recorded. Git runs in an isolated
-        workspace under its agent's wrap. A workspace a look cannot read records the gap `workspace_unobserved` and no
-        change. Nothing is looked at outside a repository."""
+        """Look at each of `places` in turn, the shared workspace first, so that a worker whose base holds its new
+        commits finds them recorded. One look at a time reads a workspace, starting from the last one's reading, and
+        different workspaces are read at once. Nothing is looked at outside a repository."""
         if (repo := self._repo()) is None:
             return
+        for where in places:
+            async with self._looking[where]:
+                await self._look_at(where, repo, agent, cause)
+
+    async def _look_at(self, where: str, repo: Repo, agent: str, cause: int | None) -> None:
+        """Look at one workspace and record what is new in pages. Git runs in an isolated workspace under its agent's
+        wrap. A workspace a look cannot read records the gap `workspace_unobserved` and no change."""
         kernel = self._kernel
-        async with self._looking:
-            readings = kernel.query(kernel.runtime, "repo.looks", {}).result
-            makers: dict[str, tuple[Path, tuple[str, ...]]] = {"shared": (Path(repo.top), ())}
-            for record in kernel.query(kernel.runtime, "agent.records", {}).result:
-                if record["workspace"] and record["workspace"]["mode"] != "shared" and not record["removed"]:
-                    made = Workspace.model_validate(record["workspace"])
-                    wrap = await self._wrap(record["name"], record["role"], made)
-                    makers[f"@{record['name']}"] = (self._root(f"@{record['name']}"), wrap)
-            shared = any(role.workspace == "shared" for role in self._team.roles.values())
-            for where in places:
-                base = repo.head if where == "shared" else self._workspace_of(agent).base
-                root, wrap = makers.get(where, (self._root(where), ()))
-                try:
-                    seen = await asyncio.to_thread(
-                        look,
-                        root,
-                        base=base,
-                        tips=self._tips_at_open(repo),
-                        last=readings.get(where),
-                        makers={name: tree for name, tree in makers.items() if tree[0].is_dir()},
-                        record=shared or where != "shared",
-                        wrap=wrap,
-                    )
-                except (GitError, OSError) as error:
-                    await self._report({"agent": agent, "workspace": where, "cause": cause, "unobserved": str(error)})
-                    continue
-                reading = seen.reading
-                if seen.whole is not None:
-                    reading = {**reading, "body": await self._stored(seen.whole)}
-                pages = [seen.commits[start : start + PAGE] for start in range(0, len(seen.commits), PAGE)] or [[]]
-                for index, commits in enumerate(pages):
-                    page: dict[str, Any] = {"agent": agent, "workspace": where, "cause": cause, "commits": commits}
-                    if index == len(pages) - 1:
-                        page |= {"rewrite": seen.rewrite, "reading": reading}
-                    if not await self._report(page):
-                        break
+        makers: dict[str, tuple[Path, tuple[str, ...]]] = {"shared": (Path(repo.top), ())}
+        for record in kernel.query(kernel.runtime, "agent.records", {}).result:
+            if record["workspace"] and record["workspace"]["mode"] != "shared" and not record["removed"]:
+                made = Workspace.model_validate(record["workspace"])
+                wrap = await self._wrap(record["name"], record["role"], made)
+                makers[f"@{record['name']}"] = (self._root(f"@{record['name']}"), wrap)
+        shared = any(role.workspace == "shared" for role in self._team.roles.values())
+        base = repo.head if where == "shared" else self._workspace_of(agent).base
+        root, wrap = makers.get(where, (self._root(where), ()))
+        try:
+            seen = await asyncio.to_thread(
+                look,
+                root,
+                base=base,
+                tips=self._tips_at_open(repo),
+                last=kernel.query(kernel.runtime, "repo.looks", {}).result.get(where),
+                makers={name: tree for name, tree in makers.items() if tree[0].is_dir()},
+                record=shared or where != "shared",
+                wrap=wrap,
+            )
+        except (GitError, OSError) as error:
+            await self._report({"agent": agent, "workspace": where, "cause": cause, "unobserved": str(error)})
+            return
+        reading = seen.reading
+        if seen.whole is not None:
+            reading = {**reading, "body": await self._stored(seen.whole)}
+        pages = [seen.commits[start : start + PAGE] for start in range(0, len(seen.commits), PAGE)] or [[]]
+        for index, commits in enumerate(pages):
+            page: dict[str, Any] = {"agent": agent, "workspace": where, "cause": cause, "commits": commits}
+            if index == len(pages) - 1:
+                page |= {"rewrite": seen.rewrite, "reading": reading}
+            if not await self._report(page):
+                break
 
     async def _report(self, page: Mapping[str, Any]) -> bool:
         """Record a page of a look. One the journal refused is a look that did not land, which is said as its gap."""
