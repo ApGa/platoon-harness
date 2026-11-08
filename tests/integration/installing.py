@@ -1,12 +1,13 @@
-"""The packages as a person installs them: wheels built from this checkout, and an environment of their own that holds
-them and what their metadata requires. uv builds and installs them offline, as tests take no network, so its cache must
-hold the build backend and every requirement already, as a `uv sync` and a `uv build` with the network leave it. Where
-it does not, the test fails, saying so, and never skips."""
+"""The packages as a person installs them: wheels built from this checkout, and from any other project a test installs
+beside them, and an environment of their own that holds them and what their metadata requires. uv builds and installs
+them offline, as tests take no network, so its cache must hold the build backend and every requirement already, as a
+`uv sync` and a `uv build` with the network leave it. Where it does not, the test fails, saying so, and never skips."""
 
 import os
 import shutil
 import subprocess
 import sys
+import tomllib
 import zipfile
 from dataclasses import dataclass
 from email.message import Message
@@ -69,13 +70,17 @@ class Installed:
             return wheel.namelist()
 
 
-def install(folder: Path) -> Installed:
-    """Every distribution of this checkout built into `folder / "dist"`, each wheel from its sdist, and the wheels
-    installed with what they require in `folder / "environment"`, on this interpreter's Python."""
+def install(folder: Path, *projects: Path) -> Installed:
+    """Every distribution of this checkout, and each of `projects`, a folder its `pyproject.toml` describes, built into
+    `folder / "dist"`, each wheel from its sdist, and the wheels installed with what they require in
+    `folder / "environment"`, on this interpreter's Python."""
     dist, environment = folder / "dist", folder / "environment"
     uv("build", "--all-packages", "--no-sources", "--out-dir", str(dist), cwd=ROOT)
+    for project in projects:
+        uv("build", "--no-sources", "--out-dir", str(dist), str(project), cwd=folder)
+    named = (tomllib.loads((project / "pyproject.toml").read_text())["project"]["name"] for project in projects)
     wheels: dict[str, Path] = {}
-    for name in PACKAGES:
+    for name in (*PACKAGES, *named):
         [wheels[name]] = dist.glob(f"{name.replace('-', '_')}-*.whl")
     uv("venv", "--python", sys.executable, str(environment), cwd=folder)
     uv("pip", "install", "--python", str(environment / "bin" / "python"), *map(str, wheels.values()), cwd=folder)

@@ -165,7 +165,7 @@ Nothing is published to PyPI yet.
 |---|---|
 | `packages/sdk/` | `platoon-harness-sdk`, the Python SDK, `platoon_harness`: the kernel, the primitives, the runtime, the topology, the tool plane, the drivers and the testing kit |
 | `packages/cli/` | `platoon-harness-cli`, the `platoon-harness` command: the command line, the terminal UI and the server of SwarmChat's page |
-| `examples/` | runnable examples, each run with no keys by `tests/integration/test_examples.py` |
+| `examples/` | runnable examples, each run with no keys by `tests/integration/test_examples.py`, and a sample extension package, installed from its wheel by `tests/integration/test_installed_extensions.py` |
 | `tests/` | `unit/` and `integration/`, on a CPU, with the slow ones marked; `e2e/`, the browser tests; `live/`, on real models and logins; `conformance/`, the conformance suite run on every driver |
 | `docs/` | the documentation, which [docs/README.md](docs/README.md) lists |
 | `pyproject.toml`, `uv.lock` | the uv workspace of the two packages, and the versions every checkout installs |

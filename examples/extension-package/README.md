@@ -93,3 +93,11 @@ extension's op yet, as it makes its commands from the SDK's own ops before any s
 
 `check_extension`, from `platoon_harness.testing`, holds an extension to what a core primitive keeps to, every failure at
 once: see [Extensions](../../docs/extending/drivers.md#extensions).
+
+## How the tests hold it
+
+[`tests/integration/test_installed_extensions.py`](../../tests/integration/test_installed_extensions.py) builds it as a
+wheel and installs it in a fresh environment beside a rival that registers an extension of the same name. There, it
+activates nothing until a team names it, a team that names `ballot` is refused before either is imported, its vote is
+cast through the SDK, MCP and `ph` and read back by `platoon-harness events`, `extension list` names it from metadata,
+and it passes `check_extension`.
