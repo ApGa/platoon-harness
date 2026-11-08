@@ -13,6 +13,7 @@ from platoon_harness.testing import AskModel, Call, FakeModel, Say, ToolCall
 from platoon_harness_cli.provenance import FROM_TEXT
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
+from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.transcript import Focus, Transcript
@@ -66,9 +67,11 @@ async def choose(pilot, app: TerminalUI, said: str) -> None:
 
 
 async def asked(pilot, ref: str) -> str:
-    """Run `/provenance` from the part with focus, as the plain keys a person types, and say what its panel says of
-    `ref` once it has drawn it."""
+    """Run `/provenance` from the part with focus, as the plain keys a person types, send its form as it is filled in,
+    with the chosen line's ref, and say what its panel says of `ref` once it has drawn it."""
     await pilot.press("slash", *"provenance", "enter")
+    await drawn(pilot, lambda _: isinstance(pilot.app.screen, Form))
+    await pilot.press("enter")
     await drawn(pilot, lambda text: f"Provenance of {ref}" in text and "Credit and rewards" in text)
     return said(pilot.app)
 
@@ -178,13 +181,15 @@ async def test_a_line_with_no_event_says_why(root):
     async with answered(root, [Call("message_send", ANSWER)]) as (_, app, pilot):
         screen = workspace(app)
         await screen.show(Focus.of_agent("nobody"))
-        await drawn(pilot, lambda _: not screen.query_one(Transcript).blocks)
+        transcript = screen.query_one(Transcript)
+        await drawn(pilot, lambda _: not transcript.blocks)
+        transcript.focus()
 
-        await pilot.press("slash", *"provenance", "enter")
+        await pilot.press("p")
         await drawn(pilot, lambda _: any("No line is chosen" in notice.message for notice in app._notifications))
 
         assert not isinstance(app.screen, Provenance)
-        assert app.focused is app.screen.query_one(Composer)
+        assert app.focused is transcript
     said = next(notice.message for notice in app._notifications if "No line is chosen" in notice.message)
     assert "What an agent is saying now is no event until the journal holds it." in said
 

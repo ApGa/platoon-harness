@@ -20,6 +20,7 @@ from platoon_harness.primitives import delivery
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 from platoon_harness_cli.ops import _command, person_ops
+from platoon_harness_cli.provenance import Line, shows
 from platoon_harness_cli.tui import live as live_module
 from platoon_harness_cli.tui import transcript as transcript_module
 from platoon_harness_cli.tui.app import TerminalUI
@@ -27,6 +28,7 @@ from platoon_harness_cli.tui.approvals import Approval
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.keymap import keys
+from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import CHOOSE, Dock, Workspace, _asked, _value
@@ -1208,3 +1210,35 @@ async def test_the_header_says_what_changed_and_each_limit_in_a_few_characters(r
         assert "changes not observed" in header and "/1,000" in header
         assert "turns unmeasured" not in header
         assert header.rstrip().endswith(("1 turn unmeasured)", "/1,000", "turns 1/8"))
+
+
+async def test_provenance_given_a_ref_opens_it_or_says_why_not(root):
+    """`/provenance` opens its form, filled in with the chosen line's ref, which a person sends as it is or changes: a
+    ref that names an event opens its panel, as a link followed does, one that names none opens one that says why, and
+    with none given nothing opens, saying why."""
+    async with attached(team([Say("on it")]), root) as (_, app, pilot):
+        await pilot.press(*"fix the flaky test", "enter")
+        await drawn(pilot, lambda text: "@lead  on it" in text)
+        chosen = app.screen.query_one(Transcript).chosen
+        assert chosen is not None
+        filled, opened = [], {}
+        for given in (None, "inbox/lead@1", "nothing/here@1", ""):
+            await pilot.press("slash", *"provenance", "enter")
+            await drawn(pilot, lambda _: isinstance(app.screen, Form))
+            filled.append(app.screen.query_one(Input).value)
+            await pilot.press(*(() if given is None else ("home", "ctrl+k", *given)), "enter")
+            if given == "":
+                await drawn(pilot, lambda _: any("No ref was given" in notice.message for notice in app._notifications))
+                continue
+            await drawn(pilot, lambda _: isinstance(app.screen, Provenance) and app.screen.lines)
+            opened[given] = app.screen.lines[0]
+            await pilot.press("escape")
+            await drawn(pilot, lambda _: not isinstance(app.screen, Provenance))
+        left = app.screen
+
+    assert filled == [shows(chosen.event)] * 4
+    assert opened[None].text.startswith(f"{chosen.event.type} {shows(chosen.event)}: on it")
+    assert opened["inbox/lead@1"] == Line("", "message.sent inbox/lead@1: fix the flaky test")
+    missing = "nothing/here@1 has no provenance to show: not_found: nothing is nothing/here@1"
+    assert opened["nothing/here@1"] == Line("", missing, warn=True)
+    assert isinstance(left, Workspace), "a form sent with no ref opens nothing"

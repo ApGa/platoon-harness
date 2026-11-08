@@ -16,6 +16,9 @@ const X = {caps: null};
 // What is not built over a session yet, and why: what the brief asks the page to show.
 X.unbuilt = {activity: 'Not built yet: an agent\'s tool calls and their output, apart from its chats, are planned.'};
 
+// What the Provenance pane's field takes.
+X.REF = 'An event\'s ref, stream@version, whose provenance to show';
+
 // What the Provenance pane says first: what the record holds, and what it cannot.
 X.RECORD = 'This is what the record holds: a citation is the agent\'s claim, being handed something is not using it, and ' +
   'what reached an agent through a file or a shell leaves nothing here. An estimate is its producer\'s, never a fact.';
@@ -144,6 +147,8 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-provenance .x-kind { color: var(--faint); }
 .x-provenance .x-warn { color: var(--warn); }
 .x-ref { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.x-ref-form { display: flex; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.x-ref-form input { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line2); background: var(--panel); color: inherit; }
 .x-form { display: grid; gap: 12px; padding: 12px 14px; }
 .x-form .x-about { margin: 0; color: var(--muted); font-size: 12.5px; }
 .x-form .x-field { display: grid; gap: 4px; }
@@ -1123,13 +1128,15 @@ ThreadPane = class extends ThreadPane {
 
 // The provenance of one event, in the lines the terminal draws, read when it opens and when its event is asked again:
 // what it rests on, what came of it and whose work it reaches, each link by how it is known. Following a link shows that
-// event's, and one a chat shows opens there too. Opened `from` `text`, where a ref in text opened it, it says so.
+// event's, and one a chat shows opens there too. Opened `from` `text`, where a ref in text opened it, it says so. Its
+// field holds the ref it shows, and a ref typed there opens that event's by hand, as the terminal's /provenance form
+// does, or the pane says why it opens none.
 X.Provenance = class {
   constructor(ref, from) {
     this.ref = this.name = ref;
     this.from = this.args = from;
     const pane = $('#pane');
-    pane.innerHTML = html`<div class="phead"><h2>Provenance of ${ref}</h2><button class="close" data-close-pane title="Close">×</button></div><div class="scroll"><div class="x-provenance"><div class="loading">Loading</div></div></div>`.s;
+    pane.innerHTML = html`<div class="phead"><h2>Provenance of ${ref}</h2><button class="close" data-close-pane title="Close">×</button></div><form class="x-ref-form"><input name="ref" value="${ref}" required pattern=".*[^ ].*" title="${X.REF}" aria-label="${X.REF}" autocomplete="off" spellcheck="false"><button type="submit" class="btn">Open</button></form><div class="scroll"><div class="x-provenance"><div class="loading">Loading</div></div></div>`.s;
     this.box = $('.x-provenance', pane);
     this.load();
   }
@@ -1166,6 +1173,14 @@ X.reveal = (at, ref) => {
   if (S.view instanceof ChatView && S.view.id === chat) return S.view.jump(+seq);
   go({layout: 'chat', chat, m: seq, provenance: ref});
 };
+
+// A ref typed in the pane's field shows that event's provenance, by hand. The browser sends no field that holds no ref.
+document.addEventListener('submit', e => {
+  const f = e.target.closest('.x-ref-form');
+  if (!f) return;
+  e.preventDefault();
+  X.provenance(f.elements.ref.value.trim(), false);
+});
 
 // A queue's or a board's own view, of its tasks or its entries, opened in the pane from its chat.
 X.tasksView = c => c && c.kind === 'channel' && ['queue', 'board'].includes(c.description)

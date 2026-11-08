@@ -105,8 +105,8 @@ it, even when its harness reported that call after the spawn. A spawn whose call
 has it, saying it joins no known call, as OpenHands' and an `exec` harness's are: their calls come through the shim and
 `ph`, each under an id of its own, which none of their items holds. A turn that `spans` cuts is drawn cut, a line
 `── span … ends ──` where each span but its last ends, under what its calls made and above the first call of the next,
-naming the span by its last call, which the line shows: `/provenance` on it says that a credit row on that call is the
-whole span's. A turn's last span ends with the turn. The cuts are read as the agent is shown and again as each of its turns
+naming the span by its last call, which the line shows: `p` on it says that a credit row on that call is the whole
+span's. A turn's last span ends with the turn. The cuts are read as the agent is shown and again as each of its turns
 ends, so a turn under way is drawn cut once it has ended. Each ref a line's words name, standing apart from the words
 around it and in no link's address, is underlined, and a click on it shows that ref's own provenance, which says first that
 it was opened from a ref in text, which records no link; one that names no event says so. A ref in an opened line's body
@@ -223,10 +223,14 @@ What came of it is said as the palette says it, and the list moves with it. Esc 
 
 ### Follow a line's provenance
 
-`/provenance`, or `p` with the transcript in focus, shows where the chosen line came from: the newest line while the transcript
-follows, or the one you chose with the arrows. Every line is an event, and a line of a message that carries another event's words,
-a write it announces or a child's report, opens on that event. The panel has four parts, read from the session's provenance queries
-when it opens, in the words the browser's pane uses ([provenance.md](provenance.md) says what each answer means):
+`p` with the transcript in focus shows where the chosen line came from: the newest line while the transcript follows, or the
+one you chose with the arrows. Every line is an event, and a line of a message that carries another event's words, a write it
+announces or a child's report, opens on that event. `/provenance` opens its form, filled in with the chosen line's ref, which
+Enter sends as it is, so it shows the same; give another ref there, `stream@version`, and it shows that event's, as the page's
+pane does for a ref typed in its field. One that names no event shows a panel saying why, and a form sent with no ref opens
+nothing, saying so. That a ref is opened by hand, rather than found by searching, is the default pending the owner's ruling. The
+panel has four parts, read from the session's provenance queries when it opens, in the words the browser's pane uses
+([provenance.md](provenance.md) says what each answer means):
 
 | Part | What it says |
 |---|---|
@@ -335,7 +339,7 @@ before the session's. `^` is Ctrl.
 |  | `/resume` | Resume this session when it is history, which can spend money |
 | `^T` | `/tasks` | Show the tasks of the queue in view, or the entries of the board in view, each act opening its op's form |
 | `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths, each opening its diff |
-|  | `/provenance` | Show the chosen line's provenance: what it rests on, what came of it and whose work it reaches |
+|  | `/provenance` | Show an event's provenance, by the ref you give, the chosen line's unless you give another: what it rests on, what came of it and whose work it reaches |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
 | `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent hold` holds its deliveries and no more |
 | `^D` | `/detach` | Detach on an empty composer: the session runs on |

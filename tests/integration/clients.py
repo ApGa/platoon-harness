@@ -18,6 +18,7 @@ from platoon_harness.team import Budget
 from platoon_harness.testing import FakeModel
 from platoon_harness_cli.provenance import Line, read
 from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.transcript import Focus, Transcript
 
@@ -326,8 +327,9 @@ def hold_their_bounds(traced: Traced, bound: str) -> None:
 
 
 async def the_tui_shows_where_a_cited_write_came_from(team: Team, root: Path) -> list[Line]:
-    """What the TUI's `/provenance` says of `bob`'s answer, the newest line sent to the person, once bob has read the
-    message that woke it by our tool and answered citing it. Its caller points `PLATOON_HARNESS_HOME` at `root`."""
+    """What the TUI's `/provenance`, its form sent as the chosen line fills it in, says of `bob`'s answer, the newest
+    line sent to the person, once bob has read the message that woke it by our tool and answered citing it. Its caller
+    points `PLATOON_HARNESS_HOME` at `root`."""
     answering = Team.model_validate({**team.canonical(), "topology": {"edges": {"bob": ["human"]}}})
     async with Session.start(answering, name="s", root=root, cwd=root) as session:
         await in_state(session, "bob", "idle")
@@ -339,6 +341,8 @@ async def the_tui_shows_where_a_cited_write_came_from(team: Team, root: Path) ->
             await workspace(app).show(Focus.of_person("human:you"))
             await drawn(pilot, lambda text: CITING["gist"] in text, within=TIMEOUT)
             await pilot.press("slash", *"provenance", "enter")
+            await drawn(pilot, lambda _: isinstance(app.screen, Form), within=TIMEOUT)
+            await pilot.press("enter")
             await drawn(pilot, lambda text: "Credit and rewards" in text, within=TIMEOUT)
             panel = app.screen
             assert isinstance(panel, Provenance)

@@ -1762,8 +1762,9 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   person moves its cursor, and an approval's whole ask opens from it, read by its body's ref, before anyone answers it, as the
   page's card opens it. Every act also takes only keys every terminal delivers, a typed command in the composer or a plain key
   where nothing is typed, so a chord is a shortcut and never the only way, and no chord decides, stops or spends anything, since
-  a terminal sends Alt and a letter as Esc then that letter. `/provenance`, or `p` with the transcript in focus, opens the
-  chosen line's provenance in a panel, Enter following a link and Esc going back one hop, so it takes no chord. `/tasks`, on a
+  a terminal sends Alt and a letter as Esc then that letter. `p` with the transcript in focus opens the chosen line's
+  provenance in a panel, Enter following a link and Esc going back one hop, so it takes no chord, and `/provenance` its
+  form, filled in with that line's ref, which takes any other, as the page's pane takes a ref in its field. `/tasks`, on a
   queue's or a board's focus, lists its tasks or its entries with every version, in the words of `channels.py`, read from
   `task.list` or `board.query` again only for a frame that holds an event on one of their streams, or for a queue an agent's
   end, which gives back each task it held, so no timer of the client's decides anything, and each act opens its op's form

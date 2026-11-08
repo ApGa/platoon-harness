@@ -41,6 +41,11 @@ named here is closed.
   ran two commands, two `cat`s and two calls of ours at once, OpenHands each two in turn, as our worker keeps its SDK's
   `tool_concurrency_limit` at 1, and Claude Code two commands it asked approvals for in turn and the rest at once, which
   [the compatibility page](docs/reference/compatibility.md#tool-calls-at-once) records.
+- **A ref opened by hand.** `/provenance` in the terminal now opens its form, filled in with the chosen line's ref, which
+  Enter sends as it is or which takes any other ref, and the page's Provenance pane has a field holding the ref it shows,
+  where a ref typed opens its event's pane. A ref that names no event, or names lines, or is no ref, opens one that says
+  why, in the one wording both clients use. `p` in the transcript still shows the chosen line's provenance at once. This
+  is the default pending the owner's ruling, in place of search by ref.
 - **A ref in a message's text opens its own provenance.** In the terminal's transcript each ref a line's words name is
   underlined, and in the page each ref a message's text names is a button, and either opens that ref's own provenance,
   which says first that it was opened from a ref in text, which records no link, or that the ref names no event. A ref is

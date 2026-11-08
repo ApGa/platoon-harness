@@ -234,3 +234,44 @@ async def test_a_ref_in_a_message_opens_its_own_pane_saying_it_records_no_link(b
 
     assert "from=text" in opened_from_text
     assert errors == []
+
+
+async def test_a_ref_typed_in_the_pane_opens_it_or_is_refused_saying_why(browser: Browser, root: Path):
+    """The pane's field holds the ref it shows, on a view link too, and a ref typed there opens that event's own pane,
+    which Back leaves, or the pane says why it opens none, in the terminal's words; a field holding no ref is not
+    sent, and the browser says what it takes."""
+    async with Session.start(team(), name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await answered(session)
+        page, errors = await opened(browser, web.link("view"), "status of 404", "status of 400")
+        await chat(page, "bob & you")
+        await provenance_of(page, "the tests pass")
+        heading, field = page.locator("#pane h2"), page.locator("#pane .x-ref-form input")
+        await expect(heading).to_have_text(f"Provenance of {ANSWERED}", timeout=SECONDS)
+        await expect(field).to_have_value(ANSWERED)
+
+        await field.fill(f"  {ASKED} ")
+        await field.press("Enter")
+        await expect(heading).to_have_text(f"Provenance of {ASKED}", timeout=SECONDS)
+        await expect(page.locator(PANE)).to_contain_text(f"message.sent {ASKED}: check the tests")
+        refused = []
+        for ref in ("nothing/here@1", f"{ASKED}#L1-2"):
+            await field.fill(ref)
+            await field.press("Enter")
+            await expect(heading).to_have_text(f"Provenance of {ref}", timeout=SECONDS)
+            refused.append(await page.locator(PANE).locator(".note").text_content(timeout=SECONDS))
+        for unsent in ("", "   "):
+            await field.fill(unsent)
+            await field.press("Enter")
+            await expect(heading).to_have_text(f"Provenance of {ASKED}#L1-2")
+            assert not await field.evaluate("field => field.validity.valid")
+        await page.go_back()
+        await page.go_back()
+        await expect(heading).to_have_text(f"Provenance of {ASKED}", timeout=SECONDS)
+        await page.context.close()
+
+    assert refused == [
+        "nothing/here@1 has no provenance to show: not_found: nothing is nothing/here@1",
+        f"{ASKED}#L1-2 has no provenance to show: invalid: these ask about events, and {ASKED}#L1-2 names lines of "
+        f"one: ask by {ASKED}",
+    ]
+    assert errors == []

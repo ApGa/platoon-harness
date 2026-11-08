@@ -169,9 +169,10 @@ KEYMAP: tuple[Key, ...] = (
     ),
     Key(
         "",
+        "provenance_of",
         "provenance",
-        "provenance",
-        "Show the chosen line's provenance: what it rests on, what came of it and whose work it reaches",
+        "Show an event's provenance, by the ref you give, the chosen line's unless you give another: what it rests on, "
+        "what came of it and whose work it reaches",
         "workspace",
     ),
     Key(

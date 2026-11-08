@@ -1045,6 +1045,30 @@ class Workspace(Screen[None]):
             return
         self.app.push_screen(Provenance(live.session, shows(chosen.event)))
 
+    @work(group="act")
+    async def action_provenance_of(self) -> None:
+        """Show the provenance of the event a ref given by hand names: its form is filled in with the chosen line's
+        ref, which opens as the transcript's key opens it, and takes any other. One that names no event opens a panel
+        that says why, as following one does."""
+        live = self.live
+        if live is None:
+            return
+        chosen = self.query_one(Transcript).chosen
+        about = SafeText("ref: an event's ref, `stream@version`, the chosen line's unless you give another.")
+        asked = [("ref", about, "" if chosen is None else shows(chosen.event))]
+        answer = await self.app.push_screen_wait(Form(SafeText("Provenance", "bold"), asked))
+        if answer is None:
+            return
+        if "ref" not in answer:
+            said = (
+                "No ref was given, so no event has a provenance to show: give one, or choose a line of the "
+                "transcript, which Tab reaches, with its arrows. What an agent is saying now is no event until the "
+                "journal holds it."
+            )
+            note(self, said, severity="warning")
+            return
+        self.app.push_screen(Provenance(live.session, answer["ref"]))
+
     def on_transcript_named(self, named: Transcript.Named) -> None:
         """Show the provenance of a ref a line's text names, saying it was opened from text, which records no link."""
         if (live := self.live) is not None:

@@ -152,7 +152,9 @@ a plan login on loopback alone: see [Security](#security).
   holds. Credit is only what an estimator said, by producer, version and params. Each ref a message's text names, standing apart
   from the words around it and in no link's address, is a button, which Tab reaches, and opens that ref's own pane, which says first
   that it was opened from a ref in text, which records no link: naming an event in text is no citation. The address says so too,
-  `from=text`, so a reload keeps it. One that names no event says so in the pane.
+  `from=text`, so a reload keeps it. One that names no event says so in the pane. The pane's field holds the ref it shows, and a
+  ref typed there, `stream@version`, opens that event's pane, as the terminal's `/provenance` form does, or the pane says why it
+  opens none, in the terminal's words; the browser does not send a field that holds no ref, and says what it takes.
 - **As an agent.** Seeing the session as an agent shows its chats, how far each was delivered to it, and what waits to
   reach it, oldest first. Nothing is marked. A person and the runtime cannot be seen as, for the same reason: the picker
   draws them disabled, saying so, and an address that names one shows everyone.

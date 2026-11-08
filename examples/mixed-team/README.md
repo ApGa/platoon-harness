@@ -92,8 +92,8 @@ $ uv run platoon-harness board get dns --board notes --name risks
 $ uv run platoon-harness message read dns --channel @lead
 ```
 
-Provenance: in the terminal UI, choose the line of the lead's answer and type `/provenance`; in the page, Provenance is
-among a message's actions. Each opens on one event, with its sources, its uses and its contributors, each link by how it
+Provenance: in the terminal UI, choose the line of the lead's answer and press `p`, or type `/provenance` and send its form
+as the chosen line fills it in; in the page, Provenance is among a message's actions. Each opens on one event, with its sources, its uses and its contributors, each link by how it
 is known. From the command line:
 
 ```console
