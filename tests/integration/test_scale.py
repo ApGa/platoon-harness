@@ -65,8 +65,9 @@ PAGES = {
 }
 """The slowest page each query that pages may answer, by op, and the journal's own read three ways: forward from the
 start, back from the head, and of one member's stream."""
-SNAPSHOTS = {"roster": (0.050, 208 * KiB), "attention": (0.090, 1358 * KiB), "changes": (0.050, 126)}
-"""The seconds and bytes each whole snapshot may take."""
+SNAPSHOTS = {"roster": (0.050, 208 * KiB), "attention": (0.090, 1358 * KiB)}
+"""The seconds and bytes each whole snapshot may take. The changes snapshot is not here: no git repository holds the
+run's workspace, so no look runs and it holds nothing."""
 PROJECTION = 37.0
 METRICS_READ = 0.100
 COUNTING = 0.028
@@ -298,8 +299,9 @@ def test_every_query_that_pages_answers_a_page_within_its_budget_at_100000_event
     assert {name: max(seconds) for name, seconds in pages.items() if max(seconds) > PAGES[name]} == {}
 
 
-def test_the_roster_attention_and_changes_snapshots_are_measured_at_100_agents(measured: Measured):
-    """Each is whole, not paged: its rows and bytes are measured, and it must fit one line of the RPC."""
+def test_the_roster_and_attention_snapshots_are_measured_at_100_agents(measured: Measured):
+    """Each is whole, not paged: its rows and bytes are measured, and it must fit one line of the RPC. A roster row
+    names its agent's workspace path, so the roster's bytes grow with that path's length."""
     for name, (seconds, rows, size) in measured.snapshots.items():
         print(f"{name}: {rows} rows, {size} bytes, {seconds * 1000:.0f} ms")
         budget, most = SNAPSHOTS[name]
