@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`kernel/writer.py`](../../packages/sdk/src/platoon_harness/kernel/writer.py), [`kernel/txn.py`](../../packages/sdk/src/platoon_harness/kernel/txn.py), [`primitives/clients.py`](../../packages/sdk/src/platoon_harness/primitives/clients.py), [architecture sections 5, 6 and 16](../architecture.md#16-observability), [the brief's section 12](../spec/BRIEF.md#12-reliability-security-and-scale), [RFC 0004](0004-one-operation-table.md), [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) and [RFC 0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | `feat: Give the kernel's writer gauges public names`, `feat: Answer session.metrics, unknown where nothing measured` |
+| Implementation | `feat: Give the kernel's writer gauges public names`, `feat: Answer session.metrics, unknown where nothing measured`, `fix: Let only a query read the kernel's gauges` |
 
 ## Summary
 
@@ -16,7 +16,7 @@ session runs from two sources. Counters that are folds: a view, `Counters`, coun
 refusal by its code as it commits, so counting adds no journal write and reading walks nothing. And the kernel's gauges: a live
 kernel keeps in memory what its writer has measured since it opened the journal, the events and commits, the writes queued and
 the most there were, the commands in flight by principal, the writes refused `busy` and each write's ack latency, and what its
-process has used, and gives them by public names as `Gauges`, through `Kernel.gauges()` and, to an op, `Txn.gauges()`. Beside
+process has used, and gives them by public names as `Gauges`, through `Kernel.gauges()` and, to a query, `Txn.gauges()`. Beside
 them the answer reads the views it already has: agents by the roster's groups, agents by the trainable level their latest start
 recorded, each surface's declared coverage with what is proved, and gaps by kind. Each metric section 16 names is defined in a
 sentence. What nothing measured is None, never zero, and `unknown` names it with why: the gauges where no runtime answers, ack
@@ -78,7 +78,7 @@ class Kernel:
     def gauges(self) -> Gauges | None: ...  # None from a read-only kernel, which measures nothing
 
 class Txn:
-    def gauges(self) -> Gauges | None: ...  # the kernel's, as an op reads them
+    def gauges(self) -> Gauges | None: ...  # the kernel's, as a query reads them; a command is refused
 ```
 
 A write is what the writer takes: a command, a body or a rebuild. The writer already takes its lock to admit a write and to
@@ -93,7 +93,9 @@ or 10 µs: a budget held against it errs on the safe side. CPU is `time.process_
 `Txn` gains one member: an op receives `me`, `now`, `view`, `gauges`, `emit` and `effect`. Law 3 holds, since the gauges are
 memory and two system calls about the process itself, so an op that reads them still waits on nothing. Law 11 holds, since the
 primitives read them through the name any extension would. A read-only kernel has none: it measures nothing, and the process
-reading a closed journal is not the one that ran it.
+reading a closed journal is not the one that ran it. Only a query reads them: a command that asks is refused `unsupported`, as a
+query that emits is, so nothing a command does or records rests on what no journal holds, and the gauges never become a
+journal write.
 
 ### 3. The op
 
@@ -188,7 +190,7 @@ owner's ruling (Open questions).
 
 - A person or a program asks how a session runs, from the command line, Python or a view link, and the scale tests read
   throughput, ack latency and memory by public names.
-- An op may read the kernel's gauges, so `Txn` has six members, and a test pins them.
+- A query may read the kernel's gauges, so `Txn` has six members, and a command that asks is refused. Tests pin both.
 - Each session folds one view more, at one upsert an event; a session from before it refolds it as its writer opens, and a
   read-only reader of one that never had it is refused `unavailable`, naming the view, until a writer has.
 - Nothing is limited. Resource use is reported, the runtime's own, and an agent's harness reads unknown.
@@ -214,8 +216,9 @@ owner's ruling (Open questions).
 
 ## Evidence
 
-- `tests/unit/kernel/test_writer.py`, `test_the_writer_reports_its_depth_in_flight_and_ack_latency_by_public_names`;
-  `tests/unit/kernel/test_envelope.py`, `test_txn_is_exactly_me_now_view_gauges_emit_effect`.
+- `tests/unit/kernel/test_writer.py`, `test_the_writer_reports_its_depth_in_flight_and_ack_latency_by_public_names` and
+  `test_only_a_query_reads_the_gauges`; `tests/unit/kernel/test_envelope.py`,
+  `test_txn_is_exactly_me_now_view_gauges_emit_effect`.
 - `tests/unit/primitives/test_metrics.py`: `test_counters_are_folds_that_add_no_journal_write`,
   `test_a_metric_nothing_measured_is_unknown_never_zero`, `test_active_and_blocked_agents_are_the_roster_s_groups`,
   `test_metrics_on_a_view_credential_write_nothing` and `test_no_agent_holds_a_grant_for_metrics`.

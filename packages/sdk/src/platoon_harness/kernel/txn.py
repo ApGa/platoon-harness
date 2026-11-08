@@ -138,8 +138,11 @@ class Txn:
         return view(self._db)
 
     def gauges(self) -> Gauges | None:
-        """What the kernel running this has measured of its writer and its process, as they stand now, or None from one
-        that holds no writer, which measures nothing."""
+        """What the kernel running this query has measured of its writer and its process, as they stand now, or None
+        from one that holds no writer, which measures nothing. A command cannot read them, so nothing it does or records
+        rests on what no journal holds."""
+        if self._apply is not None:
+            raise Refused("unsupported", "a command cannot read the gauges: only a query can")
         return None if self._gauges is None else self._gauges()
 
     def emit(

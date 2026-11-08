@@ -526,7 +526,8 @@ def claim(txn: Txn, a: Claim) -> Lease:
 ```
 
 `Txn` is what an op receives, and all an op receives: `me`, `now`, `view`, `gauges`, `emit`, `effect`. `gauges()` reads what
-the kernel keeps in memory and the system keeps of its process, so an op that asks still waits on nothing. An op refuses by raising `Refused`,
+the kernel keeps in memory and the system keeps of its process, so an op that asks still waits on nothing, and only a query
+reads them: a command that asks is refused, so nothing it does or records rests on what no journal holds. An op refuses by raising `Refused`,
 and checks a second object with `txn.view(Grants).authorize(txn.me, op, stream)`. `permits` asks the same question without
 refusing, and `Principals.select(me, relation)` lists who stands in a relation.
 

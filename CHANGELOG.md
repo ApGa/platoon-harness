@@ -77,13 +77,13 @@ named here is closed.
   agent is refused it. That no agent holds it, and that resource use is reported and never limited, is the default
   pending the owner's ruling. See
   [RFC 0069](docs/rfcs/0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md), a draft.
-- **The kernel's gauges, by public names.** `Kernel.gauges()`, and `txn.gauges()` for an op, give what a live kernel
+- **The kernel's gauges, by public names.** `Kernel.gauges()`, and `txn.gauges()` for a query, give what a live kernel
   has measured since it opened its journal for writing, as `Gauges`: the events and commits, the writes queued now and
   the most there were, the commands in flight by principal, the writes refused `busy`, which no journal holds, and each
   write's ack latency as a median, a 99th percentile and the most, from buckets a quarter octave wide, so a percentile is
   never below the true one; and the CPU and peak memory of its process, the memory None anywhere but Linux. A read-only
   kernel measures nothing, so it has None. These were the writer's private fields, which no op could read, and `Txn` now
-  has six members. See [RFC 0069](docs/rfcs/0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md), a draft.
+  has six members. A command that asks for them is refused, so nothing it does or records rests on them. See [RFC 0069](docs/rfcs/0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md), a draft.
 - **A release workflow, which publishes nothing.** `.github/workflows/release.yml` builds the SDK's and the command
   line's sdists and wheels on each pull request and each push to `main`, each wheel from its sdist, checks every one with
   `twine check --strict`, and runs the command line from the wheels in an environment of its own. Nothing checked what a

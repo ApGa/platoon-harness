@@ -318,7 +318,7 @@ class Kernel:
                 current = stream_version(db, target)
                 if current != command.expected_version:
                     raise Refused("conflict", {"expected": command.expected_version, "current": current})
-            txn = Txn(db, me, now, self._apply, command.native, self.gauges)
+            txn = Txn(db, me, now, self._apply, command.native)
             result = jsonable(operation.fn(txn, args))
             if len(canonical(result).encode()) > DATA_LIMIT:
                 raise Refused("invalid", f"result exceeds {DATA_LIMIT} bytes: store a body")

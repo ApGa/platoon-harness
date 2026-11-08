@@ -219,6 +219,34 @@ async def test_the_writer_reports_its_depth_in_flight_and_ack_latency_by_public_
     closed.close()
 
 
+async def test_only_a_query_reads_the_gauges(folder, clock):
+    """A command that asks for the gauges is refused, so nothing it does or records rests on them. A query reads them
+    as `Kernel.gauges` gives them."""
+
+    @op("gauged.note")
+    def note(txn: Txn, a: Args) -> int | None:
+        gauges = txn.gauges()
+        txn.emit("gauged.noted", "gauged/a", gist="noted")
+        return None if gauges is None else gauges.events
+
+    @op("gauged.read", query=True)
+    def read(txn: Txn, a: Args) -> int | None:
+        gauges = txn.gauges()
+        return None if gauges is None else gauges.events
+
+    kernel = Kernel.open(folder, clock=clock, extensions=[notes, Extension("gauged", ops=[note, read])])
+    result_of(await kernel.submit(kernel.runtime, "note.add", {}))
+    refused = await kernel.submit(kernel.runtime, "gauged.note", {})
+    read_now = kernel.query(kernel.runtime, "gauged.read", {})
+    gauges, types = kernel.gauges(), [event.type for event in events_of(kernel)]
+    kernel.close()
+
+    assert refused.refusal is not None and refused.refusal.code == "unsupported"
+    assert refused.refusal.detail == "a command cannot read the gauges: only a query can"
+    assert gauges is not None and result_of(read_now) == gauges.events
+    assert "gauged.noted" not in types
+
+
 async def test_runtime_principals_have_reserved_capacity(kernel, gate):
     held = await hold_writer(kernel, gate)
     tasks = [
