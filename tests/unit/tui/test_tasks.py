@@ -70,7 +70,7 @@ async def opened(app: Any, pilot: Any, name: str, kind: str) -> str:
 
 
 def lease(seconds: float) -> str:
-    return time.strftime("%H:%M:%S", time.localtime(seconds))
+    return time.strftime("%H:%M:%S %Z", time.localtime(seconds))
 
 
 async def test_a_queue_s_tasks_show_each_state_claimant_and_lease_deadline(root):

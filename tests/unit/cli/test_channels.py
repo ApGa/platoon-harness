@@ -2,6 +2,7 @@
 state, held by an agent or by the person, an entry revised, and what moves a view."""
 
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -53,20 +54,31 @@ async def queued(session: Session) -> None:
     await session.task_fail("tasks", task="4", gist="not yet")
 
 
-async def test_each_task_says_its_state_who_claimed_it_which_attempt_and_until_when_its_lease_holds(root):
-    """As `task.list` gives it, oldest first, the lease's deadline on the session's clock and never judged by the
-    reader's: a claim holds until its expiry is recorded."""
+@pytest.fixture
+def utc() -> Iterator[None]:
+    """This process's zone UTC, which a time it says names, and its own zone back after."""
+    with pytest.MonkeyPatch.context() as patched:
+        patched.setenv("TZ", "UTC")
+        time.tzset()
+        yield
+    time.tzset()
+
+
+async def test_each_task_says_its_state_who_claimed_it_which_attempt_and_until_when_its_lease_holds(root, utc):
+    """As `task.list` gives it, oldest first, the lease's deadline on the session's clock, in the zone of the machine
+    that says it, which it names, as in the page that is its server's, and never judged by the reader's clock: a claim
+    holds until its expiry is recorded."""
     async with Session.start(team(), name="s", root=root, cwd=root, clock=ManualClock(1000.0)) as session:
         await in_state(session, "lead", "idle")
         await queued(session)
         view = await read(session, "queue/tasks", "you")
         listed = (await session.task_list("tasks"))["tasks"]
 
-    until_ = {task["id"]: time.strftime("%H:%M:%S", time.localtime(task["lease_until"])) for task in listed[:2]}
+    assert [task["lease_until"] for task in listed[:2]] == [2800.0, 2800.0]
     assert view.title == "Tasks on tasks"
     assert [said(line) for line in view.lines] == [
-        f"task 1  claimed by @lead, attempt 1, lease until {until_['1']}  the lead's",
-        f"task 2  claimed by @you, attempt 1, lease until {until_['2']}  yours",
+        "task 1  claimed by @lead, attempt 1, lease until 00:46:40 UTC  the lead's",
+        "task 2  claimed by @you, attempt 1, lease until 00:46:40 UTC  yours",
         "task 3  done  done  → it is done",
         "task 4  failed, 1 attempt  failed  → not yet",
         "task 5  dead after 2 attempts  dead  → no luck",

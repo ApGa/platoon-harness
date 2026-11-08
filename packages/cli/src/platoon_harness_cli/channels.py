@@ -4,7 +4,6 @@ read a page at a time, each line with the acts that open an op's form filled in 
 named by its stream, `queue/<name>` or `board/<name>`."""
 
 import json
-import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -12,7 +11,7 @@ from typing import Any, Literal
 from platoon_harness import Session
 from platoon_harness.kernel import Event
 
-from .review import Part, Tone
+from .review import Part, Tone, clock
 
 MOST = 256
 """The most tasks or versions a view reads, a page at a time: past them it says how many more there are, and what reads
@@ -89,7 +88,7 @@ def _task(queue: str, task: Mapping[str, Any], holder: str) -> Line:
     its gist and its result, with what a person may do from it."""
     state, attempts = task["state"], task["attempts"]
     if state == "claimed":
-        said = f"claimed by {task['owner']}, attempt {attempts}, lease until {_clock(task['lease_until'])}"
+        said = f"claimed by {task['owner']}, attempt {attempts}, lease until {clock(task['lease_until'])}"
     elif state == "dead":
         said = f"dead after {_some(attempts, 'attempt')}"
     elif state != "done" and attempts:
@@ -172,8 +171,3 @@ def _some(count: int, what: str) -> str:
 
 def _json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-
-
-def _clock(at: float) -> str:
-    """A time on the session's clock as the transcript says one."""
-    return time.strftime("%H:%M:%S", time.localtime(at))

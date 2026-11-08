@@ -473,7 +473,7 @@ async def test_an_uncommitted_diff_says_when_it_was_read(root, repo):
         text = await drawn(pilot, lambda text: "What it held at" in text)
 
     head = git("rev-parse", "platoon-harness/s/lead", cwd=repo).strip()
-    at = time.strftime("%H:%M:%S", time.localtime(1000.0))
+    at = time.strftime("%H:%M:%S %Z", time.localtime(1000.0))
     assert f"@lead uncommitted against {head[:12]}, " in text
     assert f"What it held at {at}, read in @lead's worktree." in text
     assert "+unfinished" in text

@@ -186,7 +186,7 @@ async def read(session: Session, effect: int) -> Diff:
         mode = None if read_in == "shared" else ((await session.status(read_in))["workspace"] or {}).get("mode")
         where = place(read_in, mode, commit=data["sha"] is not None)
         when = data["read_at"]
-        above.append(f"Read in {where}." if when is None else f"What it held at {_clock(when)}, read in {where}.")
+        above.append(f"Read in {where}." if when is None else f"What it held at {clock(when)}, read in {where}.")
         patch = _text(await session.get_body(data["body"], limit=PATCH_LIMIT))
         lines = None if patch is None else lines_of(patch)
     if data["sha"] is not None:
@@ -282,6 +282,7 @@ def _whose(workspace: str) -> str:
     return "your checkout" if workspace == "shared" else f"{workspace}'s workspace"
 
 
-def _clock(at: float) -> str:
-    """A time on the session's clock as the transcript says one."""
-    return time.strftime("%H:%M:%S", time.localtime(at))
+def clock(at: float) -> str:
+    """A time on the session's clock, in the zone of the machine that says it, which it names, as for the page that is
+    its server's, not its reader's."""
+    return time.strftime("%H:%M:%S %Z", time.localtime(at))

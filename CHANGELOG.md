@@ -76,10 +76,11 @@ named here is closed.
   projection, now at version 7, tells it with `x_moved`, naming the chat, and at no other time. Before, both buttons were
   drawn disabled, saying they were not built.
 - **A queue's tasks and a board's entries in the terminal UI.** On a queue's focus, `/tasks` or Ctrl+T lists each task's
-  state, by whom it is claimed, which attempt that is and until when its lease holds, on the session's clock, its gist and its
-  result, and on a board's, each entry with every version, its author, gist and fields. The list is read again whenever the
-  journal holds an event on one of its tasks' or entries' streams, or for a queue an agent's end, and at no other time, so a
-  claim stands until the runtime records its expiry. Before, Ctrl+T and `/tasks` said they were not built.
+  state, by whom it is claimed, which attempt that is and until when its lease holds, on the session's clock, in a zone it
+  names, its gist and its result, and on a board's, each entry with every version, its author, gist and fields. The list is
+  read again whenever the journal holds an event on one of its tasks' or entries' streams, or for a queue an agent's end,
+  and at no other time, so a claim stands until the runtime records its expiry. Before, Ctrl+T and `/tasks` said they were
+  not built.
 - **A child drawn under the call that spawned it.** In an agent's transcript in the terminal UI, a child's spawn is drawn
   under the line of the tool call whose id its anchor holds, the spawner's own tool item, even when its harness reported
   that call after the spawn. A spawn whose call no line holds is drawn where the journal has it, as a line of its own

@@ -176,18 +176,18 @@ The inspector says why a workspace was kept only once its agent's stop has kept 
 shows the list for a scripted harness that made a commit in its worktree and left two paths uncommitted.
 
 Enter on a commit opens its patch, and on a workspace or one of its paths what that workspace holds uncommitted. Each asks the
-runtime with `repo diff`, which reads it where the workspace lives ([workspaces.md](workspaces.md#read-a-diff)), so a commit's patch
-is read once and opened again shows what was kept, while an uncommitted diff is read again each time it opens. Above the patch
-are its record's words, what it is of and how many lines, and where it was read: your repository or your checkout, an agent's
-worktree, a snapshot's own repository, or inside an isolation; an uncommitted diff says when, `What it held at 14:02:11`, as it
-changes while its agent works. Each line is numbered as a citation names it and drawn as text, whatever it holds, so a control
-shows as its escape and markup as itself. The patch is read whole and drawn 500 lines at a time, and Enter on the last row,
-`312 more lines: Enter reads on`, draws the next, so a line of any length is drawn, wrapped. Git ends a line at a newline
-alone, where a citation numbers lines at a form feed or U+2028 too, so what follows one goes on its line, led by `↳` in that
-line's colour, the separator shown as its escape. A file git takes for binary is named, as git names it, and never drawn. Below a
-cut patch's last line it says it was cut at 64 KiB and that the rest is in git, at its commit, and a patch that is not UTF-8 is not
-drawn, saying why. A session that is its history cannot ask for a diff, and says what restarts it.
-[Its snapshot](../assets/tui-patch.svg) shows a commit's patch with a file git takes for binary.
+runtime with `repo diff`, which reads it where the workspace lives ([workspaces.md](workspaces.md#read-a-diff)), so a commit's
+patch is read once and opened again shows what was kept, while an uncommitted diff is read again each time it opens. Above the
+patch are its record's words, what it is of and how many lines, and where it was read: your repository or your checkout, an
+agent's worktree, a snapshot's own repository, or inside an isolation; an uncommitted diff says when, `What it held at
+14:02:11 UTC`, as it changes while its agent works. Each line is numbered as a citation names it and drawn as text, whatever
+it holds, so a control shows as its escape and markup as itself. The patch is read whole and drawn 500 lines at a time, and
+Enter on the last row, `312 more lines: Enter reads on`, draws the next, so a line of any length is drawn, wrapped. Git ends a
+line at a newline alone, where a citation numbers lines at a form feed or U+2028 too, so what follows one goes on its line,
+led by `↳` in that line's colour, the separator shown as its escape. A file git takes for binary is named, as git names it,
+and never drawn. Below a cut patch's last line it says it was cut at 64 KiB and that the rest is in git, at its commit, and a
+patch that is not UTF-8 is not drawn, saying why. A session that is its history cannot ask for a diff, and says what restarts
+it. [Its snapshot](../assets/tui-patch.svg) shows a commit's patch with a file git takes for binary.
 
 A comment on a diff is a message to whoever made the change: the agent whose workspace made the commit, or whose workspace
 holds what is uncommitted. Space chooses the line under the cursor, marked `┃`; pressed on another line it chooses every line from
@@ -201,12 +201,13 @@ it in the composer instead.
 ### Tasks and entries
 
 On a queue's focus, chosen in the navigator, `/tasks` or Ctrl+T lists its tasks, oldest first, as `task list` gives them: each
-task's id, its state, open, claimed, done, failed or dead, and while it is claimed, by whom, which attempt that is and until when
-its lease holds, `claimed by @ada, attempt 2, lease until 14:02:11`, on the session's clock, then its gist and, once it has one,
-its result. A failed or open task says how many attempts it has had, and a dead one after how many it died. On a board's
-focus the same keys list its entries, as `board query --history` gives them: each entry's name and how many versions it has, then
-each version, who wrote it, its gist and its fields. Every word an agent wrote is drawn through `SafeText`, so a control shows
-as its escape and markup as itself. The page's Tasks and Entries say the same ([web.md](web.md#what-the-page-shows)).
+task's id, its state, open, claimed, done, failed or dead, and while it is claimed, by whom, which attempt that is and until
+when its lease holds, `claimed by @ada, attempt 2, lease until 14:02:11 UTC`, on the session's clock in your machine's zone,
+which it names, then its gist and, once it has one, its result. A failed or open task says how many attempts it has had, and a
+dead one after how many it died. On a board's focus the same keys list its entries, as `board query --history` gives them:
+each entry's name and how many versions it has, then each version, who wrote it, its gist and its fields. Every word an agent
+wrote is drawn through `SafeText`, so a control shows as its escape and markup as itself. The page's Tasks and Entries say the
+same ([web.md](web.md#what-the-page-shows)).
 
 The list is read again whenever the journal holds an event on one of its tasks' or entries' streams, or for a queue an agent's
 end, which gives back each task the agent held, and at no other time: no timer of the terminal's decides anything. A claim
