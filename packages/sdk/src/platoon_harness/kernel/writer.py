@@ -6,7 +6,6 @@ import logging
 import math
 import os
 import queue
-import resource
 import sqlite3
 import sys
 import threading
@@ -53,8 +52,12 @@ def _rank(counts: Sequence[int], share: float, slowest: float) -> float:
 
 
 def _peak_resident_bytes() -> int | None:
-    """The most memory this process has held, which Linux gives in KiB. Elsewhere the unit is unchecked."""
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024 if sys.platform == "linux" else None
+    """The most memory this process has held, as Linux's /proc gives it in KiB, which may count what each CPU has yet
+    to add to the process's total where `getrusage` leaves it out. Elsewhere the unit is unchecked."""
+    if sys.platform != "linux":
+        return None
+    status = Path("/proc/self/status").read_text()
+    return next(int(line.split()[1]) * 1024 for line in status.splitlines() if line.startswith("VmHWM:"))
 
 
 class Writer:

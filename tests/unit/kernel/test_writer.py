@@ -1,7 +1,11 @@
 """One writer thread: group commit, bounded admission, safe acks."""
 
 import asyncio
+import mmap
+import os
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from platoon_harness.kernel import Args, Extension, JournalError, Kernel, Principal, Txn, op, writer
 from platoon_harness.kernel.writer import BATCH_LIMIT, PRINCIPAL_LIMIT, RUNTIME_RESERVE, SESSION_LIMIT
@@ -217,6 +221,27 @@ async def test_the_writer_reports_its_depth_in_flight_and_ack_latency_by_public_
     assert after.cpu_seconds > 0 and (after.peak_resident_bytes or 0) > 0
     assert closed.gauges() is None
     closed.close()
+
+
+def test_the_peak_memory_gauge_counts_what_each_cpu_has_touched(kernel):
+    """A thread on each CPU this process may use touches a few pages of its own, too few for that CPU to have added
+    them to the process's count, and the gauge still reads at least what /proc said the process held before it."""
+
+    def touch(cpu: int) -> mmap.mmap:
+        os.sched_setaffinity(0, {cpu})
+        pages = mmap.mmap(-1, 16 * mmap.PAGESIZE)
+        for offset in range(0, len(pages), mmap.PAGESIZE):
+            pages[offset] = 1
+        return pages
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        touched = [pool.submit(touch, cpu).result() for cpu in sorted(os.sched_getaffinity(0))]
+    status = Path("/proc/self/status").read_text().splitlines()
+    held = next(int(line.split()[1]) * 1024 for line in status if line.startswith("VmHWM:"))
+    gauges = kernel.gauges()
+    for pages in touched:
+        pages.close()
+    assert gauges is not None and (gauges.peak_resident_bytes or 0) >= held
 
 
 async def test_only_a_query_reads_the_gauges(folder, clock):

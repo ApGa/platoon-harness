@@ -1215,6 +1215,9 @@ named here is closed.
   and its agent lives on. An event may cite a redacted body's hash once its bytes are gone too, so an agent whose last words a
   person redacted ends as any other, where its end was refused once the eraser had run, and its stop tells its authority the
   gist, where it failed reading the body.
+- **Peak memory is what Linux counts.** `Gauges.peak_resident_bytes` read `getrusage`, which leaves out what each CPU has
+  counted and not yet added to the process's total, so on a host of 192 CPUs it read a runtime's peak 13 to 23 MiB low. It now
+  reads `VmHWM` from `/proc/self/status`.
 - **A conflict sends you to its agent or your own checkout.** A conflict an agent's merge stopped on said to resolve it in the
   agent's own workspace, where any commit you make is recorded as that agent's, as its HEAD reflog says that workspace made it.
   Its gist now says to tell the agent, or to resolve it in your own checkout, never in its workspace, and your checkout's says

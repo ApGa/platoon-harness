@@ -86,12 +86,13 @@ answer it, and keeps the gauges under that lock: one more clock reading as a wri
 answered, and one bisection into 97 buckets for each write. Ack latency runs from joining the queue to the answer, after the commit that made the write durable
 (law 4). The buckets are a quarter octave wide, from 10 µs to about two minutes, with one more for the rest. A percentile is the
 nearest rank's bucket bound, or the slowest ack where that is lower, so it is never below the true one and at most 19% above it,
-or 10 µs: a budget held against it errs on the safe side. CPU is `time.process_time()`. Peak memory is `getrusage`'s
-`ru_maxrss`, which Linux gives in KiB; anywhere else it is None, since its unit there is unchecked here: macOS documents bytes
-(UNVERIFIED, as nothing has run there).
+or 10 µs: a budget held against it errs on the safe side. CPU is `time.process_time()`. Peak memory is `VmHWM` in
+`/proc/self/status`, which Linux gives in KiB; anywhere else it is None, since no unit is checked there: macOS's `getrusage`
+documents bytes (UNVERIFIED, as nothing has run there). Linux's `getrusage` leaves out what each CPU has counted and not yet
+added to the process's total, and on a host of 192 CPUs read a runtime's peak 13 to 23 MiB low.
 
 `Txn` gains one member: an op receives `me`, `now`, `view`, `gauges`, `emit` and `effect`. Law 3 holds, since the gauges are
-memory and two system calls about the process itself, so an op that reads them still waits on nothing. Law 11 holds, since the
+memory, a system call and a read of `/proc` about the process itself, so an op that reads them still waits on nothing. Law 11 holds, since the
 primitives read them through the name any extension would. A read-only kernel has none: it measures nothing, and the process
 reading a closed journal is not the one that ran it. Only a query reads them: a command that asks is refused `unsupported`, as a
 query that emits is, so nothing a command does or records rests on what no journal holds, and the gauges never become a
@@ -238,4 +239,6 @@ owner's ruling (Open questions).
   took 108 to 112 ms, nearly all of it the roster reading attention's rows. On a shared host with 192 threads of Xeon Platinum
   8468 at a load of about 20, the journal on a local XFS disk. Scripted reports alone, and no runtime: a real session's mix is
   UNVERIFIED.
-- `getrusage(2)` on Linux gives `ru_maxrss` in kilobytes. That macOS gives bytes is UNVERIFIED here.
+- `proc(5)` on Linux gives `VmHWM` in kilobytes. `getrusage(2)` gives `ru_maxrss` in kilobytes there too, read from the
+  process's total without what each CPU has yet to add to it: a process that touched 64 pages on each of 192 CPUs read 87 MiB
+  in `VmHWM` and 36 MiB in `ru_maxrss`. That macOS gives bytes is UNVERIFIED here.
