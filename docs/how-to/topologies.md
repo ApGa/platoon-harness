@@ -12,7 +12,8 @@ The TOML forms go in a team file, whose every key [the team file reference](../r
 
 Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team, as TOML and as Python, and a test
 checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each, and `run` runs
-each but git-swarm, whose session is its program's, [a script](#run-a-program-from-python) that starts it.
+each but those under `until = "program"`, git-swarm's and the reviewers' of [Run a program from Python](#run-a-program-from-python),
+whose session is its program's, a script that starts it.
 
 ```python
 from platoon_harness.team import Budget, Role, Team

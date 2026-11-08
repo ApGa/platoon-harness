@@ -18,6 +18,7 @@ from platoon_harness import Team
 from platoon_harness.config import Manifest
 from platoon_harness.runtime.paths import read_conformance
 
+from ..unit.runtime.gitting import repository
 from .cli import EXECUTABLE, ROOT, SECONDS, Cli, Done, checked, crew, finished, line_where, said, solo
 
 pytestmark = pytest.mark.timeout(120)
@@ -612,21 +613,57 @@ async def test_team_check_says_every_problem_at_once_and_exits_78(cli: Cli):
     assert "recursive may_spawn with no limit" in done.stdout
 
 
-async def test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78(cli: Cli):
-    """A session under `until = "program"` waits for its program to close it, and `run` starts one as a person, so it
-    costs nothing. The team is sound, so `team check` says nothing of it."""
-    swarm = cli.write("swarm.toml", f'{solo("saying")}[topology.git-swarm]\nrole = "bob"\nlive = 1\n')
+SCRIPT_WAY = (
+    "topology.until: `program` leaves the session to the program that owns it, and `human:you` is a person: start it "
+    'from a script, with `Session.start(team, principal="program:<name>")`'
+)
+GUIDE = ROOT / "docs" / "how-to" / "topologies.md"
+STAND_IN = '"tests.integration.scripts:saying"'
 
-    checked = await cli.run("team", "check", swarm, "--trust")
-    ran = await cli.run("run", "go", "--team", swarm, "--trust")
+
+def guide_s_reviewers() -> str:
+    """The team the topologies guide's program runs, as the page writes it."""
+    section = GUIDE.read_text().partition("## Run a program from Python")[2]
+    written = re.search(r"^```toml\n(.*?)^```$", section, re.M | re.S)
+    assert written is not None
+    return written[1]
+
+
+@pytest.fixture
+async def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Cli]:
+    """The command line in a repository with a commit, which ignores the state root there, as a team in worktrees
+    runs."""
+    folder = repository(tmp_path / "repo", monkeypatch)
+    (folder / ".git" / "info" / "exclude").write_text("home/\n")
+    made = Cli(folder)
+    yield made
+    await asyncio.to_thread(made.end)
+
+
+@pytest.mark.parametrize(
+    ("text", "role"),
+    [
+        (f'{solo("saying")}[topology.git-swarm]\nrole = "bob"\nlive = 1\n', None),
+        ((ROOT / "examples" / "git-swarm" / "team.toml").read_text(), "worker"),
+        (guide_s_reviewers(), "reviewer"),
+    ],
+    ids=["one agent of its own", "the git-swarm example's", "the topologies guide's"],
+)
+async def test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78(
+    repo: Cli, text: str, role: str | None
+):
+    """A session under `until = "program"` waits for its program to close it, and `run` starts one as a person, so it
+    costs nothing, whether the team starts an agent of its own or, as each the docs show does, leaves every one to its
+    program, whom no prompt reaches. The team is sound, so `team check` says nothing of it."""
+    team = repo.write("team.toml", text)
+    sets = () if role is None else ("--set", f"roles.{role}.harness = {STAND_IN}")
+
+    checked = await repo.run("team", "check", team, *sets, "--trust")
+    ran = await repo.run("run", "go", "--team", team, *sets, "--trust")
 
     assert checked.code == 0, checked.stdout
-    assert ran.code == 78
-    assert (
-        "topology.until: `program` leaves the session to the program that owns it, and `human:you` is a person: start "
-        'it from a script, with `Session.start(team, principal="program:<name>")`'
-    ) in ran.stderr
-    assert not (cli.folder / "home" / "sessions").exists()
+    assert (ran.code, ran.stderr) == (78, f"platoon-harness: {SCRIPT_WAY}\n")
+    assert not (repo.folder / "home" / "sessions").exists()
 
 
 async def test_a_session_whose_team_names_program_is_refused_on_resume_as_an_unknown_key(cli: Cli):

@@ -92,9 +92,13 @@ def _seconds(timeout: str | None) -> float | None:
 
 def _recipients(team: Team, to: str | None) -> tuple[str, ...]:
     """Whom a prompt is for, decided before any cost, as `Team.recipients` says: `to`, which must name an agent the
-    session starts, or else every agent it starts."""
+    session starts, or else every agent it starts. A team left to its program has none, as a person's start of it is
+    refused, with every other problem it has, naming the script way."""
+    resolved = team.resolved(Installed())
+    if resolved.topology.until == "program":
+        return ()
     try:
-        found = team.resolved(Installed()).recipients(to)
+        found = resolved.recipients(to)
     except ConfigError as error:
         raise Usage(f"--to {error.problems[0].what}") from None
     if not found:
