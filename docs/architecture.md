@@ -2014,7 +2014,8 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
   login exits 78 and names the fix unless the user opts in, with `Session.start(team, plan_login=True)` or `--plan-login` on the command
   line. `prepare` refuses it from each role's
   `DriverInfo.login`, which comes from the harness's own status command, and a role with an auth profile is on no login. One agent alone is not
-  refused, unless another role can spawn more. The manifest keeps the opt-in, and without it the runtime holds the same line later, on what each
+  refused, unless another role can spawn more, or the program that owns a session under `until = "program"` starts a role nothing else
+  does, which it may start several of at once unless `max_live` is 1. The manifest keeps the opt-in, and without it the runtime holds the same line later, on what each
   harness says then: a launch that would put an agent on a plan login beside a live one fails, as a human can spawn more than a team said, and a
   resume that would bring back several is refused before anything runs, as a harness can be signed in again between runs. A browser on
   a control link acts as the session's person, and nothing tells a second person from the first, so a control link is the owner's to

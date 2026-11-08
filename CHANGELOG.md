@@ -767,6 +767,11 @@ named here is closed.
   do, and whether real models follow their instructions. A test holds every example to importing, and naming as a
   harness, no module of the tests. Its stand-ins and the review example's run each role's code as a `Do` step, and a
   test holds every example to the SDK's public names.
+- **A role only a program starts counts as several agents on a plan login.** Under `until = "program"`, the program that owns
+  the session starts a role nothing else does, as a population's workers are, as many at once as `max_live` lets it, so before
+  any cost such a role on a plan login is refused as one another role can spawn is, unless `max_live` is 1 or the script says
+  `plan_login=True`. A population of Codex workers on a plan login was refused only at each launch past the first, once the
+  first had begun to spend, using up an attempt each time.
 - **`team check` warns when no budget bounds a program's spawns.** Under `until = "program"`, a role that only the program starts,
   none with the session and no role by `may_spawn`, as a population's workers are, is warned of when neither its budget nor the
   session's sets a limit, as nothing in the team then bounds how many the program starts or what they spend. `team check` cannot

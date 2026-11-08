@@ -565,7 +565,9 @@ so it adds no task and starts no reviewer twice, and it goes on from there. `Ses
 methods, such as `task_add`, choose a new one for each call, so send what must act once through `submit`, keyed by what it is for and
 not by when it was sent: a second run can read what the first did not. The session issues no owner credential, so anyone who attaches
 only reads, and it cannot detach: its runtime runs in the script's process, and the script leaving stops it, resumable.
-`platoon-harness session resume` is a person's, so it refuses such a session, naming this way.
+`platoon-harness session resume` is a person's, so it refuses such a session, naming this way. On a plan login, a role only the
+program starts counts as several agents, as it may start more than one at once, so the start is refused before any cost unless
+`max_live` is 1 or the script says `plan_login=True` to `Session.start`.
 
 ## Check before you spend
 

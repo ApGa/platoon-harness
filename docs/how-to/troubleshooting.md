@@ -65,7 +65,9 @@ platoon-harness: plan_login: lead, worker would run several agents headless on o
 ```
 
 It exits 78, before any cost, and `team check` says the same. Several agents on your own plan login need you to say this
-is your own work: add `--plan-login`, or give each role an auth profile, which runs it on a key instead.
+is your own work: add `--plan-login`, or give each role an auth profile, which runs it on a key instead. A role that another
+role can spawn counts as several, and so does one that only a script's program starts, under `until = "program"`, unless
+`max_live` is 1: a script says so with `Session.start(team, plan_login=True)`.
 
 ## A name that is taken
 

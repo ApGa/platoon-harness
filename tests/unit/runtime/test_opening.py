@@ -24,6 +24,8 @@ from .support import harness, in_state, journal, of_type, scripted, state_of
 
 pytestmark = pytest.mark.timeout(30)
 
+EXAMPLE = Path(__file__).parents[3] / "examples" / "git-swarm" / "team.toml"
+
 MEASURING = Capabilities(persistent=True, measures={"tokens"})
 
 
@@ -165,6 +167,22 @@ def test_a_role_a_written_grant_lets_spawn_counts_as_several_too(tmp_path):
 
     with pytest.raises(ConfigError, match="plan_login=True"):
         prepare(team, root=tmp_path)
+
+
+def test_a_role_only_its_program_starts_counts_as_several_unless_max_live_holds_it_to_one(tmp_path):
+    """Under `until = "program"` the program that owns the session starts a role nothing else does, as the git-swarm
+    example's workers are, as many at once as `max_live` lets it, so before any cost such a role on a plan login
+    counts as several, as one another role can spawn does, unless `max_live` is 1 or its owner says so."""
+    text = EXAMPLE.read_text().replace('harness = "codex"', f'harness = "{harness(OnAPlan)}"')
+    swarm, one_at_a_time = Team.loads(text), Team.loads(text.replace("live = 2", "live = 1"))
+
+    def refused(team: Team, **options: Any) -> list[str]:
+        return [str(problem) for problem in check(team, cwd=tmp_path, **options) if problem.where == "plan_login"]
+
+    assert refused(swarm) == [
+        f"plan_login: worker would run several agents headless on one plan login: {PLAN_LOGIN_FIX}"
+    ]
+    assert refused(swarm, plan_login=True) == refused(one_at_a_time) == []
 
 
 def test_one_agent_alone_on_a_plan_login_is_ordinary_use(tmp_path):

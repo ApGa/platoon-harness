@@ -60,11 +60,19 @@ def _described(team: Team, cwd: Path) -> tuple[dict[str, DriverInfo], list[Probl
     return known, problems
 
 
+def _more_can_start(team: Team, role: str) -> bool:
+    """Whether agents of `role` can start beside those the session starts: another role can spawn them, or the program
+    that owns a session left to it starts them, as nothing else does, more than one at once unless `max_live` is 1."""
+    topology = team.topology
+    by_program = topology.until == "program" and not team.starts(role) and topology.limits.max_live != 1
+    return bool(team.spawners(role)) or by_program
+
+
 def _on_a_plan_login(team: Team, known: Mapping[str, DriverInfo]) -> list[Problem]:
     """Refuse many agents on one plan login. A role with an auth profile is on no login, and one agent alone is
-    ordinary use, unless another role can spawn more."""
+    ordinary use, unless more can start."""
     roles = [name for name, info in known.items() if info.login == "plan" and team.roles[name].auth is None]
-    if sum(len(team.starts(role)) for role in roles) < 2 and not any(map(team.spawners, roles)):
+    if sum(len(team.starts(role)) for role in roles) < 2 and not any(_more_can_start(team, role) for role in roles):
         return []
     names = ", ".join(roles)
     return [Problem("plan_login", f"{names} would run several agents headless on one plan login: {PLAN_LOGIN_FIX}")]

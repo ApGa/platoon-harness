@@ -176,6 +176,8 @@ What changes for users:
 - `git_swarm("worker")` with no `live`, and a `[topology.git-swarm]` with no `live`, are refused.
 - A team under `until = "program"` with a role only the program starts and no budget is warned of, the topologies guide's
   reviewer among them.
+- On a plan login, a population's role counts as several agents before any cost, as `live` above 1 runs several at once, so its
+  start is refused unless the script says `plan_login=True`, as the example's `--plan-login` does.
 - No winner is read out. Which nomination a population favours, if any, is the person's to read from the board.
 - How often workers abstain, nominate or contribute on real harnesses is unknown: no real harness has run a population.
 
