@@ -120,6 +120,14 @@ named here is closed.
   harness's own as `act(spec, call)`, where `call(tool, arguments)` calls a tool as a `Call` step does and returns its
   result, so the code can go on from each answer, and each of its calls goes under an id of its own, as a harness's own
   calls do. A stand-in whose next step rested on an answer had to override `ScriptedDriver`'s private methods.
+- **A GitSwarm population, run from a script.** [examples/git-swarm](examples/git-swarm/README.md): `run.py` owns its
+  session as `program:swarm` and runs `population` over Codex workers under the `git-swarm` preset, each in a worktree of
+  its own and at most two at once, then closes the session and prints each worker's outcome as board `outcomes` records
+  it. Its README checks the team, runs it with no keys on stand-ins of its own, in which one worker builds on another's
+  commit by the SHA its outcome records, a third nominates the result and a fourth abstains, reads back the outcomes and
+  the commit the nomination cites, and says what a run with no keys cannot show. A test runs the README's commands as it
+  shows them, in a repository of its own. It has not run on real models. That it ships, and that choosing among the
+  nominations is yours, are the defaults, pending the owner's rulings.
 - **A population, git-swarm's program.** `platoon_harness.patterns.population(session, role, goal, attempts=...)`, called by a
   script that owns its session as `program:<name>`, starts workers of `role` with `goal`, `worker-1`, `worker-2` and on, as many at
   once as `max_live` allows, until it has started `attempts`, and gives each one outcome once it has ended and its stop has looked

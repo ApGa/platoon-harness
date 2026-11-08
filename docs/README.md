@@ -25,6 +25,8 @@ Each example has a README that says what it does and how to run it.
   handing them to one merger through a queue, a conflict reaching its worker as its task's result, with no keys too.
 - [A review and verification team](../examples/review-verification/README.md): an author's commit read by a reviewer and
   checked by a verifier in Codex's read-only sandbox, with your test of it as evidence, with no keys too.
+- [A GitSwarm population](../examples/git-swarm/README.md): workers in worktrees of their own, started by a script that
+  owns the session and gives each one outcome, one building on another's commit and one nominating it, with no keys too.
 
 ## How-to guides
 

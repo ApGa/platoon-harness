@@ -4,7 +4,9 @@ session's guide run it too, and on the real binaries against FakeModel, each mod
 models run it in `tests/live/test_examples.py`. The SDK script: its README's commands, on the `exec` driver. The
 worktree team and the review team: each README's commands, in a repository of their own, on the stand-ins of the
 example's own `stand_ins.py` through `--set`. Stand-ins show each flow, and none shows what a harness's sandbox or
-approvals stop, which only a run on the real harnesses does."""
+approvals stop, which only a run on the real harnesses does. The GitSwarm example: its README's commands, in a
+repository of their own, its script on the stand-ins of its own `stand_ins.py` through `--set`. Stand-ins show its
+flow, and none shows what a real model would choose."""
 
 import ast
 import asyncio
@@ -13,6 +15,7 @@ import json
 import re
 import shlex
 import shutil
+import sys
 from collections.abc import AsyncIterator, Callable, Sequence
 from pathlib import Path
 from types import ModuleType
@@ -23,7 +26,7 @@ import pytest
 from platoon_harness import Session, load_team
 from platoon_harness.testing import Call, FakeModel, ToolCall
 
-from ..unit.runtime.gitting import repository
+from ..unit.runtime.gitting import git, repository
 from ..unit.runtime.support import of_type
 from . import test_claude, test_codex, test_openhands, test_pi
 from .cli import ROOT, SECONDS, Cli, Done, finished, shown
@@ -36,6 +39,7 @@ SCRIPT = ROOT / "examples" / "sdk-script"
 WORKTREE = ROOT / "examples" / "worktree-merge-queue" / "README.md"
 REVIEW = ROOT / "examples" / "review-verification" / "README.md"
 FIRST = ROOT / "docs" / "getting-started" / "first-session.md"
+SWARM = ROOT / "examples" / "git-swarm" / "README.md"
 
 
 def loaded(path: Path) -> ModuleType:
@@ -440,3 +444,72 @@ async def test_the_mixed_team_example_runs_on_real_binaries_against_fake_model(
     assert [(row.maker, row.kinds) for row in reached.rows] == [
         (maker, ("declared",)) for maker in ("agent:lead", "agent:w", "human:you")
     ]
+
+
+async def python_typed(cli: Cli, command: str) -> Done:
+    """A `python` command as a page shows it with the checkout's environment active, run on this environment's
+    interpreter with nothing on `PYTHONPATH`, where `path/to/platoon-harness` is this checkout."""
+    python, *words = shlex.split(command.replace("path/to/platoon-harness", str(ROOT)))
+    assert python == "python", command
+    return await finished(await cli.start(*words, program=Path(sys.executable), PYTHONPATH=""))
+
+
+def by_order(text: str) -> str:
+    """`text` with each short SHA named by the order it first comes in, as a commit's SHA differs from run to run."""
+    named: dict[str, str] = {}
+    return re.sub(r"\b[0-9a-f]{12}\b", lambda sha: named.setdefault(sha[0], f"<commit {len(named) + 1}>"), text)
+
+
+async def test_the_git_swarm_example_runs_with_no_keys_and_ends_with_each_worker_s_outcome(repo: Cli):
+    """Its page's commands as it shows them, in a repository of its own, its script on the stand-ins of its own
+    `stand_ins.py` with no test code on the path: the team checks and says what it allows, and the script, which owns
+    the session as `program:swarm`, starts four workers, at most two at once, each in a worktree of its own, and ends
+    with each one's outcome as the page says and as the program alone recorded it on `outcomes`: a contribution, a
+    second built on it by the SHA its outcome records, a nomination citing that commit, seen through `repo.commit`, and
+    an abstention. The script reads out no winner, and the commits stay on the workers' branches in the repository,
+    with the checkout as it was. The stand-ins show the flow, and nothing of what a real model would choose or of what
+    Codex's sandbox and the workers' approvals let their git do, which only a run on the real harnesses shows."""
+    check, show = shown(SWARM, where="team check")[1:]
+    [run] = shown(SWARM, where="run.py")
+    reads = shown(SWARM, where="board query")
+    head = git("rev-parse", "HEAD", cwd=repo.folder)
+
+    checked, told, ran = await typed(repo, check), await typed(repo, show), await python_typed(repo, run)
+    first, *said = ran.stdout.splitlines()
+    session = re.fullmatch(r"session (\S+): settled", first)
+    assert ran.code == 0 and session, ran.stderr
+    queried, read, traced = [await typed(repo, command.replace("NAME", session[1])) for command in reads]
+
+    assert (checked.code, checked.stdout, told.stdout) == (0, "no problems\n", expected(SWARM, "may message no one"))
+    page, *outcomes = expected(SWARM, "settled").splitlines()
+    assert re.fullmatch(r"session \S+: settled", page) and by_order("\n".join(said)) == by_order("\n".join(outcomes))
+    events = await journal(repo, session[1])
+    live, most = set(), 0
+    for event in events:
+        if event["type"] == "agent.spawned":
+            live.add(event["data"]["name"])
+            most = max(most, len(live))
+        elif event["type"] == "agent.ended":
+            live.discard(event["agent"])
+    spawned = [(event["actor"], event["data"]["name"]) for event in events if event["type"] == "agent.spawned"]
+    assert spawned == [("program:swarm", f"worker-{n}") for n in (1, 2, 3, 4)] and most <= 2
+    made, built = [event for event in events if event["type"] == "repo.committed"]
+    assert (made["data"]["made_in"], built["data"]["made_in"]) == ("@worker-1", "@worker-2")
+    assert built["data"]["parents"] == [made["data"]["sha"]]
+    entries = {entry["name"]: entry["fields"] for entry in json.loads(queried.stdout)["results"]}
+    assert entries == {
+        "worker-1": {"outcome": "contribute", "sha": made["data"]["sha"]},
+        "worker-2": {"outcome": "contribute", "sha": built["data"]["sha"]},
+        "worker-3": {"outcome": "nominate", "sha": built["data"]["sha"]},
+        "worker-4": {"outcome": "abstain"},
+    }
+    posted = [event for event in events if event["type"] in ("board.posted", "board.revised")]
+    assert [(event["actor"], event["stream"]) for event in posted] == [
+        ("program:swarm", f"board/outcomes/worker-{n}") for n in (1, 2, 3, 4)
+    ]
+    assert [entry["sender"] for entry in json.loads(read.stdout)["entries"]] == ["@worker-3"]
+    cited = [(cite["ref"], cite["maker"], cite["exposure"]["answer"]) for cite in json.loads(traced.stdout)["declared"]]
+    assert cited == [(ref(built), "agent:worker-2", "seen")]
+    branch = f"platoon-harness/{session[1]}/worker-2"
+    assert git("rev-parse", branch, cwd=repo.folder).strip() == built["data"]["sha"]
+    assert (git("rev-parse", "HEAD", cwd=repo.folder), git("status", "--porcelain", cwd=repo.folder)) == (head, "")

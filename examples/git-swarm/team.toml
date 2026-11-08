@@ -1,0 +1,20 @@
+# A population of Codex workers, each in a worktree of its own, under the `git-swarm` preset: commits go to your
+# repository and nominations to a topic everyone reads, with at most two workers at once. A script, run.py, owns the
+# session: it starts each worker with its goal, records each one's outcome on board `outcomes` and closes the session,
+# so `run` and the terminal UI refuse this team. Each worker commits, and each git command that writes asks for an
+# approval, which nobody is there to answer, so the workers allow theirs: they run git as you. Swap the harness with
+# `--set`, as README.md shows.
+
+[roles.worker]
+harness = "codex"
+workspace = "worktree"
+count = 0
+approvals = "allow"
+
+[topology.git-swarm]
+role = "worker"
+live = 2
+
+[budget]
+turns = 16
+wall = "15m"
