@@ -7,6 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, JsonValue
 
 from platoon_harness.kernel import NAME, Args, Event, Refused, Stamps, Txn, View, fold, op
+from platoon_harness.schema import either
 
 from .common import BasedOn, BodyRef, Injection, Name, Policy, cited
 
@@ -141,13 +142,8 @@ def labelled(txn: Txn, labels: Mapping[str, str]) -> dict[str, str]:
             known = f"its labels are {', '.join(declared)}" if declared else "it declares none"
             raise Refused("invalid", f"this team has no label {name}: {known}")
         if value not in declared[name]:
-            raise Refused("invalid", f"{name} takes {_either(declared[name])}, and not {value}")
+            raise Refused("invalid", f"{name} takes {either(declared[name])}, and not {value}")
     return dict(sorted(labels.items()))
-
-
-def _either(values: tuple[str, ...]) -> str:
-    *rest, last = values
-    return f"{', '.join(rest)} or {last}" if rest else last
 
 
 class OpenEpisode(Args):

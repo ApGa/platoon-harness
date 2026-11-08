@@ -5,7 +5,7 @@ import inspect
 import json
 import re
 import sys
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from types import NoneType, UnionType
 from typing import Annotated, Any, Literal, TypeAliasType, Union, get_args, get_origin, get_type_hints
 
@@ -14,7 +14,7 @@ from pydantic.fields import FieldInfo
 
 from platoon_harness.config import ENVIRONMENT_VARIABLE, PROJECT_FILE
 from platoon_harness.kernel import NAME
-from platoon_harness.schema import Duration
+from platoon_harness.schema import Duration, either
 from platoon_harness.team import Team
 from platoon_harness.tools import PREAMBLE
 from platoon_harness.topology import PRESETS, Topology
@@ -23,11 +23,6 @@ HIDDEN = {(Topology, "unexpanded")}
 """Fields no file sets: `expand` reads an `unexpanded` key of `[topology]` as a preset's name."""
 WORDS = {str: "string", int: "integer", float: "number", bool: "boolean"}
 PLURAL = ("string", "integer", "number", "boolean", "name", "duration", "list", "table")
-
-
-def _either(choices: Iterable[str]) -> str:
-    *rest, last = choices
-    return f"{', '.join(rest)} or {last}" if rest else last
 
 
 def _plural(kind: str) -> str:
@@ -44,7 +39,7 @@ def _pattern(pattern: str) -> str:
     if text == "<name>":
         return "name"
     if match := re.fullmatch(r"\(([^()]*)\)(.*)", text):
-        return _either(f"`{choice}{match[2]}`" for choice in match[1].split("|"))
+        return either(f"`{choice}{match[2]}`" for choice in match[1].split("|"))
     return f"string matching `{text}`"
 
 
@@ -75,9 +70,9 @@ def _kind(hint: Any) -> str:
         return ", ".join([kind, *(limit for item in metadata for limit in _limits(item))])
     if origin in (Union, UnionType):
         kinds = list(dict.fromkeys(_kind(arg) for arg in args if arg is not NoneType))
-        return "number" if kinds == ["integer", "number"] else _either(kinds)
+        return "number" if kinds == ["integer", "number"] else either(kinds)
     if origin is Literal:
-        return _either(f"`{json.dumps(value)}`" for value in args)
+        return either(f"`{json.dumps(value)}`" for value in args)
     if origin in (tuple, Sequence):
         return f"list of {_plural(_kind(args[0]))}"
     if origin is Mapping:

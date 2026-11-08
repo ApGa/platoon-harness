@@ -3,7 +3,7 @@
 import difflib
 import json
 import re
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, get_args
 
@@ -22,6 +22,7 @@ __all__ = [
     "Problem",
     "Sorted",
     "dumps",
+    "either",
     "nearest",
     "problems_in",
     "seconds",
@@ -92,6 +93,12 @@ class ConfigError(ValueError):
 
     def __str__(self) -> str:
         return "\n".join(map(str, self.problems))
+
+
+def either(choices: Iterable[str]) -> str:
+    """Choices said in words: `a`, `a or b`, `a, b or c`."""
+    *rest, last = choices
+    return f"{', '.join(rest)} or {last}" if rest else last
 
 
 def nearest(name: str, known: Collection[str]) -> str:

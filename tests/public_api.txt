@@ -417,6 +417,7 @@ platoon_harness.runtime.workspaces.write_bundle
 platoon_harness.schema.ConfigError
 platoon_harness.schema.dumps
 platoon_harness.schema.Duration
+platoon_harness.schema.either
 platoon_harness.schema.Model
 platoon_harness.schema.Name
 platoon_harness.schema.nearest

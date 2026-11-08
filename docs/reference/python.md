@@ -8348,6 +8348,14 @@ Duration = Annotated[str, AfterValidator(_duration)]
 
 A duration such as `30m`, held in its largest exact unit, so `60m` and `1h` are one value.
 
+### `platoon_harness.schema.either`
+
+```python
+def either(choices: Iterable[str]) -> str: ...
+```
+
+Choices said in words: `a`, `a or b`, `a, b or c`.
+
 ### `platoon_harness.schema.Model`
 
 ```python

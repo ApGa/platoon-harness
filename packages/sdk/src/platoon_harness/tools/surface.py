@@ -8,7 +8,7 @@ from typing import Any
 
 from platoon_harness.kernel import Kernel, Principal, Refusal, Refused, tool_name
 from platoon_harness.primitives import BODY_REF, Capabilities
-from platoon_harness.schema import nearest
+from platoon_harness.schema import either, nearest
 
 type Surface = Callable[[str], str]
 
@@ -189,15 +189,10 @@ def _field(field: dict[str, Any], teach: Callable[[str], str]) -> dict[str, Any]
     return shown
 
 
-def _either(values: list[str]) -> str:
-    *rest, last = values
-    return f"{', '.join(rest)} or {last}" if rest else last
-
-
 def _labelled(field: dict[str, Any], teach: Callable[[str], str], labels: Mapping[str, list[str]]) -> dict[str, Any]:
     """An argument that takes labels, as a model is shown it: each label its team declares with the values it may
     take, so that a model picks from them, in its schema and in words, which `ph` shows."""
-    said = "; ".join(f"{name}, one of {_either(values)}" for name, values in labels.items())
+    said = "; ".join(f"{name}, one of {either(values)}" for name, values in labels.items())
     return {
         "type": "object",
         "description": f"{teach(field['description'])} Its labels: {said}.",
