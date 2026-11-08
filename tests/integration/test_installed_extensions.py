@@ -167,9 +167,7 @@ def test_the_sample_s_op_is_a_command_from_its_wheel(
     assert rivalled.returncode == 78
     assert f"{BOTH}, so this loads neither: uninstall one" in rivalled.stderr
     assert imports.read_text() == ""
-    assert "ballot The ops of the extension ballot, from ballot 0.1.0, on a session whose team names it." in " ".join(
-        found["help"]["out"].split()
-    )
+    assert "ballot The extension ballot, from ballot 0.1.0. " in " ".join(found["help"]["out"].split())
     assert (first["code"], json.loads(first["out"])) == (0, {"choice": "yes"}), first["err"]
     assert again["code"] == 1 and re.search(r"refused conflict on agent/author: you voted yes", again["err"])
     assert plain["code"] == 1 and "session plain's team does not name the extension ballot" in plain["err"]

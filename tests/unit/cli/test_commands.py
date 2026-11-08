@@ -420,12 +420,15 @@ def test_an_extension_named_as_one_every_session_holds_is_refused_at_discovery_a
 
 
 def test_help_lists_installed_extensions_from_metadata_without_importing_them(site: Site):
-    """Each by its distribution and version, which metadata gives, under Installed extensions, with none imported."""
+    """Each by its distribution and version, which metadata gives, under Installed extensions, with none imported, and
+    claiming no op of its, as metadata says nothing of its ops."""
     site.module("never_ballot", NEVER)
     site.install("voting", "2.0.0", entry_points={EXTENSIONS: {"ballot": "never_ballot:extension"}})
 
-    said = " ".join(helped([], extended(build(), [])).split())
+    said = helped([], extended(build(), []))
 
     assert "Installed extensions" in said
-    assert "ballot The ops of the extension ballot, from voting 2.0.0, on a session whose team names it." in said
+    assert [line.strip("│ ") for line in said.splitlines() if "voting" in line] == [
+        "ballot  The extension ballot, from voting 2.0.0."
+    ]
     assert "never_ballot" not in sys.modules

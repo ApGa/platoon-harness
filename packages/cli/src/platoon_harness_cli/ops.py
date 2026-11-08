@@ -199,13 +199,14 @@ def _sources(components: Sequence[Component]) -> str:
 
 
 def _purpose(components: Sequence[Component]) -> str:
-    """What an installed extension's group is for, from its metadata alone."""
+    """What an installed extension's group is for, from its metadata alone, which says nothing of its ops."""
     name = components[0].name
     if len(components) > 1:
         return f"Defined by more than one distribution, {_sources(components)}, so it loads neither: uninstall one."
     return (
-        f"The ops of the extension {name}, from {_sources(components)}, on a session whose team names it.\n\n"
-        f"It is imported only when a command line names it, and nothing else installed is."
+        f"The extension {name}, from {_sources(components)}.\n\n"
+        f"Metadata does not say which ops it gives: `platoon-harness {name} --help` imports it, and nothing else "
+        "installed, and lists a command for each one a person may run, on a session whose team names it."
     )
 
 
@@ -221,10 +222,13 @@ def _load_commands(group: App, components: Sequence[Component]) -> None:
         what = f"`{components[0].value}` is the extension {extension.name}, whose ops no command of {name} would name"
         raise ConfigError([Problem(f"extensions.{name}", what)])
     ops = [operation for operation in extension.ops if _for_a_person(operation)]
+    group.help = (
+        f"The extension {name}, from {_sources(components)}: a command for each op of its a person may run, on a "
+        "session whose team names it.\n\nIt is imported only when a command line names it, and nothing else installed "
+        f"is.{'' if ops else ' It gives no op a person may run.'}"
+    )
     for operation in sorted(ops, key=lambda operation: operation.name):
         _place(group, operation, _command(operation, extension=name))
-    if not ops:
-        group.help = f"{group.help} It gives no op a person may run."
 
 
 @dataclass(frozen=True)

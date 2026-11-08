@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`main.py`](../../packages/cli/src/platoon_harness_cli/main.py), [`ops.py`](../../packages/cli/src/platoon_harness_cli/ops.py), [`extensions.py`](../../packages/sdk/src/platoon_harness/extensions.py), [architecture section 6](../architecture.md#6-operations) and [section 17](../architecture.md#17-extensions-and-configuration), [the brief's section 11](../spec/BRIEF.md#11-extension-and-configuration-model), [RFC 0004](0004-one-operation-table.md), [RFC 0017](0017-config-and-entry-points.md), [RFC 0026](0026-every-act-from-any-terminal.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | `feat: Give an installed extension's op a command, loading only that extension`, `feat: Refuse an extension named as a built-in command group`, and the fixes `fix: Leave an extension's command to the runtime where a team names extensions by module:attr`, `fix: Give no command to an installed extension named as one every session holds` and `fix: Name in extension list and doctor an installed extension whose name is held` |
+| Implementation | `feat: Give an installed extension's op a command, loading only that extension`, `feat: Refuse an extension named as a built-in command group`, and the fixes `fix: Leave an extension's command to the runtime where a team names extensions by module:attr`, `fix: Give no command to an installed extension named as one every session holds`, `fix: Name in extension list and doctor an installed extension whose name is held` and `fix: Claim no op for an installed extension before its group loads it` |
 
 ## Summary
 
@@ -49,8 +49,9 @@ third problem: `platoon-harness <extension> <verb>` puts extension names beside 
 
 The command line reads the installed extensions from metadata with `discover()`, which imports nothing, and gives each a
 group of commands under its entry point's name, which is the name a team gives in `extensions = [...]`. Placed under
-Installed extensions, each group's help says what metadata says: the distribution and version that define it, that its
-commands run on a session whose team names it, and that it is imported only when a command line names it.
+Installed extensions, each group's help says only what metadata says, the distribution and version that define it, and so
+claims no op: metadata does not say which ops an extension gives, and `platoon-harness <extension> --help` imports it, and
+nothing else installed, to list a command for each one a person may run.
 
 It reads metadata only when the first word may name an extension: when it is none of the command line's own commands, as
 for no word at all, `--help`, an extension's name or a mistake. A command of its own never reads metadata to run. Reading
@@ -77,7 +78,8 @@ What cannot be loaded as one extension exits 78, with what is wrong, as a team t
 - An entry point whose `Extension` has another name is refused: its ops lie in that other name's namespace, so no command
   of the group's name would name them.
 
-An extension that gives no op a person may run, as the SDK's `bwrap` gives none, says so in its group's help.
+Once loaded, the group's help says that its commands run on a session whose team names it, and an extension that gives no
+op a person may run, as the SDK's `bwrap` gives none, says so.
 
 ### 3. Refused on a session whose team does not name it
 
@@ -181,7 +183,7 @@ arguments against the op it holds, and refuses `invalid` what does not fit.
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
-| M1 the command | A group per installed extension from metadata, loaded by name alone, refused on a session whose team does not name it, and listed by `--help` | `tests/unit/cli/test_commands.py`, `test_an_installed_extension_s_group_loads_only_that_extension`, `test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_is_refused_saying_why` and `test_help_lists_installed_extensions_from_metadata_without_importing_them`; `tests/integration/test_installed_extensions.py`, `test_the_sample_s_op_is_a_command_from_its_wheel` | `feat: Give an installed extension's op a command, loading only that extension`, `fix: Leave an extension's command to the runtime where a team names extensions by module:attr` |
+| M1 the command | A group per installed extension from metadata, loaded by name alone, refused on a session whose team does not name it, and listed by `--help` | `tests/unit/cli/test_commands.py`, `test_an_installed_extension_s_group_loads_only_that_extension`, `test_an_extension_s_command_on_a_session_whose_team_does_not_name_it_is_refused_saying_why` and `test_help_lists_installed_extensions_from_metadata_without_importing_them`; `tests/integration/test_installed_extensions.py`, `test_the_sample_s_op_is_a_command_from_its_wheel` | `feat: Give an installed extension's op a command, loading only that extension`, `fix: Leave an extension's command to the runtime where a team names extensions by module:attr`, `fix: Claim no op for an installed extension before its group loads it` |
 | M2 the reserved names | An extension named as a command of the command line's own, or as an extension every session holds, refused at discovery, saying why, and named by `extension list`, and by `doctor` where no session can load it | `test_an_extension_named_as_a_built_in_command_group_is_refused_at_discovery_before_any_import` and `test_an_extension_named_as_one_every_session_holds_is_refused_at_discovery_as_no_session_can_load_it`; `tests/unit/cli/test_machine.py`, `test_extension_list_and_doctor_say_why_an_installed_extension_has_no_command` | `feat: Refuse an extension named as a built-in command group`, `fix: Give no command to an installed extension named as one every session holds`, `fix: Name in extension list and doctor an installed extension whose name is held` |
 
 ## Open questions
