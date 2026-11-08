@@ -47,6 +47,13 @@ named here is closed.
   that ran it: the page makes none, and its server keeps credentials of its own, so no link of a session's page opens it.
   `web` says each session's port as it opens one, for a forward from another machine. A person in a browser needed a `web`
   of its own for each session. See [RFC 0074](docs/rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md).
+- **Start, resume and stop a session from the browser.** The sessions page's Start takes a team file, read from where `web`
+  runs, or the project's own, and a name, and says above it that it can spend money. Before anything runs it asks once for
+  trust, naming each value the team's files give that would run as you or pass on a credential, as written, and a yes
+  covers what was shown alone, and once for several agents on one plan login. The session runs on a runtime of its own and
+  opens on its own control link. Resume asks once, saying it can spend money, and Stop asks once, then answers once the
+  runtime has let go, as `session stop` does. Starting, resuming and stopping needed a shell. See
+  [RFC 0074](docs/rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md).
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
   keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body, which a

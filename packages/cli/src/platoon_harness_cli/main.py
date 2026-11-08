@@ -104,9 +104,12 @@ async def web(
     money. Ctrl+C or SIGTERM stops it.
 
     With no session it serves a page of every session under the root, on loopback alone, and says one link, the sessions
-    link, which only it gives: the page makes none, and no link of a session's page opens it. Open there serves that
-    session's page here, on a port of its own, and goes to a control link of it. Stopping `web` stops serving every
-    page it serves, and leaves every session as it was.
+    link, which only it gives: the page makes none, and no link of a session's page opens it. There Open serves that
+    session's page here, on a port of its own, and goes to a control link of it, and Start, Resume and Stop do what the
+    terminal's sessions screen does, each first asking once what only you may allow: trusting what the team's files
+    name to run as you, shown as written, several agents on one plan login, a resume, which can spend money, and a
+    stop. A session started or resumed there runs on a runtime of its own. Stopping `web` stops serving every page it
+    serves, and leaves every session as it was.
 
     It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS. On
     loopback it also says how to reach it from another machine: forward its port under the same number. A session on a

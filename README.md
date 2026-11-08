@@ -15,9 +15,9 @@ What it gives you:
   boards and wait, under a topology you choose, which says who may reach whom. Presets such as `manager-worker`, `tree`
   and `mesh` write the common ones, an approval is resolved once, by a person or a stated policy, and a budget stops a
   runaway ([topologies](docs/how-to/topologies.md)).
-- **Four ways in.** `platoon-harness` alone opens the terminal UI, `platoon-harness web` serves SwarmChat's page over a
-  session's journal, the headless commands suit scripts and CI, and the Python SDK is what all of them are built on
-  ([terminal UI](docs/how-to/tui.md), [browser](docs/how-to/web.md), [headless](docs/how-to/headless.md)).
+- **Four ways in.** `platoon-harness` alone opens the terminal UI, `platoon-harness web` serves a page of your sessions and
+  SwarmChat's page over each one's journal, the headless commands suit scripts and CI, and the Python SDK is what all of
+  them are built on ([terminal UI](docs/how-to/tui.md), [browser](docs/how-to/web.md), [headless](docs/how-to/headless.md)).
 - **Workspaces.** An agent works in the session's checkout, in a git worktree of its own or in a snapshot. After each
   turn the runtime looks at what the agent left, and a look changes no ref, index or file: the runtime never merges,
   rebases or moves a branch an agent has. `isolated`, a confined snapshot, is experimental

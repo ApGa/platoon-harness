@@ -29,9 +29,17 @@ button, input { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1p
 button { cursor: pointer; }
 button[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 .acts { display: flex; gap: 6px; flex-wrap: wrap; }
-.why { color: var(--muted); font-size: 12.5px; margin: 4px 0 0; }
-.why:empty { display: none; }
+#tip { position: fixed; z-index: 1; max-width: 360px; margin: 0; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--line2); background: var(--panel); font-size: 12.5px; pointer-events: none; }
 #look { margin-top: 12px; }
+form { display: grid; gap: 4px; max-width: 560px; }
+label { display: grid; gap: 4px; margin-top: 8px; font-weight: 600; }
+label input { font-weight: 400; }
+#cost { margin: 12px 0 8px; }
+dialog { max-width: 560px; border-radius: 10px; border: 1px solid var(--line2); background: light-dark(#ffffff, #141923);
+  color: inherit; padding: 16px 18px; }
+dialog::backdrop { background: rgb(0 0 0 / .35); }
+#question { margin: 0 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -45,7 +53,21 @@ button[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
   </table>
   <p id="none" hidden>No sessions yet.</p>
   <button id="look" type="button">Look again</button>
+  <h2>Start a session</h2>
+  <form id="start">
+    <label>Team file <input name="team" autocomplete="off" spellcheck="false" aria-describedby="team-about"></label>
+    <p class="about" id="team-about"></p>
+    <label>Name <input name="name" autocomplete="off" spellcheck="false" aria-describedby="name-about"></label>
+    <p class="about" id="name-about">Left empty, one is made from the time.</p>
+    <p id="cost"></p>
+    <div class="acts"><button type="submit" data-act="start">Start</button></div>
+  </form>
 </main>
+<p id="tip" hidden></p>
+<dialog id="ask" aria-labelledby="question">
+  <p id="question"></p>
+  <div class="acts"><button type="button" id="yes"></button><button type="button" id="no" autofocus>Cancel</button></div>
+</dialog>
 <!--JS-->
 </body>
 </html>

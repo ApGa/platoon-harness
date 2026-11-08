@@ -23,7 +23,14 @@ with `--plan-login`, or `plan_login=True` from Python. `web` serves a session on
 control link acts as you, on your login. It refuses another address as it starts, from the session's opt-in, the logins
 its agents came up on and what each role's harness says now, as a control link can spawn any role. It stops with 78 if
 an agent comes up on a plan login while it serves, as when a harness was signed in on one since, and what a control link
-did before then stands. [RFC 0016](rfcs/0016-plan-logins-and-credentials.md) says why.
+did before then stands. [RFC 0016](rfcs/0016-plan-logins-and-credentials.md) says why. The sessions page, `web` with no
+session, serves on loopback alone, and so does every session it opens, so it starts several agents on one plan login only
+after asking you once whether it is your own work, as the terminal does.
+
+A team or project file is untrusted too. What it names that would run code as you, a command, a `module:attr` or a test
+command, or a credential it would pass on, an auth profile, runs only once you trust it: `--trust` on the command line, and
+on the sessions page a question naming each such value by its place and as written, whose yes covers what you were shown
+and nothing the file says since ([§15](architecture.md#15-security)).
 
 ## What it does not protect
 
@@ -64,7 +71,7 @@ did before then stands. [RFC 0016](rfcs/0016-plan-logins-and-credentials.md) say
   twelve hours. `web` keeps only hashes, in its own memory, so stopping it ends every browser's session. Your own credential
   never reaches a browser. The sessions page's link is the command's alone: the page makes none, its server keeps
   credentials of its own, so no link of a session's page opens it and its own opens no session's page, and it is served on
-  loopback alone, as it acts as you on every session there
+  loopback alone, as it acts as you on every session there and starts a team's harnesses, which run what its files name
   ([RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md)).
 
 ## Retention

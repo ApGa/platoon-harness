@@ -338,3 +338,24 @@ async def test_web_with_no_session_says_one_link_and_serves_loopback_alone(cli: 
     assert f"web: session s on 127.0.0.1:{port}, opened from your sessions page" in done.stderr
     assert f"ssh -N -L {port}:127.0.0.1:{port} {socket.gethostname()}" in done.stderr
     assert json.loads(after.stdout)["state"] == "open"
+
+
+async def test_web_with_no_session_serves_tls_on_loopback_and_each_session_it_opens_with_it(cli: Cli, tmp_path: Path):
+    certificate, key = await asyncio.to_thread(certified, tmp_path)
+    team = cli.write("solo.toml", solo("listening"))
+    serving = await cli.start("serve", "--team", team, "--trust", "--name", "s")
+    await said(serving, "serving session s")
+    web = await cli.start("web", "--certificate", str(certificate), "--key", str(key))
+    link = await sessions_link(web)
+    context = ssl.create_default_context(cafile=certificate)
+
+    token = await asyncio.to_thread(opened, link, context)
+    _, served = await asyncio.to_thread(call, link, "POST", "/x/open", {"name": "s"}, token, context)
+    status, _ = await asyncio.to_thread(call, served["link"], "GET", "/view", context=context)
+    web.send_signal(signal.SIGTERM)
+    done = await finished(web)
+    await cli.run("session", "stop", "s")
+    await finished(serving)
+
+    assert link.startswith("https://127.0.0.1:") and served["link"].startswith("https://127.0.0.1:") and status == 200
+    assert done.code == 0 and "ssh -N -L" not in done.stderr

@@ -1713,8 +1713,11 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   actions show while focus is in it, so the keyboard reaches both. `web` with no session serves a page of our own, of every
   session under the root and how it stands, as the TUI's sessions screen lists them, on loopback alone, from one link the
   command says, whose server keeps its own credentials, so no link of a session's page opens it and it makes none. Open
-  serves a session in the same process on a port of its own, as `web SESSION` serves one, and goes to a control link of it.
-  [web.md](how-to/web.md) is its guide, and
+  serves a session in the same process on a port of its own, as `web SESSION` serves one, and goes to a control link of it,
+  and Start, Resume and Stop do what the sessions screen does, each asking first, once, what only the person may allow: the
+  page asks before a resume, which can spend money, and a stop, and the server, which alone can tell, before a start whose
+  team needs trust, naming each value as written, with trust carrying the digest of what was shown, or would run several
+  agents on one plan login. [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
   [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
   and [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md) its decisions.
@@ -2034,10 +2037,13 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
   other address with 78 as it starts: one whose manifest keeps the opt-in, one of whose agents' harnesses came up last
   on a plan login, as the roster says, or one with a role that names no auth profile whose harness says now that it is
   on one, as a control link can spawn any role. While it serves another address it stops with 78 once an agent comes up
-  on a plan login after all, and what a control link did before then stands.
+  on a plan login after all, and what a control link did before then stands. The sessions page, `web` with no session, and
+  every session it opens are on loopback alone, so it starts several agents on one plan login after asking once, as the
+  TUI does.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference, an auth profile or a `test` command, needs an explicit trust step when it comes from a
-  project or team file: `--trust` on the command line, `trust_project` to `load_team`. The trust step covers a test's command and not
+  project or team file: `--trust` on the command line, `trust_project` to `load_team`, and on the sessions page a question naming
+  each such value as written, whose yes covers what was shown and nothing changed since. The trust step covers a test's command and not
   the commit it runs, which its maker wrote, so a runtime test is a person's or a program's act and never an agent's, says on its act
   that it runs that commit's maker's code as you, unconfined, and is refused for a commit whose code runs only in an isolation (§13).
   The check reads where each value came from, since mappings merge

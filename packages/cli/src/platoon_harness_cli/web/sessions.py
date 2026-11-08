@@ -1,5 +1,8 @@
 """The sessions page, which `platoon-harness web` serves with no session, on loopback alone: every session under the
-root and how each stands, and opening one, as the terminal's sessions screen does on a terminal.
+root and how each stands, and opening, starting, resuming or stopping one, as the terminal's sessions screen does on a
+terminal. What only the person may allow is asked first, once each: the page asks before a resume, which can spend
+money, and before a stop, and the server, which alone can tell, before a start whose team needs trust or runs several
+agents on one plan login.
 
 Its server mints one link, which the command says, and keeps credentials of its own, so no link of a session's page
 opens it and its token opens no session's page. A session opened from it is served in this process, on a port of its
@@ -9,27 +12,32 @@ own on the same host, as `web SESSION` serves one, and the page goes to a contro
 import asyncio
 import base64
 import hashlib
+import json
 import ssl
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from platoon_harness import ConfigError, Refused, Session
+from platoon_harness import ConfigError, Refused, Session, Team
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.http import Head, Rejected, Server, bearer, check_site, response
-from platoon_harness.kernel import Clock, SystemClock
-from platoon_harness.runtime.paths import find_root, listing
+from platoon_harness.kernel import Clock, SystemClock, is_held
+from platoon_harness.runtime.paths import find_root, listing, session_folder
 
 from ..exits import Usage
 from ..output import note, refused
+from ..sessions import ask_to_stop
+from ..teams import Source
 from . import forward, loopback, serve
 from .credentials import Credentials
 from .page import Unpinned, load
 from .server import HEADERS, JSON_LIMIT, Request, Web, authorities_of, json_answer, params_of, refusal_answer
 
-ACTS = ("/x/sessions", "/x/open")
+ACTS = ("/x/sessions", "/x/open", "/x/start", "/x/resume", "/x/stop")
 """What the page asks of its server, each on the session token its link was spent for."""
+TRUST = "The team names what would run as you, or a credential to pass on, which needs your trust:"
+"""What a start asks first of a team that needs trust, above each value that needs it."""
 SPENT = "this link was used already or has expired, and only `platoon-harness web` gives one: run it again"
 EXPIRED = "this page's session has expired, and only `platoon-harness web` gives a link: run it again"
 
@@ -128,8 +136,15 @@ class Sessions(Server[Request]):
             token, held = spent
             return json_answer({"token": token, "class": held.kind, "expires": held.expires})
         params = params_of(request.body)
-        if route == "/x/sessions":
-            return json_answer(await self._list())
+        match route:
+            case "/x/sessions":
+                return json_answer(await self._list())
+            case "/x/start":
+                return json_answer(await self._start(params))
+            case "/x/resume":
+                return json_answer(await self._resume(_name(params)))
+            case "/x/stop":
+                return json_answer(await self._stop(_name(params)))
         return json_answer(await self._open(_name(params)))
 
     # The page's reads and acts.
@@ -164,6 +179,67 @@ class Sessions(Server[Request]):
             return {"refused": _why(served.task)}
         return {"link": served.opened.result().link("control")}
 
+    async def _start(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Start a session from `team`, a team file read from where `web` runs, or the project's own, named `name` or
+        from the time, on a runtime of its own, and open it. First ask, once each, what only the person may allow: to
+        trust what the team's files name to run as them or a credential to pass on, which `trust`, the digest of what
+        was shown, answers, and to run several agents on one plan login, which `plan_login` answers. Or refuse, saying
+        why, as `run` would."""
+        team, name, trust, plan_login = (params.get(key) for key in ("team", "name", "trust", "plan_login"))
+        if not (isinstance(team, str) and isinstance(name, str) and isinstance(trust, str | None)):
+            raise Rejected(400, why="a start is a team file and a name, each of them text, and trust what was shown")
+        if not isinstance(plan_login, bool | None):
+            raise Rejected(400, why="plan_login says yes or no")
+        path = Path(team) if team else None
+        try:
+            loaded = await asyncio.to_thread(Source(trust=True).load, path)
+        except ConfigError as error:
+            return {"refused": _problems(error)}
+        try:
+            await asyncio.to_thread(Source().load, path)
+        except ConfigError as error:
+            question = _trusting(error, loaded)
+            if trust != (shown := hashlib.sha256(question.encode()).hexdigest()):
+                return {"ask": {"question": question, "yes": "Trust and start", "answer": {"trust": shown}}}
+        try:
+            session = await Session.start(
+                loaded, name=name or None, detach=True, cwd=Path.cwd(), plan_login=bool(plan_login)
+            )
+        except ConfigError as error:
+            if not plan_login and [problem.where for problem in error.problems] == ["plan_login"]:
+                question = f"{error.problems[0].what.partition(':')[0]}. Is this your own work?"
+                return {"ask": {"question": question, "yes": "It is my own work", "answer": {"plan_login": True}}}
+            return {"refused": _problems(error)}
+        except Refused as error:
+            return {"refused": refused(error.refusal)}
+        await session.leave()
+        return await self._open(session.name)
+
+    async def _resume(self, name: str) -> dict[str, Any]:
+        """Resume a session no runtime holds, on a runtime of its own, and open it, the page having said first, once,
+        that its harnesses come back, which can spend money; or refuse, saying why."""
+        try:
+            if is_held(session_folder(find_root(), name)):
+                return {"refused": f"A runtime holds {name} already: Open opens it."}
+            await (await Session.resume(name, detach=True)).leave()
+        except ConfigError as error:
+            return {"refused": _problems(error)}
+        except Refused as error:
+            return {"refused": refused(error.refusal)}
+        return await self._open(name)
+
+    async def _stop(self, name: str) -> dict[str, Any]:
+        """Stop a session's runtime as its owner would, as `session stop` does, the page having asked first, once, and
+        answer once the runtime has let go, so the session stays resumable; or refuse, saying why."""
+        try:
+            async with Session.attach(name, view=True) as attached:
+                await ask_to_stop(attached)
+                async for _ in attached.events(await attached.head(), follow=True):
+                    pass
+        except Refused as error:
+            return {"refused": refused(error.refusal)}
+        return {"said": f"Stopped {name}. Resume restarts it, which can spend money."}
+
 
 async def sessions(
     stop: asyncio.Event, *, host: str, port: int, tls: ssl.SSLContext | None, clock: Clock | None = None
@@ -177,7 +253,7 @@ async def sessions(
         await server.listen(host, port, tls=tls)
         where = server.authorities[0]
         note(f"web: your sessions under {find_root()}, on {where}. Its link opens once, within ten minutes")
-        note(f"web: sessions link, which lists and opens your sessions, as you: {server.link()}")
+        note(f"web: sessions link, which lists, starts, resumes and stops your sessions, as you: {server.link()}")
         if tls is None:
             forward(host, server.port)
         await stop.wait()
@@ -192,6 +268,24 @@ def _name(params: dict[str, Any]) -> str:
     return name
 
 
+def _problems(error: ConfigError) -> str:
+    return "\n".join(map(str, error.problems))
+
+
+def _trusting(error: ConfigError, team: Team) -> str:
+    """What trusting a team asks: each value its files give that would run code as the person or pass on a credential,
+    which loading it untrusted refused, by its place and as it is written, in JSON that escapes all but ASCII."""
+    data = team.model_dump(mode="json")
+    lines = []
+    for problem in error.problems:
+        value: Any = data
+        for key in problem.where.split("."):
+            value = value.get(key) if isinstance(value, dict) else None
+        lines.append(f"{problem.where} = {json.dumps(value)}" if value is not None else str(problem))
+    named = "\n".join(lines)
+    return f"{TRUST}\n{named}\nTrust it, as written here, and start?"
+
+
 def _why(task: asyncio.Task[None]) -> str:
     """Why serving a session ended before it listened, in the command line's words."""
     if task.cancelled():
@@ -200,7 +294,7 @@ def _why(task: asyncio.Task[None]) -> str:
         case Refused():
             return refused(error.refusal)
         case ConfigError():
-            return "\n".join(map(str, error.problems))
+            return _problems(error)
         case Usage() | Unpinned() | OSError():
             return str(error)
     raise AssertionError(f"serving a session ended with {error!r}")
