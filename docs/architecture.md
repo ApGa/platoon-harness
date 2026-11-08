@@ -2102,8 +2102,9 @@ class AgentOutcome(Model):
   span, which no span's row holds. Its walk is version 3's, so its agent rows are version 3's on every journal, and where no
   claimant's event of a claim is reached its rows are version 3's too; where no span took another principal's event those are
   `propagate@2`'s, whose agent rows were `propagate@1`'s: one name, one function and a version for each, an earlier one reached
-  by pinning an earlier SDK. Citing, and taking, give away all but `retained` of what reaches the event; being cited or taken by a credited span earns credit, broadcasting draws takes, reading in a
-  last turn costs, and a program's task statement taken in a span earns its share for nobody. See
+  by pinning an earlier SDK. Citing, and taking, give away all but `retained` of what reaches the event; being cited or taken by
+  a credited span earns credit, broadcasting draws takes, reading in a last turn costs, and a program's task statement taken in a
+  span earns its share for nobody. See
   [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md),
   [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and
   [RFC 0078](rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md).

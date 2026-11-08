@@ -163,8 +163,7 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
   UNVERIFIED on OpenHands and Codex, whose turns have not been read for it.
 - **What a turn's first call says.** An op of the claimant's tied to no call, in a turn that is cut, was chosen by one of its
   calls, so it would seem to come after the turn's first. But a call can go unreported, as a `hidden_call` or a `stream_lost` gap
-  says, and a native child's calls reach its parent's report stream: the first call reported is not surely the first made, and the
-  op is placed anywhere in its turn.
+  says, so the first call reported is not surely the first made, and the op is placed anywhere in its turn.
 - **Incentives.** Under a keyed baseline, a harder label lowers the baseline its work is measured against. A shared policy can learn
   to call work hard to raise its claimants' advantage, as the creator decides difficulty and its claimant trains on it. That is the
   training system's to guard, by the creator's own credit or a check of labels against outcomes; nothing here can.
