@@ -56,13 +56,16 @@ named here is closed.
   runtime has let go, as `session stop` does. Starting, resuming and stopping needed a shell. See
   [RFC 0074](docs/rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md), a draft.
 - **Scale, measured on the real stack.** `tests/integration/test_scale.py`, slow and run by hand before each release,
-  drives 100 `ScriptedDriver` agents on the real tool plane to 100,000 events through the real kernel and a runtime of
-  their own, reading `session.metrics` at each round's end. It measures the runtime's memory, the writer's throughput and
-  ack latency, a person's message while the agents work, each query that pages and the journal's own read, the roster,
-  attention and changes snapshots, which are whole, the page's projection, what counting events costs the writer, and a
-  resume after a SIGKILL; `test_tui_budgets.py` measures the terminal UI's attach to such a run. [The scale
-  page](docs/reference/scale.md) publishes each, with the hardware described by its specs, and each test holds its
-  measurement to twice the most that was measured. No CI job runs it, as its budgets fit that hardware.
+  drives 100 `ScriptedDriver` agents, each a process of its own on the real tool plane, to 100,000 events through the real
+  kernel and a runtime of their own, reading `session.metrics` at each round's end. It measures how long a round takes, the
+  runtime's memory, the events committed a second and the writer's ack latency, a person's message while the agents work,
+  each query that pages and the journal's own read, the roster and attention snapshots, which are whole, the page's
+  projection, what counting events costs, and a resume after a SIGKILL; `test_tui_budgets.py` measures the terminal UI's
+  attach to such a run. [The scale page](docs/reference/scale.md) publishes each, with the hardware described by its
+  specs, and each test holds its measurement to twice the most that was measured, but half the least for throughput and
+  never under 50 ms for a time. The runtime's memory grows with the journal, and no run has shown where it stops, so the
+  test holds it to a budget and does not call it bounded. The changes snapshot, which the run never fills, is not measured.
+  No CI job runs it, as its budgets fit that hardware.
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
   keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body, which a
