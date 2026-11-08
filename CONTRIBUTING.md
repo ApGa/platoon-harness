@@ -374,9 +374,11 @@ primitive, needs:
 
 An example is a folder of `examples/`: a `README.md` that states the goal, what it needs, the steps and what to expect,
 with the files it runs. Each has a CPU test that runs it as its README does, on scripted stand-ins or `FakeModel`, so it
-cannot break unseen: `tests/integration/test_examples.py` runs each of them. Its stand-ins live in its folder and import
-nothing from the tests, which a test there holds, and its README says what a run on them cannot show. A cost the README
-quotes comes from a run that was made, as the mixed team's does.
+cannot break unseen: `tests/integration/test_examples.py` runs each of them. Its stand-ins live in its folder, import
+nothing from the tests and reach the SDK by the names `tests/public_api.txt` lists alone, which tests there hold, and its
+README says what a run on them cannot show. A stand-in whose next step rests on what a tool answered runs its code as a
+`Do` step of `ScriptedDriver`, as [the review example's](examples/review-verification/stand_ins.py) do. A cost the
+README quotes comes from a run that was made, as the mixed team's does.
 
 ## When a change needs an RFC
 
