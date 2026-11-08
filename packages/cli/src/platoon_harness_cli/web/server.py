@@ -2,10 +2,10 @@
 
 Every request is bounded before it is believed, by the SDK's HTTP: its head, then `Host` against the authority served,
 which defeats DNS rebinding, and on a POST `Origin` against the page's own origin, then its bearer, and only then a body
-of a stated length. A view credential reaches the page's reads alone: `view_*`, and `x_read`, every pane of ours, which
-reads through the session's queries, where the kernel refuses an op that writes, and its journal. Every mutation is
-`/x/command` into `Session.submit`, the op path the terminal uses, and the kernel's grants decide what the person may
-do. Every answer says `no-store`.
+of a stated length. A view credential reaches the page's reads alone: `view_*`, and `x_read`, every pane of ours but a
+diff, which only asking for one gives, and which reads through the session's queries, where the kernel refuses an op
+that writes, its journal and a diff's patch. Every mutation is `/x/command` into `Session.submit`, the op path the
+terminal uses, and the kernel's grants decide what the person may do. Every answer says `no-store`.
 """
 
 import asyncio
@@ -189,7 +189,7 @@ class Web(Server[Request]):
                 case "view_download":
                     return await self._download(params)
                 case "x_read":
-                    return _json(await self._read(params))
+                    return _json(await self._read(params, held))
             raise replies.Error(404, f"There is no request named '{name}'.")
         except replies.Error as error:
             raise Rejected(error.status, why=str(error)) from None
@@ -283,10 +283,11 @@ class Web(Server[Request]):
         headers = (f"Content-Type: {found['type']}", f"X-Attachment: {json.dumps(found)}")
         return response(200, data, *headers, *_PAGE)
 
-    async def _read(self, params: Mapping[str, Any]) -> dict[str, Any]:
+    async def _read(self, params: Mapping[str, Any], held: Held) -> dict[str, Any]:
         """One pane of the page, which `pane` names, in the words of the command line's package, read through the
-        session's queries, which the kernel runs on a read connection and refuses for any op that writes, and its
-        journal, so nothing is written through it on the owner's credential `web` holds, and a view link reads it."""
+        session's queries, which the kernel runs on a read connection and refuses for any op that writes, its journal
+        and a diff's patch, so nothing is written through it on the owner's credential `web` holds. A view link reads
+        every pane but a diff, which is read by the effect that asking for it gave, an act a view link may not do."""
         match params.get("pane"):
             case "provenance":
                 return await self._provenance(params)
@@ -295,6 +296,10 @@ class Web(Server[Request]):
             case "changes":
                 return await self._changes()
             case "diff":
+                if held.kind == "view":
+                    raise replies.Error(
+                        403, "a view link reads no diff: asking for one is an act, and it acts on nothing"
+                    )
                 return await self._diff(params)
         raise replies.Error(404, "there is no such pane: the page's panes are provenance, attention, changes and diff")
 

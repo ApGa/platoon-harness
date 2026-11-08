@@ -15,8 +15,9 @@ The terminal's palette and a new palette in the page each offer every write op t
 one function of the command line's package, by one rule: every op but `wait` and the ops on a wait, as a wait parks a turn and a
 person has none, and but a query, which a pane draws. Each is worded as its command's help, and runs through one form made from
 its schema, which asks once before each op the terminal asks about. Every pane of the page reads through one route, `/v1/x_read`,
-which answers in the command line package's words through the session's queries alone, where the kernel refuses an op that
-writes, so nothing can be written through it, and which a view link reaches. `x_provenance` becomes its `provenance` pane, and
+which answers in the command line package's words through the session's queries, where the kernel refuses an op that writes,
+and for a diff the journal and the patch's body, which it reads and never writes, so nothing is written through it, and which a
+view link reaches, but for a diff ([RFC 0065](0065-a-diff-is-read-on-request-as-a-test-is-run.md) section 7). `x_provenance` becomes its `provenance` pane, and
 Needs you reads its `attention` pane. In step 2, an action of a place where a person must act fixes only the arguments it knows,
 and says with `form` that it leaves the rest to its op's form, which each client opens filled in with what it fixes. Every kind of
 place the `attention` view raises carries such an action or says in its gist what settles it, and a conflict never sends a person
@@ -111,10 +112,13 @@ POST /v1/x_read {"pane": "attention"}                       -> {"rows"}
 
 Each pane answers in the command line package's words: `provenance` what `x_provenance` answered
 ([RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md)), and `attention` every row of the runtime's `attention` view
-but a mention, which is a message to read in its chat. A pane reads through the session's queries alone, which the kernel runs on a
-read connection and refuses for any op that writes, so nothing can be written through it, whatever a pane asks. It reads on the
-owner's credential that `web` holds, as every read of the page's does, and `web` lets a view link reach it by the link's class, as
-it reaches `view_*`: the kernel's grants on the owner's credential, not the link's, decide what a pane may read. `/x/command` stays
+but a mention, which is a message to read in its chat. A pane reads through the session's queries, which the kernel runs on a
+read connection and refuses for any op that writes, so nothing can be written through them, whatever a pane asks. The `diff` pane
+that [RFC 0065](0065-a-diff-is-read-on-request-as-a-test-is-run.md) adds also follows the journal to a diff's record and reads its patch by the record's body,
+through `Session.events` and `Session.get_body`: those write nothing because no op runs in them, which is the code's to keep, not
+the kernel's to refuse. A pane reads on the owner's credential that `web` holds, as every read of the page's does, and `web` lets a
+view link reach it by the link's class, as it reaches `view_*`, but for a diff, which only asking for one gives: the kernel's
+grants on the owner's credential, not the link's, decide what a pane may read. `/x/command` stays
 the one route that writes, and the page sends it no read.
 
 This amends [RFC 0028](0028-acting-from-the-page.md), whose Needs you read through `/x/command` and whose page acted on a few ops,

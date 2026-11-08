@@ -879,8 +879,8 @@ def test_a_role_is_on_a_plan_login_past_loopback_as_the_runtime_counts_one():
 async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words(root, clock, monkeypatch):
     """`changes` is what changed in the lines the terminal's `/review` draws, with none new, as the page keeps no
     marks; `diff` is, by the effect `repo diff` gave, the diff it read with every line of its patch, a line longer
-    than a `blob.get` result holds among them, and how many the page draws at a time. A view link reads both, and
-    neither submits an op or writes anything."""
+    than a `blob.get` result holds among them, and how many the page draws at a time. A view link reads what changed,
+    and is refused a diff, as asking for one is an act. Neither submits an op or writes anything."""
     repo = repository(root / "repo", monkeypatch)
     long = "y" * 13_000
     lead = {"harness": working(lambda cwd: commit(cwd, "notes.txt", f"one\n{long}\ntwo\n")), "workspace": "worktree"}
@@ -893,7 +893,7 @@ async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words
         [record] = await until(lambda: of_type(session, "repo.diffed"), session)
         rows = (await session.submit("view.watch", name="changes")).result["rows"]
         async with served(session, root / "home", clock) as web:
-            browser = await Browser(web).opened("view")
+            browser, viewer = await Browser(web).opened("control"), await Browser(web).opened("view")
             head, submitted, submit = await session.head(), [], session.submit
 
             async def recorded(op: str, /, **args: object) -> object:
@@ -902,9 +902,10 @@ async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words
 
             with monkeypatch.context() as patched:
                 patched.setattr(session, "submit", recorded)
-                changes = await browser.view("x_read", {"pane": "changes"})
+                changes = await viewer.view("x_read", {"pane": "changes"})
                 read = await browser.view("x_read", {"pane": "diff", "effect": effect})
                 wrong = await browser.request("POST", "/v1/x_read", {"pane": "diff", "effect": "38"})
+                viewed = await viewer.request("POST", "/v1/x_read", {"pane": "diff", "effect": effect})
             assert await session.head() == head and submitted == []
 
     sha, ref = made.data["sha"], f"{record.stream}@{record.version}"
@@ -927,3 +928,4 @@ async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words
     ]
     assert (diff["lines"][-3:], len(diff["lines"]), read["page"]) == (added, 9, PAGE)
     assert wrong.status == 400
+    assert viewed.status == 403 and "a view link reads no diff" in viewed.json()["error"]

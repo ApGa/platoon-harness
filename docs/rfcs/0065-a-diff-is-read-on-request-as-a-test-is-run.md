@@ -190,8 +190,9 @@ role in the review example. Both clients say what changed in the words of one mo
 - **The page reads through `x_read`** ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), with two panes more:
   `changes`, the lines of what changed, and `diff`, which by an `effect` holds until that effect's record is in the journal, for at
   most the 25 s the feed holds, and gives the diff with every line of its patch and how many the page draws at a time. A pane
-  reads, the record by following the journal and the patch by its body, which writes nothing either. Asking for a diff, testing and commenting go
-  through `/x/command`, so on a view link and on history they are disabled, saying why, as every act is.
+  reads, the record by following the journal and the patch by its body, which writes nothing either. Asking for a diff, testing
+  and commenting go through `/x/command`, so on a view link and on history they are disabled, saying why, as every act is. A
+  diff is read by the effect that asking for it gave, so the `diff` pane refuses a view link, which reads none.
 
 ```text
 POST /v1/x_read {"pane": "changes"}                        -> {"repo", "lines"}
@@ -251,7 +252,8 @@ Shift and a click a range, and Comment sends what is written below.
   read a crash cut off.
 - A person reads what changed, and comments on it, from either client in the same words, and a comment is a message, so its
   maker hears it as it hears any, and provenance follows it to the lines it cites.
-- Asking for a diff is an act, so a view link and a session's history read none, not even a commit's patch kept, and say why.
+- Asking for a diff is an act, so a view link reads none, not even a commit's patch kept, as the `diff` pane refuses it, and a
+  session's history can ask for none. Both say why.
 - A comment on a change no agent's workspace made has nobody to take it, and a person writes about it in the composer instead.
 
 ## Rollout plan

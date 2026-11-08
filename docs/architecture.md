@@ -1679,8 +1679,9 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   person acts there through `/x/command`, on every op they hold that writes, through the form the terminal's palette uses: each act
   keeps its key until it is answered, across a lost connection, a reload or a new
   link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
-  `attention` view. Every pane of ours reads through `x_read`, a read beside the `view_*` that a view link reaches too, which reads
-  through the session's queries, where the kernel refuses an op that writes, and its journal, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, and the provenance a message's actions open, where the
+  `attention` view. Every pane of ours reads through `x_read`, a read beside the `view_*` that a view link reaches too, but for a
+  diff, which only asking for one gives, and which reads through the session's queries, where the kernel refuses an op that
+  writes, and for a diff the journal and the patch's body, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, and the provenance a message's actions open, where the
   projection keeps the ref of the event each line shows, which the pane opens on, and following a link a chat shows opens that chat
   there. Each link in the pane is a button, and a message's
   actions show while focus is in it, so the keyboard reaches both. [web.md](how-to/web.md) is its guide, and

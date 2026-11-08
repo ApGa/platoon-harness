@@ -36,7 +36,8 @@ named here is closed.
   Uncommitted diff. A diff opens in the same pane a page at a time, every word of it through the page's escaping. Test asks
   once, saying whose code it runs as you. A click on a line's number chooses it, Shift and a click a range, and Comment sends
   your message to the change's maker citing those lines, or the commit. `x_read` gains a `changes` pane and a `diff` pane, which
-  reads a diff's record by the effect `repo diff` gave, with every line of its patch. See
+  reads a diff's record by the effect `repo diff` gave, with every line of its patch, and is refused to a view link, as asking
+  for a diff is an act. See
   [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **A comment on a diff's lines, from the terminal.** In a diff `/review` opens, Space chooses a line, and on another every
   line between, and `c` writes a comment at the foot, sent as your message to the agent whose workspace made the change, its
@@ -662,8 +663,9 @@ named here is closed.
   leaves the rest to its op's form, so a client that runs every action as it stands would run `budget.set` with no limits. The
   view is at version 5, so an older session's is refolded as it opens.
 - **Every pane of the page reads through one route, `x_read`.** `POST /v1/x_read` with a `pane` answers in the terminal's words
-  through the session's queries alone, which the kernel refuses for an op that writes, so nothing can be written through it, and
-  a view link reaches it as it reaches SwarmChat's `view_*`: `provenance`, where `x_provenance` was, which goes with no alias, and `attention`, every place the person must act but
+  through the session's queries, which the kernel refuses for an op that writes, and for a diff the journal and the patch's body,
+  which it reads and never writes, so nothing is written through it, and a view link reaches it as it reaches SwarmChat's
+  `view_*`, but for a diff, which only asking for one gives: `provenance`, where `x_provenance` was, which goes with no alias, and `attention`, every place the person must act but
   a mention, which Needs you read through `/x/command`, a route a view link cannot reach. So a view link and history now show
   where the person must act, each action disabled, saying why, where Needs you was disabled. See
   [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.

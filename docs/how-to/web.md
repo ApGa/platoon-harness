@@ -178,13 +178,14 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 | `view_activity` | Real: messages over time across every chat, or an agent's, and with `from` and `to` how many each chat had in that stretch and from whom, by the journal's times |
 
 The page asks one read of ours beside them, `x_read`, for each pane of ours, in the terminal's words, and a view link may ask it,
-as it asks the others. It reads through the session's queries, which the kernel refuses for an op that writes, and its journal,
-so nothing is written through it. Its `provenance` pane is one event's provenance,
+as it asks the others, but for a diff. It reads through the session's queries, which the kernel refuses for an op that writes,
+and for a diff the journal and the patch's body, which it reads and never writes, so nothing is written through it. Its `provenance` pane is one event's provenance,
 by its ref, and the message it is in its chat, if one shows it. Its `attention` pane is every place you must act, but a mention.
 Its `changes` pane is what changed, in the lines the terminal's `/review` draws, none of them new, as the page keeps no marks. Its
 `diff` pane is, by the effect `repo diff` gave, the diff that effect read with every line of its patch, which the page draws 500
 at a time, held until the journal records it, for at most 25 s, and saying it is still `reading` past that. Asking for a diff is an
-act, so a view link and history read none, and Patch and Uncommitted diff say why.
+act, so a view link reads none, as the `diff` pane refuses it, and history can ask for none, and Patch and Uncommitted diff say
+why.
 
 ## Not built yet
 
