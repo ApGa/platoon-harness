@@ -120,7 +120,6 @@ named here is closed.
   harness's own as `act(spec, call)`, where `call(tool, arguments)` calls a tool as a `Call` step does and returns its
   result, so the code can go on from each answer, and each of its calls goes under an id of its own, as a harness's own
   calls do. A stand-in whose next step rested on an answer had to override `ScriptedDriver`'s private methods.
-
 - **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose
   harness cannot start fails, as the workspace showed, and the terminal UI now also says what `doctor`, run in that
   terminal, finds of that harness, in the words `doctor` prints: not on PATH, or its version, the kind of its login and
@@ -732,7 +731,6 @@ named here is closed.
   the version both packages release at, and each package's `pyproject.toml` reads it, where five places set it, which a
   release had to change alike. A test holds the command line to requiring the SDK of its own minor release. That the two
   release together is the default, pending the owner's ruling.
-
 - **Each Git example runs on stand-ins of its own.** The worktree team's no-keys run took the test suite's stand-ins,
   `tests.integration.scripts:spawning_contributors` and the rest, with the checkout on `PYTHONPATH`, so a copy of the
   example could not run alone. Its stand-ins are now its own, in `examples/worktree-merge-queue/stand_ins.py`, as
@@ -741,7 +739,6 @@ named here is closed.
   do, and whether real models follow their instructions. A test holds every example to importing, and naming as a
   harness, no module of the tests. Its stand-ins and the review example's run each role's code as a `Do` step, and a
   test holds every example to the SDK's public names.
-
 - **Every pane of the page reads through one route, `x_read`.** `POST /v1/x_read` with a `pane` answers in the terminal's words
   through the session's queries, which the kernel refuses for an op that writes, and for a diff the journal and the patch's body,
   which it reads and never writes, so nothing is written through it, and a view link reaches it as it reaches SwarmChat's
