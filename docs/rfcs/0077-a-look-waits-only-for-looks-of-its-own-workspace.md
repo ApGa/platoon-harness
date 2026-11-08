@@ -23,17 +23,17 @@ agent.
 ## Motivation
 
 The owner asked that tool calls and their execution run in parallel across the agents of a team that share one tool server. Most
-already did: every harness is a process of its own, the tool server answers each request on a connection of its own, and the host
-gives each effect a task of its own. Two things did not.
+already did: every real harness is a process of its own, the tool server answers each request on a connection of its own, and the
+host gives each effect a task of its own. Two things did not.
 
 - **Looks ran one at a time in a session.** `Host._look` held one lock across both of a probe's looks, so the looks of a team of N
   agents in worktrees, each committing each turn, queued behind each other at every turn's end, though each reads its own work
   tree. A look's cost grows with the team, as it reads every workspace's HEAD reflog to say whose a new commit is, so a round of
-  looks grew faster than the team. Measured on 32 hardware threads of a compute node, a round of such a team, from the person's message to
-  every agent until every look after that turn had finished, took 0.74 to 0.77 s for 10 agents, 3.5 to 3.6 s for 30 and
-  27 to 30 s for 100, against 0.36 to 0.42 s, 1.3 to 1.5 s and 8.6 to 10.3 s with looks one at a time per workspace. RFC 0032 had
-  weighed concurrent looks only as looks deduplicated by the op, which "would race on the shared workspace's last look, which every
-  look takes".
+  looks grew faster than the team. Measured on 32 hardware threads of a compute node, a round of such a team, from the person's
+  message to every agent until every look after that turn had finished, took 0.74 to 0.77 s for 10 agents, 3.5 to 3.6 s for 30
+  and 27 to 30 s for 100, against 0.36 to 0.42 s, 1.3 to 1.5 s and 8.6 to 10.3 s with looks one at a time per workspace. RFC
+  0032 had weighed concurrent looks only as looks deduplicated by the op, which "would race on the shared workspace's last look,
+  which every look takes".
 - **A query an agent called ran on the event loop.** The tool server ran `Kernel.query` on the runtime's loop, so one slow query,
   such as an extension's, held up every agent's calls, every harness's reports and every daemon until it returned. The core's
   queries an agent holds read a view and are quick, and the control link already ran a person's query, which may walk the

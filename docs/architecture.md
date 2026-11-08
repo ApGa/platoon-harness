@@ -212,10 +212,9 @@ Agents work at once, and wait for each other only where they share a thing. Acro
   answers 503 (§10), and a held `wait` holds only its own. On the same four binaries, three agents' calls of a query of ours, each
   through its harness's own client, ended only once all three were in it: `test_several_agents_call_our_tools_at_once`. A query an
   agent calls runs off the event loop on a thread of the loop's pool, as a person's does, so a slow one holds up no other call
-  while a thread is free: `test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them`.
-  That pool is Python's default, of four threads more than the CPUs Python counts and 32 at most, and readers share it with the
-  kernel's blob writes alone: the host's git and files run on threads of its own, so no round of looks fills it,
-  `test_a_held_look_holds_up_no_query`.
+  while a thread is free: `test_several_agents_calls_are_in_flight_at_once_a_held_wait_among_them`. That pool is Python's
+  default, of four threads more than the CPUs Python counts and 32 at most, and readers share it with the kernel's blob writes
+  alone: the host runs its git and files on threads of its own, so no round of looks fills it, `test_a_held_look_holds_up_no_query`.
 - **Every write goes through the one writer,** in transactions of up to 64 commands with one fsync each (§5.1), so writes are
   ordered and never run at once, and the writer's queue is the one thing every call that writes shares: at 100 agents its ack took
   24 to 29 ms at the median ([scale.md](reference/scale.md)), and `test_a_batch_is_one_transaction_of_at_most_64_commands`. An op
