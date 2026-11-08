@@ -21,7 +21,7 @@ entry on board `outcomes`, which refuses a second, citing the worker's end and w
 nomination's entry gives its commit's recorded SHA. Every outcome counts against `attempts`, so a population whose every worker
 abstains ends. A worker builds on a peer's commit by checking out that SHA on its own branch, which only a worktree reaches, so a
 population in any other kind of workspace is refused, saying why. `git-swarm` takes `live`, which is its `max_live`, and makes
-the board, and `team check` warns of a role only the program starts when no budget bounds how many. Nothing is read out as a
+the board, and `team check` warns of a role only the program starts when no budget sets a limit. Nothing is read out as a
 winner: choosing among the nominations is the person's.
 
 ## Motivation
@@ -130,8 +130,9 @@ a refusal is answered again under its key, so a spawn that `max_live` refused wo
 
 `team check` knows no program, so it cannot see `attempts`. Under `until = "program"`, it warns of each role that nothing in the
 team starts, none at the session's start and no role by `may_spawn`, when neither that role's budget nor the session's sets a
-limit, as then nothing in the team bounds how many of its agents the program starts, or what they spend. It is a warning, as the
-program may bound them itself.
+limit, as then nothing in the team stops the program starting more of its agents, or what they spend. Any limit does once it is
+reached, as a spawn past it is refused and the session stops, though only `agents` counts how many start: under a `wall` limit
+alone, the program starts as many as it likes until then. It is a warning, as the program may bound them itself.
 
 What changes for users:
 

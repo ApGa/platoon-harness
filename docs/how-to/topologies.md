@@ -589,8 +589,10 @@ that can stay, a role that lets its harness start agents of its own, saying what
 `{ending}`, words that name a tool a role cannot hold, and a team's `preamble` that a role on a harness that reaches none of our tools
 is never told. It says nothing of `until = "program"`, as it checks a team before anyone starts it: a person's start of such a team
 is refused, and a program's goes ahead. Under it, it warns of a role only the program starts, none with the session and no role by
-`may_spawn`, when no budget, the role's or the session's, sets a limit: nothing in the team then bounds how many the program starts,
-or what they spend. A program may bound them itself, as a population's `attempts` does, so it is a warning.
+`may_spawn`, when no budget, the role's or the session's, sets a limit: nothing in the team then stops the program starting more,
+or what they spend. Any limit does once it is reached, as a spawn past it is refused and the session stops, though only `agents`
+counts how many start: under `wall` alone, the program starts as many as it likes until then. A program may bound them itself, as a
+population's `attempts` does, so it is a warning.
 
 A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
 count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as a message from the

@@ -393,8 +393,8 @@ def _warnings(team: Team) -> Iterable[Problem]:
         for name in sorted(team.roles):
             if not team.starts(name) and not team.spawners(name) and not _limited(team.roles[name].budget):
                 what = (
-                    f"only the program that owns the session starts `{name}`, and no budget bounds how many it starts "
-                    "or what they spend: give this role or the session a limit"
+                    f"only the program that owns the session starts `{name}`, and no budget sets a limit, so nothing "
+                    "in the team stops it starting more, or what they spend: give this role or the session a limit"
                 )
                 yield Problem(f"roles.{name}.budget", what, "warning")
 

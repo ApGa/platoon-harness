@@ -528,8 +528,8 @@ def test_team_check_warns_when_no_budget_bounds_a_population_s_spawns():
     swarm = PRESET_TEAMS["git-swarm"]
     worker = swarm.roles["worker"]
     said = (
-        "roles.worker.budget: only the program that owns the session starts `worker`, and no budget bounds how many it "
-        "starts or what they spend: give this role or the session a limit"
+        "roles.worker.budget: only the program that owns the session starts `worker`, and no budget sets a limit, so "
+        "nothing in the team stops it starting more, or what they spend: give this role or the session a limit"
     )
     bounded = [
         swarm.model_copy(update={"budget": Budget(wall="4h")}),

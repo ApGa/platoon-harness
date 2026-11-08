@@ -774,7 +774,7 @@ named here is closed.
   first had begun to spend, using up an attempt each time.
 - **`team check` warns when no budget bounds a program's spawns.** Under `until = "program"`, a role that only the program starts,
   none with the session and no role by `may_spawn`, as a population's workers are, is warned of when neither its budget nor the
-  session's sets a limit, as nothing in the team then bounds how many the program starts or what they spend. `team check` cannot
+  session's sets a limit, as nothing in the team then stops the program starting more, or what they spend. `team check` cannot
   see a population's `attempts`, which lives in its script, so it is a warning. The topologies guide's git-swarm team now has a
   budget, and its reviewers' team is warned of. See
   [RFC 0070](docs/rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md), a draft.
