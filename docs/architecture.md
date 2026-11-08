@@ -796,7 +796,7 @@ on `task.added` payload 2 and `agent.spawned` payload 4, by name, where an older
   changes them after.
 - **Shown as the values allowed.** A tool that takes `labels` shows each label with its values as an `enum`, and no other key, and
   says them in its description, which `ph` shows; where the team declares none, the argument is left out (§10).
-- **No claimant is shown them.** `task.claim` and `task.list` show a task as they did, the default pending the owner's ruling:
+- **No claimant is shown them.** `task.claim` and `task.list` show a task as they did, as the owner ruled:
   labels are for the record, which a person reads, and for the training system that reads them on each span (§11).
 
 See [RFC 0078](rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md).

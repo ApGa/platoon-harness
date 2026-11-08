@@ -87,7 +87,7 @@ A tool that takes `labels` shows a model each label with its values, as an `enum
 its description too, which `ph` shows, so a model picks from them; with no vocabulary, the argument is left out of the schema, as
 no value could fill it. The op's own check is what holds, for a harness that does not enforce a tool's schema. The vocabulary is
 fixed at open and the tool list at launch, so the two always agree. No claimant is shown its task's labels: `task.list` and
-`task.claim` say what they said before, the default pending the owner's ruling on open question 1. A person reading the record,
+`task.claim` say what they said before, as the owner ruled on open question 1. A person reading the record,
 and a training system reading `spans`, see them.
 
 ### 3. A span's labels
@@ -141,8 +141,8 @@ completing span the eighth and the crafting span the sixteenth.
 
 Version 4 takes version 3's place under the same name and function, `propagate(session, episode, *, judge, retained)`, and its
 rows say `producer_version` 4, as RFC 0061 has each version do: a run recorded on `propagate@3`, as DAO's run notes and configs
-name it, runs again on the SDK it was recorded on. That version 4 is the producer the SDK ships is the default, pending the
-owner's ruling on open question 3.
+name it, runs again on the SDK it was recorded on. Version 4 is the producer the SDK ships, and the one DAO's next arms train on,
+as the owner ruled on open question 3.
 
 ### 5. The contract for a training system
 
@@ -213,13 +213,12 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 
 ## Open questions
 
-1. Should a claimant be shown its task's labels in `task.claim` and `task.list`? The default, built, shows none, pending the owner's
-   ruling, and showing them is a field added to two results, which tears out nothing.
-2. Should a failure and a release be shared as a completion is? The default, built, shares every claimant's event of a hold,
-   pending the owner's ruling; a ruling for completions alone narrows one set.
-3. Should DAO's next run train on `propagate@4`, or pin the SDK before it, which writes `propagate@3` and has no labels, until a
-   smoke run of version 4? The owner decides, before any GPU run. The default, built, ships version 4 in version 3's place,
-   pending that ruling; a ruling for both in one SDK adds a version argument, and tears out nothing.
+1. Should a claimant be shown its task's labels in `task.claim` and `task.list`? No, the owner ruled on 2026-11-09: a worker told
+   its task is easy may work it as one.
+2. Should a failure and a release be shared as a completion is? Yes, the owner ruled on 2026-11-09: every claimant's event of a
+   hold is shared.
+3. Should DAO's next run train on `propagate@4`, or pin the SDK before it, which writes `propagate@3` and has no labels? On
+   version 4, the owner ruled on 2026-11-09, for the arms that test labels; runs recorded on version 3 keep their pinned SDK.
 4. Should a span that claimed a task carry the task's labels for its calls before the claim? The default, built, does: a span
    that surely held a claim takes its claims' labels alone, pending the owner's ruling. A ruling for the spawn's work makes such
    a span's labels None wherever its spawn's differ, which changes one rule of `spans` and tears out nothing; a worker that
