@@ -102,6 +102,10 @@ in its `TMPDIR` was not looked into.
   says in the runtime's log.
 - **A wire program's harness in an isolated home**: the home, `home/`, lies beside the program's own folder, `wire/`, so a
   program can name no file there. OpenHands, the one wire worker shipped, keeps its key in no file.
+- **A harness that keeps a login with its record**: OpenCode 2.2.6, which the ACP extension's `opencode` driver runs (RFC 0072),
+  keeps a login in its database beside its sessions, and moves a legacy `auth.json` into it, so its driver names no file, as
+  removing the database would remove the record. The driver gives it the key in its environment, never by a login, and whether
+  OpenCode writes that key into its database is not checked.
 - **A credential outside the files named**, such as a key an agent wrote in its workspace or a harness put in a transcript, is
   content, which security.md says nothing sanitizes.
 
