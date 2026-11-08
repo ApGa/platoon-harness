@@ -72,8 +72,7 @@ stays in your copy, uncommitted: `git diff` shows it, and `python3 -m unittest` 
 A real model chooses its own steps, so a run can go otherwise: it may name its worker differently, read more files
 before it acts, or take more turns. The team's budget of 16 turns and 20 minutes is what stops a runaway: no budget
 counts model calls, and one turn can make many. `tests/live/test_examples.py` fails a live run of this example that took
-more than 40 model calls, counted once the run has ended, or 15 minutes, numbers no run has checked yet, as it has not
-run: [docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the
+more than 50 model calls, counted once the run has ended, or 15 minutes, about one and a half times what live runs on DeepSeek V4.1 Flash took on 2026-11-08, 30 model calls in each of two runs: [docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the
 commands of sections 1, 2 and 4 as shown, with `fake-model` for MODEL, and the run with one more `--set` line, which
 hands pi its switch for no network, on the real `pi` and OpenHands against FakeModel, a loopback model that replies from
 a script, so the harnesses, the tools and the team file are real and only the model is scripted. Section 5's swap is not
@@ -91,9 +90,9 @@ $ platoon-harness attach tally    # the terminal UI, as a guest of the running s
 $ platoon-harness web tally       # SwarmChat's page; open the control link it prints
 ```
 
-![The terminal UI on a closed session: a lead and the worker it spawned in the navigator, the lead's transcript beside them, and the composer below](../../docs/assets/tui-wide.svg)
+![The terminal UI on the mixed team's closed session: the pi lead and the OpenHands worker it spawned in the navigator, the lead's transcript beside them, and the composer below](../../docs/assets/tui-wide.svg)
 
-*The terminal UI on another session, of scripted harnesses, as its snapshot test draws it.*
+*The terminal UI on this team's session as a live run on DeepSeek V4.1 Flash recorded it, read back as history.*
 
 A message from either goes to whoever you address, `@lead` or `@fixer`, and a person's message steers. Or start the
 whole thing from the terminal UI: `platoon-harness`, then start a session from the team file on its sessions screen, type

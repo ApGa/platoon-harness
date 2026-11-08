@@ -107,7 +107,7 @@ def stated(events: list[dict[str, Any]]) -> str:
 
 @pytest.mark.timeout(int(20 * MINUTE))
 async def test_the_mixed_team_fixes_issue_1_on_a_real_model(tmp_path: Path):
-    """Budget: at most 40 model calls and 15 minutes. The page's run in a copy of the sample project settles, the task
+    """Budget: at most 50 model calls and 15 minutes. The page's run in a copy of the sample project settles, the task
     on `tasks` is done, the worker's note is `fix-1` on `notes`, and the copy's tests pass with its change to
     `tally/money.py` uncommitted; then, if `PLATOON_HARNESS_RECORD` names a folder, the closed session is recorded
     there, with every local path, the host, the endpoint and the key replaced."""
@@ -125,7 +125,7 @@ async def test_the_mixed_team_fixes_issue_1_on_a_real_model(tmp_path: Path):
     assert "board/notes/fix-1" in {event["stream"] for event in events if event["type"] == "board.posted"}
     assert "tally/money.py" in git("status", "--porcelain", cwd=cli.folder)
     assert ran_tests(cli.folder).returncode == 0
-    assert calls(events) <= 40
+    assert calls(events) <= 50
     if into is not None:
         private = {
             str(cli.folder): "/path/to/tally",
@@ -143,7 +143,7 @@ async def test_the_mixed_team_fixes_issue_1_on_a_real_model(tmp_path: Path):
 
 @pytest.mark.timeout(int(20 * MINUTE))
 async def test_the_first_session_s_run_settles_on_a_real_model(tmp_path: Path):
-    """Budget: at most 40 model calls and 15 minutes. The guide's run, the mixed team's, settles, and `session show`
+    """Budget: at most 50 model calls and 15 minutes. The guide's run, the mixed team's, settles, and `session show`
     says it is closed."""
     [run] = shown(FIRST, where="--prompt-file")
 
@@ -155,12 +155,12 @@ async def test_the_first_session_s_run_settles_on_a_real_model(tmp_path: Path):
 
     assert ran.code == 0, ran.stderr[-2000:]
     assert told.stdout.startswith("first  no runtime, closed, until role:lead"), told.stdout
-    assert calls(events) <= 40
+    assert calls(events) <= 50
 
 
 @pytest.mark.timeout(int(20 * MINUTE))
 async def test_the_sdk_script_s_agents_each_commit_a_fix_on_a_real_model(tmp_path: Path):
-    """Budget: at most 30 model calls and 15 minutes. The script's session settles, it prints each agent's report, and
+    """Budget: at most 50 model calls and 15 minutes. The script's session settles, it prints each agent's report, and
     each agent made a commit on its own branch."""
     page = SCRIPT / "README.md"
     [run] = [command for command in shown(page, where="run.py") if "run.py" in command]
@@ -176,12 +176,12 @@ async def test_the_sdk_script_s_agents_each_commit_a_fix_on_a_real_model(tmp_pat
     assert sorted(line.partition(":")[0] for line in said) == ["cents", "comments"]
     made_in = {event["data"]["made_in"] for event in events if event["type"] == "repo.committed"}
     assert made_in == {"@cents", "@comments"}
-    assert calls(events) <= 30
+    assert calls(events) <= 50
 
 
 @pytest.mark.timeout(int(30 * MINUTE))
 async def test_the_merge_queue_example_merges_on_a_real_model(tmp_path: Path):
-    """Budget: at most 80 model calls and 25 minutes. The run settles, each worker's task on `merges` is completed with
+    """Budget: at most 110 model calls and 25 minutes. The run settles, each worker's task on `merges` is completed with
     what came of its merge, and only the merger made a merge commit, at least one."""
     [run] = shown(WORKTREE, where="--prompt-file")
 
@@ -196,12 +196,12 @@ async def test_the_merge_queue_example_merges_on_a_real_model(tmp_path: Path):
     assert len(tasks) == 2 and all(task["state"] == "done" and task["result"] for task in tasks), tasks
     merges = [event for event in events if event["type"] == "repo.committed" and len(event["data"]["parents"]) == 2]
     assert {event["data"]["made_in"] for event in merges} == {"@merger"}
-    assert calls(events) <= 80
+    assert calls(events) <= 110
 
 
 @pytest.mark.timeout(int(45 * MINUTE))
 async def test_the_review_example_s_verdict_rests_on_your_test_on_a_real_model(tmp_path: Path):
-    """Budget: at most 60 model calls and 40 minutes, your answer included. The run goes on until the verifier asks
+    """Budget: at most 70 model calls and 40 minutes, your answer included. The run goes on until the verifier asks
     you; the test then tests the author's commit and answers citing the test's record, as a person would, and the run
     settles with the verifier finished. Whether its ask cites the commit and its verdict your answer, as its
     instructions ask, is its model's to do, so the test prints which it cited, and the FakeModel test holds them."""
@@ -228,12 +228,12 @@ async def test_the_review_example_s_verdict_rests_on_your_test_on_a_real_model(t
     assert (tested.code, replied.code, ran.code) == (0, 0, 0), ran.stderr[-2000:]
     assert result["data"]["outcome"] == "passed"
     assert "verifier" in {event["agent"] for event in events if event["type"] == "agent.finished"}
-    assert calls(events) <= 60
+    assert calls(events) <= 70
 
 
 @pytest.mark.timeout(int(30 * MINUTE))
 async def test_the_git_swarm_example_gives_each_worker_one_outcome_on_a_real_model(tmp_path: Path):
-    """Budget: at most 60 model calls and 25 minutes. The script's session settles, and each of its four workers has
+    """Budget: at most 120 model calls and 25 minutes. The script's session settles, and each of its four workers has
     one outcome on `outcomes`, whatever its model chose."""
     [run] = shown(SWARM, where="run.py")
 
@@ -248,4 +248,4 @@ async def test_the_git_swarm_example_gives_each_worker_one_outcome_on_a_real_mod
 
     outcomes = {entry["name"]: entry["fields"]["outcome"] for entry in json.loads(queried.stdout)["results"]}
     assert sorted(outcomes) == [f"worker-{n}" for n in (1, 2, 3, 4)], outcomes
-    assert calls(events) <= 60
+    assert calls(events) <= 120

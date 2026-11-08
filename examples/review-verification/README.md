@@ -110,8 +110,8 @@ words, which are the model's own: the verifier's is its verdict.
 A real model chooses its own steps, so a run can go otherwise: the reviewer may ask `repo.commit` again more often, and
 the verifier may word its ask differently, so read the SHA from what it says. The team's budget of 24 turns and 40
 minutes is what stops a runaway: no budget counts model calls, and one turn can make many.
-`tests/live/test_examples.py` fails a live run of this example that took more than 60 model calls, counted once the run
-has ended, or 40 minutes, your answer included, numbers no run has checked yet, as it has not run:
+`tests/live/test_examples.py` fails a live run of this example that took more than 70 model calls, counted once the run
+has ended, or 40 minutes, your answer included, about one and a half times what live runs on DeepSeek V4.1 Flash took on 2026-11-08, 42 model calls:
 [docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the
 `platoon-harness` commands on this page as shown, with `fake-model` for MODEL, and the run with one more `--set` line,
 which hands pi its switch for no network, the run in one process and your steps beside it, on the real `pi` and

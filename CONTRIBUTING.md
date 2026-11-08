@@ -405,13 +405,13 @@ The images of the terminal UI in `docs/assets` are copies of snapshots that `tes
 test holds to them byte for byte, and the page's images, `web-chat.png` and `web-provenance.png`, are what
 `tests/e2e/test_page_images.py` writes. Each is to show a real session: the mixed team's, as a live run of it records it in
 the folder `RECORDED` names in `tests/recorded.py`, its manifest and its journal's events and bodies in text, with every local
-path, the host, the endpoint and the key replaced, and refused while the privacy scan catches anything. Once that recording is
+path, the host, the user, the group, the endpoint and the key replaced, and refused while the privacy scan catches anything. Once that recording is
 there, `SCREENSHOTS` maps each screenshot to the recorded session's snapshot, but for `tui-patch.svg`, which stays a scripted
-session's: a patch is read from git when it opens, and a recording keeps no repository. No live run has recorded the session
-yet, so the docs still show sessions of scripted harnesses, and no image of the page. They never show one of FakeModel's: the
+session's: a patch is read from git when it opens, and a recording keeps no repository. A live run on DeepSeek V4.1 Flash recorded the session
+on 2026-11-08. The docs never show one of FakeModel's: the
 live test refuses to record from an endpoint on loopback, where FakeModel serves.
 
-Record it with the mixed team's live test alone, which may spend 40 model calls, with `PLATOON_HARNESS_LIVE_MODEL`,
+Record it with the mixed team's live test alone, which may spend 50 model calls, with `PLATOON_HARNESS_LIVE_MODEL`,
 `OPENAI_BASE_URL` and `OPENAI_API_KEY` set. It records only a run that passed each of its checks. Then draw the images from it:
 
 ```bash

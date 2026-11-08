@@ -152,6 +152,10 @@ record and is never credit.
 
 ## Follow it in the terminal and the browser
 
+![The page's Provenance pane of the mixed team's lead's answer: the model call that chose it, and the worker's note, its task and your message it cites, each with how it is known](../assets/web-provenance.png)
+
+*The Provenance pane of the lead's answer, on the mixed team's session as a live run on DeepSeek V4.1 Flash recorded it.*
+
 A person follows provenance from where they read: `/provenance` in the terminal, or `p` with the transcript in focus, on the chosen
 line, and Provenance among a message's actions in the browser, on a view link too. Both show one event at a time, in the same words,
 in four parts: its sources, its uses, its contributors, and what estimators said of it. Each link is labelled by how it is known,

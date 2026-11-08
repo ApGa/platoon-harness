@@ -75,10 +75,10 @@ and from the last sends it.
 
 ## The workspace
 
-![The workspace on a closed session: a lead and the worker it spawned in the navigator, the lead's transcript beside them, and the composer below](../assets/tui-wide.svg)
+![The workspace on the mixed team's closed session: the pi lead and the OpenHands worker it spawned in the navigator, the lead's transcript beside them, and the composer below](../assets/tui-wide.svg)
 
-*The workspace on scripted harnesses, as its snapshot test draws it at 120 columns by 32 rows: a lead that spawned a worker,
-read back as history.*
+*The workspace on the mixed team's session as a live run on DeepSeek V4.1 Flash recorded it, at 120 columns by 32 rows: a pi lead
+that spawned an OpenHands worker, read back as history.*
 
 | Part | What it answers |
 |---|---|
@@ -173,7 +173,7 @@ marked `●`, and reading the list to its end moves the mark. A
 conflict an agent's merge stopped on waits in the dock, saying to tell the agent or to resolve it in your own checkout, never in
 its workspace, with Write to it, since the runtime never resolves one ([workspaces.md](workspaces.md#resolve-an-agents-conflict)).
 The inspector says why a workspace was kept only once its agent's stop has kept it. [Its snapshot](../assets/tui-review.svg)
-shows the list for a scripted harness that made a commit in its worktree and left two paths uncommitted.
+shows the list for the mixed team's recorded session, whose worker left two paths uncommitted in your checkout.
 
 Enter on a commit opens its patch, and on a workspace or one of its paths what that workspace holds uncommitted. Each asks the
 runtime with `repo diff`, which reads it where the workspace lives ([workspaces.md](workspaces.md#read-a-diff)), so a commit's
@@ -250,7 +250,7 @@ read at; Sources says where it stops counting, below the model call that chose t
 commit's look; what an answer does not hold below there reads as not held there, never as never; and an answer whose turn had not
 ended says a later report can still confirm an offer or join a call. Yellow marks what is unknown, missing or cut, and a part an
 answer cut names the command line command that reads on. With no line chosen, it says so: what an agent is saying now is no event
-until the journal holds it. [Its snapshot](../assets/tui-provenance.svg) shows the panel alone, on a record its test scripted.
+until the journal holds it. [Its snapshot](../assets/tui-provenance.svg) shows the panel of the mixed team's lead's answer, on the recorded session.
 
 ### Size
 

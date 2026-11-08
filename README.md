@@ -116,9 +116,14 @@ A message from either goes to whoever you address, and a person's message steers
 closed, both show its history read-only, as neither starts or resumes a session, which can spend money.
 [The terminal UI](docs/how-to/tui.md) and [the browser](docs/how-to/web.md) say what each shows and how to act.
 
-![The terminal UI on a closed session: a lead and the worker it spawned in the navigator, the lead's transcript beside them, and the composer below](docs/assets/tui-wide.svg)
+![The terminal UI on the mixed team's closed session: the pi lead and the OpenHands worker it spawned in the navigator, the lead's transcript beside them, and the composer below](docs/assets/tui-wide.svg)
 
-*The terminal UI on scripted harnesses, as its snapshot test draws it: a lead that spawned a worker, read back as history.*
+*The terminal UI on the mixed team's session as a live run on DeepSeek V4.1 Flash recorded it: a pi lead that spawned an
+OpenHands worker to fix issue 1 of the sample project, read back as history.*
+
+![The page's chat between you and the mixed team's lead: your job, the lead's word that it spawned a worker, and its answer citing the worker's note](docs/assets/web-chat.png)
+
+*The page on the same recorded session: your chat with the lead.*
 
 **4. Read it back.** `uses` says what cites an event, and `contributors` whose work the record ties to one, on a live
 session or a closed one. The mixed team's [Read it back](examples/mixed-team/README.md#4-read-it-back) walks from

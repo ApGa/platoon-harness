@@ -85,8 +85,8 @@ checkout. A session's name is taken once, so a second run needs another `--name`
 A real model chooses its own steps, so a run can go otherwise: a worker may write its line in another place, and then
 both branches merge, or the merger may try to resolve a conflict its instructions leave for you. The team's budget of
 24 turns and 25 minutes is what stops a runaway: no budget counts model calls, and one turn can make many.
-`tests/live/test_examples.py` fails a live run of this example that took more than 80 model calls, counted once the run
-has ended, or 25 minutes, numbers no run has checked yet, as it has not run: [docs/STATUS.md](../../docs/STATUS.md) says
+`tests/live/test_examples.py` fails a live run of this example that took more than 110 model calls, counted once the run
+has ended, or 25 minutes, about one and a half times what live runs on DeepSeek V4.1 Flash took on 2026-11-08, 74 model calls: [docs/STATUS.md](../../docs/STATUS.md) says
 what has run live. `tests/integration/test_examples.py` runs the `platoon-harness` commands on this page as shown, with
 `fake-model` for MODEL, and the run with one more `--set` line, which hands pi its switch for no network, on the real
 `pi` and OpenHands against FakeModel, a loopback model that replies from a script, so the harnesses, the tools, git and
@@ -106,4 +106,4 @@ agent has not ended; [When a workspace goes](../../docs/how-to/workspaces.md#whe
 removed, and how to let go of one that stays. In the terminal UI, `platoon-harness attach fixes` opens the same session:
 `/review` lists what changed, grouped by workspace, and the conflict waits in the dock, saying where to resolve it, as
 [Review what changed](../../docs/how-to/tui.md#review-what-changed) says, with a
-[snapshot](../../docs/assets/tui-review.svg) of the list for one scripted harness's worktree.
+[snapshot](../../docs/assets/tui-review.svg) of the list for the mixed team's recorded session.

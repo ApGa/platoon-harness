@@ -38,8 +38,8 @@ checkout, and the branches stay in your repository. Its approvals allow, as nobo
 commands as you, unasked, and a worktree is not a sandbox: what runs there can reach anything you can.
 
 The team's budget of 8 turns and 15 minutes is what stops a runaway: no budget counts model calls, and one turn can
-make many. `tests/live/test_examples.py` fails a live run of the script that took more than 30 model calls, counted once
-the run has ended, or 15 minutes, numbers no run has checked yet, as it has not run:
+make many. `tests/live/test_examples.py` fails a live run of the script that took more than 50 model calls, counted once
+the run has ended, or 15 minutes, about one and a half times what live runs on DeepSeek V4.1 Flash took on 2026-11-08, 29 model calls:
 [docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the commands on
 this page as shown, with `fake-model` for MODEL, on OpenHands against FakeModel, a loopback model that replies from a
 script, so the harness, the tools and the team are real and only the model is scripted.

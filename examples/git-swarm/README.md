@@ -91,8 +91,7 @@ the session, with `Session.resume` in place of `Session.start`, starts no worker
 A real model chooses its own outcome: whether a worker builds on a peer's commit, nominates or abstains, how often one
 does something else, which is invalid, and how many turns each takes. The team's budget of 16 turns and 25 minutes is
 what stops a runaway: no budget counts model calls, and one turn can make many. `tests/live/test_examples.py` fails a
-live run of this example that took more than 60 model calls, counted once the run has ended, or 25 minutes, numbers no
-run has checked yet, as it has not run: [docs/STATUS.md](../../docs/STATUS.md) says what has run live.
+live run of this example that took more than 120 model calls, counted once the run has ended, or 25 minutes, about one and a half times what live runs on DeepSeek V4.1 Flash took on 2026-11-08, 64 and 80 model calls in two runs: [docs/STATUS.md](../../docs/STATUS.md) says what has run live.
 `tests/integration/test_examples.py` runs the commands on this page as shown, with `fake-model` for MODEL, and the script
 with one more `--set` line, which hands pi its switch for no network, on the real `pi` against FakeModel, a loopback
 model that replies from a script, so the harness, the tools, git and the team file are real and only the model is

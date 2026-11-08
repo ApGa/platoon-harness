@@ -1,7 +1,7 @@
 """The page's images for the docs, drawn from the mixed team's session as a live run of it recorded it: the chat with
-the lead, and the Provenance pane of the lead's answer. Each is written where `PLATOON_HARNESS_IMAGES` names, else in
-the test's own folder, where it only shows that it draws. No live run has recorded the session yet, so this skips, and
-`test_examples.py` draws the images of a session of the real harnesses against FakeModel, recorded as a live run
+the lead, and the Provenance pane of the lead's answer. Each is written where `PLATOON_HARNESS_IMAGES` names, in the
+checkout if relative, else in the test's own folder, where it only shows that it draws. Without a recording it skips,
+and `test_examples.py` draws the images of a session of the real harnesses against FakeModel, recorded as a live run
 records one."""
 
 import os
@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from playwright.async_api import Browser, expect
 
-from ..recorded import IMAGES, RECORDED, finish_of, restored
+from ..recorded import IMAGES, RECORDED, ROOT, finish_of, restored
 from .support import SECONDS, chat, opened, serving
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
@@ -43,7 +43,8 @@ async def test_the_page_images_draw_the_mixed_team_as_a_live_run_recorded_it(
     name = restored(RECORDED, tmp_path / "state")
     finish = finish_of(RECORDED, "lead")
     answer = f"{finish['stream']}@{finish['version']}"
-    into = Path(os.environ.get("PLATOON_HARNESS_IMAGES") or tmp_path / "images")
+    named = os.environ.get("PLATOON_HARNESS_IMAGES")
+    into = ROOT / named if named else tmp_path / "images"
 
     written = await page_images(browser, tmp_path / "state", name, answer, into)
 

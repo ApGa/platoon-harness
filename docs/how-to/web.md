@@ -105,6 +105,11 @@ a plan login on loopback alone: see [Security](#security).
 
 ## What the page shows
 
+![The page's chat between you and the mixed team's lead: your job, the lead's word that it spawned a worker, and its answer citing the worker's note](../assets/web-chat.png)
+
+*The page on the mixed team's session as a live run on DeepSeek V4.1 Flash recorded it: your chat with the lead, read back as
+history.*
+
 - **Chats.** A channel's chat for each topic, group, queue and board, and direct chats. Every agent has a direct chat with
   you from its start, which the page says the runtime made, and a direct chat between two agents merges both their inboxes,
   in the order the journal has them. An agent's goal is the first message in its chat with whoever started it.

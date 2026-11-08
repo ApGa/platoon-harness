@@ -18,8 +18,10 @@ from platoon_harness.kernel import Event
 from platoon_harness.primitives import Contributors, Lineage, Uses
 from platoon_harness.testing import Do, Say, ScriptedDriver
 from platoon_harness_cli.tui.app import CSS, TerminalUI
+from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.review import Patch
+from platoon_harness_cli.tui.workspace import Workspace
 
 from ...recorded import RECORDED, finish_of, restored
 from ..cli.test_provenance import opened
@@ -27,7 +29,6 @@ from ..primitives.test_provenance import ask, scenario
 from ..runtime.gitting import commit, repository, working
 from ..runtime.support import in_state, of_type, until
 from .support import drawn
-from .test_provenance import choose
 
 SIZES = {"wide": (120, 32), "medium": (90, 28), "narrow": (70, 24), "slim": (52, 20), "short": (100, 14)}
 SNAPSHOTS = Path(__file__).parent / "__snapshots__" / "test_snapshots"
@@ -114,29 +115,42 @@ def test_the_recorded_mixed_team_s_layout_at_each_size(snap_compare, recorded, s
     answer = finish_of(RECORDED, "lead")["data"]["gist"]
 
     async def ready(pilot) -> None:
-        await drawn(pilot, lambda text: answer[:30] in " ".join(text.split()))
+        await drawn(pilot, lambda text: answer[:30] in " ".join(text.split()) and ended(pilot.app.screen))
 
     assert snap_compare(TerminalUI(recorded), terminal_size=SIZES[size], run_before=ready)
 
 
+def ended(screen: object) -> bool:
+    """Whether the workspace's header has read how the session ended, which it reads after its status, so that both
+    are drawn as they stay: below 60 columns the header shows neither."""
+    header = screen.query_one("#header") if isinstance(screen, Workspace) else None
+    return header is not None and (screen.size.width < 60 or "tokens" in str(header.content))
+
+
 def test_the_recorded_mixed_team_s_review_lists_what_changed(snap_compare, recorded):
     async def listed(pilot) -> None:
-        await drawn(pilot, lambda text: "uncommitted" in text)
+        await drawn(pilot, lambda text: "uncommitted" in text and ended(pilot.app.screen))
         await pilot.press("alt+d")
         await drawn(pilot, lambda text: "What changed" in text and "tally/money.py" in text)
 
     assert snap_compare(TerminalUI(recorded), terminal_size=(120, 32), run_before=listed)
 
 
+def drawn_whole(screen: object) -> bool:
+    """Whether a provenance panel has drawn down to its credit, which on a real session lies below the fold."""
+    return isinstance(screen, Provenance) and any("Credit and rewards" in line.text for line in screen.lines)
+
+
 def test_the_recorded_mixed_team_s_provenance_of_the_lead_s_answer(snap_compare, recorded):
     finish = finish_of(RECORDED, "lead")
-    answer, said = f"{finish['stream']}@{finish['version']}", finish["data"]["gist"][:30]
+    answer = f"{finish['stream']}@{finish['version']}"
 
     async def asked(pilot) -> None:
-        await drawn(pilot, lambda text: said in " ".join(text.split()))
-        await choose(pilot, pilot.app, said)
+        await drawn(pilot, lambda text: "The session is closed" in text and ended(pilot.app.screen))
         await pilot.press("slash", *"provenance", "enter")
-        await drawn(pilot, lambda text: f"Provenance of {answer}" in text and "Credit and rewards" in text)
+        await drawn(pilot, lambda _: isinstance(pilot.app.screen, Form))
+        await pilot.press("home", "ctrl+k", *answer, "enter")
+        await drawn(pilot, lambda text: f"Provenance of {answer}" in text and drawn_whole(pilot.app.screen))
 
     assert snap_compare(TerminalUI(recorded), terminal_size=(120, 48), run_before=asked)
 
