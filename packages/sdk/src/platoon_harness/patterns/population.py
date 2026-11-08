@@ -19,8 +19,8 @@ Outcome = Literal["contribute", "nominate", "abstain", "invalid", "failed"]
 commit; neither; anything else; or an end other than finishing, or a last look that never finished."""
 
 TOLD = """\
-You are one worker of a population, and your attempt comes to one outcome, which the program that started you reads from
-the record once you have ended:
+You are one worker of a population, each in a worktree of its own, and your attempt comes to one outcome, which the
+program that started you reads from the record once you have ended:
 
 - contribute: commit your work on your own branch, and nominate nothing;
 - nominate: send one message to `#nominations` whose `based_on` holds the ref of one recorded commit, which
@@ -28,8 +28,17 @@ the record once you have ended:
 - abstain: do neither, and say why as you finish.
 
 Anything else is invalid, and an end other than finishing is failed. Every outcome counts as one of the population's
-attempts. Board `outcomes` holds each worker's outcome once it has one."""
-"""What each worker is told beside its goal: how its outcome is read."""
+attempts. Board `outcomes` holds each worker's outcome once it has one, and a contribution's or a nomination's gives
+the `sha` of its commit. To build on one, check it out on your own branch with `git reset --hard <sha>`: your worktree
+shares the repository's objects, so every recorded commit is in it."""
+"""What each worker is told beside its goal: how its outcome is read, and how to build on a peer's commit."""
+
+_ELSEWHERE = {
+    "shared": "in `shared`, every worker works in one checkout, with no branch or commits of its own",
+    "snapshot": "a `snapshot` is a repository of its own, which holds no peer's commits",
+    "isolated": "an `isolated` workspace is a repository of its own, which holds no peer's commits",
+}
+"""Why a worker in each other kind of workspace cannot build on a peer's commit."""
 
 _SETTLED = ("finished", "failed", "cancelled")
 
@@ -114,9 +123,9 @@ class _Record:
             number += 1
         return f"{self.role}-{number}"
 
-    def outcome_of(self, worker: _Worker) -> tuple[Outcome, str, list[str]]:
-        """A worker's outcome, once it has ended and its stop has settled, in words, and the refs it rests on: its end
-        and what it came to."""
+    def outcome_of(self, worker: _Worker) -> tuple[Outcome, str, list[str], str | None]:
+        """A worker's outcome, once it has ended and its stop has settled, in words, the refs it rests on, its end and
+        what it came to, and the SHA of the commit a contribution or a nomination came to, which a peer builds on."""
         ended = worker.ended
         assert ended is not None
         cites = [_ref(ended)]
@@ -126,31 +135,33 @@ class _Record:
             what = f"it ended {status}" + (f": {reason}" if reason else "")
             if worker.turn_reason not in (None, "stopped"):
                 what = f"its turn ended {worker.turn_reason}, and {what}"
-            return "failed", what, cites
+            return "failed", what, cites, None
         if worker.stop != "finished":
-            return "failed", "its last look never finished, so what it left in its worktree is unknown", cites
+            return "failed", "its last look never finished, so what it left in its worktree is unknown", cites, None
         made, nominated = worker.commits, worker.nominations
         last = made[-1:]
         cited = [ref for ref in nominated[0].based_on if ref in self.commits] if nominated else []
         if made and nominated:
             why = "it both committed and nominated, and an attempt does one"
-            return "invalid", why, [*cites, *last, *map(_ref, nominated)]
+            return "invalid", why, [*cites, *last, *map(_ref, nominated)], None
         if len(nominated) > 1:
             why = f"it nominated {len(nominated)} times, and an attempt nominates once"
-            return "invalid", why, [*cites, *map(_ref, nominated)]
+            return "invalid", why, [*cites, *map(_ref, nominated)], None
         if nominated and len(cited) != 1:
             why = (
                 "its nomination cites no recorded commit"
                 if not cited
                 else f"its nomination cites {len(cited)} recorded commits"
             )
-            return "invalid", why, [*cites, _ref(nominated[0])]
+            return "invalid", why, [*cites, _ref(nominated[0])], None
         if nominated:
-            return "nominate", self.commits[cited[0]].gist, [*cites, _ref(nominated[0]), *cited]
+            commit = self.commits[cited[0]]
+            return "nominate", commit.gist, [*cites, _ref(nominated[0]), *cited], commit.data["sha"]
         if made:
-            what = self.commits[last[0]].gist
-            return "contribute", what if len(made) == 1 else f"{len(made)} commits, the last {what}", [*cites, *last]
-        return "abstain", ended.data.get("report") or "it finished with no commit and no nomination", cites
+            commit = self.commits[last[0]]
+            what = commit.gist if len(made) == 1 else f"{len(made)} commits, the last {commit.gist}"
+            return "contribute", what, [*cites, *last], commit.data["sha"]
+        return "abstain", ended.data.get("report") or "it finished with no commit and no nomination", cites, None
 
 
 def _unfit(team: Team, role: str) -> list[Problem]:
@@ -164,6 +175,12 @@ def _unfit(team: Team, role: str) -> list[Problem]:
             "goal: set `count = 0`"
         )
         problems.append(Problem(f"roles.{role}.count", what))
+    if (workspace := team.roles[role].workspace) != "worktree":
+        what = (
+            "a worker builds on a peer's commit by checking out its SHA on its own branch, which a worktree reaches, "
+            f"as every worktree shares the repository's objects, and {_ELSEWHERE[workspace]}: use `worktree`"
+        )
+        problems.append(Problem(f"roles.{role}.workspace", what))
     for name, kind, what in (
         ("nominations", "topic", "reads its workers' nominations on topic `nominations`"),
         ("outcomes", "board", "writes each worker's outcome on board `outcomes`"),
@@ -202,9 +219,9 @@ class _Population:
         await self._start()
 
     async def _post(self, worker: _Worker) -> None:
-        outcome, what, cites = self.record.outcome_of(worker)
+        outcome, what, cites, sha = self.record.outcome_of(worker)
         gist = f"{outcome}: {what}"[:GIST_LIMIT]
-        fields = {"outcome": outcome}
+        fields = {"outcome": outcome} if sha is None else {"outcome": outcome, "sha": sha}
         posted = await self.session.submit(
             "board.post", board="outcomes", name=worker.name, gist=gist, fields=fields, based_on=cites
         )
@@ -240,20 +257,22 @@ class _Population:
 
 
 async def population(session: Session, role: str, goal: str, *, attempts: int) -> dict[str, Outcome]:
-    """Start workers of `role` with `goal`, as many at once as the session's `max_live` allows, and all at once with
-    none, until `attempts` have started, and give each one outcome once it has ended and its stop has looked at what it
-    left: each worker's, by its name, in the order they started.
+    """Start workers of `role` with `goal`, each in a worktree of its own, as many at once as the session's `max_live`
+    allows, and all at once with none, until `attempts` have started, and give each one outcome once it has ended and
+    its stop has looked at what it left: each worker's, by its name, in the order they started.
 
     A worker is `<role>-1`, `<role>-2` and on, the first name no agent has taken, told beside its goal how its outcome
-    is read. Its outcome is recorded once, as an entry of board `outcomes` by its name, `<outcome>: <what>`, with the
-    outcome in `fields` and citing the worker's end and what it came to, and the board refuses a second. Every outcome
+    is read and how to build on a peer's commit. Its outcome is recorded once, as an entry of board `outcomes` by its
+    name, `<outcome>: <what>`, with the outcome in `fields`, and for a contribution or a nomination the `sha` of its
+    commit, citing the worker's end and what it came to, and the board refuses a second. Every outcome
     counts against `attempts`, abstaining and failing too, so a population whose every worker abstains ends. A worker
     whose turn ended with nothing more to come for it is retired, and is `failed`. A spawn refused `not_permitted` is
     tried again once an agent has ended. Any other refusal ends the starting, and is raised once each worker started
     has its outcome. The population chooses nothing among the nominations: that is the person's.
 
     Refused `invalid` for `attempts` below 1, and `ConfigError` names each reason the session's team cannot run it: no
-    such role, a role that starts with the session, or no topic `nominations` or board `outcomes`."""
+    such role, a role that starts with the session, a workspace other than `worktree`, which alone reaches a peer's
+    commit, or no topic `nominations` or board `outcomes`."""
     if attempts < 1:
         raise Refused("invalid", f"`attempts` counts the workers to start, and {attempts} is none")
     team = await _team(session)

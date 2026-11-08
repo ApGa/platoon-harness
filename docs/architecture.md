@@ -610,8 +610,10 @@ check decides what it shows.
 `population(session, role, goal, attempts=...)` starts workers of `role` as many at once as `max_live` allows, until `attempts` have
 started, and gives each one outcome once it has ended and its stop has looked at what it left: `contribute`, `nominate`, `abstain`,
 `invalid` or `failed`. The program records each as the worker's entry on board `outcomes`, which takes no second, citing what it
-rests on. Every outcome counts against `attempts`, and the population reads the record from its start on every run, so run again
-after a crash it starts no worker and records no outcome twice. It reads out no winner. See
+rests on, and a contribution's or a nomination's gives the SHA of its commit. A worker builds on a peer's commit by checking that
+SHA out on its own branch, which only a worktree reaches, sharing the repository's objects, so a population refuses any other
+workspace (§13). Every outcome counts against `attempts`, and the population reads the record from its start on every run, so run
+again after a crash it starts no worker and records no outcome twice. It reads out no winner. See
 [RFC 0070](rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md).
 
 An episode **program** is a Python script that starts its session as `program:<name>` and drives it through the session's ops, so

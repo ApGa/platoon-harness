@@ -130,6 +130,11 @@ named here is closed.
   outcome that the record holds. It reads out no winner: choosing among the nominations is the person's, the default pending the
   owner's ruling. The topologies guide's git-swarm section shows it. See
   [RFC 0070](docs/rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md), a draft.
+- **Building on a peer's commit by its recorded SHA.** A population's contribution and nomination give the `sha` of their commit
+  on `outcomes`, and each worker is told to build on one by checking it out on its own branch, `git reset --hard <sha>`, as every
+  worktree shares the repository's objects. So a population runs only in worktrees, and refuses a role in `shared`, a `snapshot` or
+  an `isolated` workspace before it starts anyone, saying why. See
+  [RFC 0070](docs/rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md), a draft.
 - **A program, in the topologies guide.** Run a program from Python shows a script that starts its session as
   `program:<name>` under `until = "program"`, adds a task for each path under a key that says what it is for, starts a reviewer,
   and closes the session once each task is done, and says how to run it again on the session after a crash, adding nothing twice.

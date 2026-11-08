@@ -307,9 +307,16 @@ A worker's outcome is one of five, which its worker is told beside its goal:
   one, is retired, and fails.
 
 Each is an entry on `outcomes` named for its worker, `<outcome>: <what>`, citing what it rests on, and the board takes no second.
-Every outcome counts against `attempts`, abstaining too, so a population that only abstains still ends. The population reads out
-no winner: choosing among the nominations is yours, from the board. Workers start as `worker-1`, `worker-2` and on. A population
-keeps nothing, so run `swarm` again on the session after a crash, with `Session.resume`, and it goes on from what the record holds.
+A contribution's and a nomination's give the `sha` of its commit in their `fields`. Every outcome counts against `attempts`,
+abstaining too, so a population that only abstains still ends. The population reads out no winner: choosing among the nominations
+is yours, from the board. Workers start as `worker-1`, `worker-2` and on. A population keeps nothing, so run `swarm` again on the
+session after a crash, with `Session.resume`, and it goes on from what the record holds.
+
+A worker builds on a peer's commit by checking out the `sha` its entry records on its own branch, `git reset --hard <sha>`, which
+its worker is told. Every worktree shares the repository's objects, so every commit a worker made is in each, and the look after the
+builder's turn records its commit with the peer's as its parent. The runtime moves no branch: the worker moves its own. So a
+population runs only in worktrees, and refuses any other workspace before it starts anyone, saying why: in `shared` every worker
+works in one checkout, and a `snapshot` or an `isolated` workspace is a repository of its own, which holds no peer's commits.
 
 ## Mix presets
 

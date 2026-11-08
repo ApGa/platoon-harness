@@ -74,13 +74,25 @@ async def fail(worker: Worker) -> str:
 
 
 def nominating(peer: str) -> Plan:
-    """Nominate the commit a peer contributed, once its outcome is recorded, by the ref `repo.commit` gives for the SHA
-    the peer's branch is at in the worker's own git."""
+    """Nominate the commit a peer contributed, by the ref `repo.commit` gives for the SHA its entry on `outcomes`
+    records."""
 
     async def plan(worker: Worker) -> str:
-        await worker.outcome_of(peer)
-        made = (await asyncio.to_thread(git, "rev-parse", f"platoon-harness/s/{peer}", cwd=worker.cwd)).strip()
+        made = (await worker.outcome_of(peer))["fields"]["sha"]
         await worker.nominate((await worker.tool("repo_commit", sha=made))["ref"])
+        return "stopped"
+
+    return plan
+
+
+def building_on(peer: str) -> Plan:
+    """Build on the commit a peer nominated: check out the SHA its entry on `outcomes` records, on the worker's own
+    branch in its own worktree, and commit on it."""
+
+    async def plan(worker: Worker) -> str:
+        nominated = (await worker.outcome_of(peer))["fields"]["sha"]
+        await asyncio.to_thread(git, "reset", "-q", "--hard", nominated, cwd=worker.cwd)
+        await asyncio.to_thread(commit, worker.cwd, f"{worker.name}.txt")
         return "stopped"
 
     return plan
@@ -127,7 +139,9 @@ async def test_each_worker_gets_one_outcome_and_never_a_second(repo, tmp_path):
     assert made.data["made_in"] == "@worker-1"
     assert entries["worker-1"].gist == f"contribute: {made.gist}"
     assert f"{made.stream}@{made.version}" in entries["worker-1"].based_on
+    assert entries["worker-1"].data["fields"]["sha"] == made.data["sha"]
     assert entries["worker-2"].gist == f"nominate: {made.gist}"
+    assert entries["worker-2"].data["fields"]["sha"] == made.data["sha"]
     assert {f"{made.stream}@{made.version}", f"{nomination.stream}@{nomination.version}"} <= {
         *entries["worker-2"].based_on
     }
@@ -136,6 +150,47 @@ async def test_each_worker_gets_one_outcome_and_never_a_second(repo, tmp_path):
         "failed: its turn ended failed: its model went away, and it ended retired: retired by program:swarm"
     )
     assert {entry.data["fields"]["outcome"] for entry in entries.values()} == {*came_to.values()}
+
+
+async def test_a_worker_builds_on_a_peer_s_nominated_commit_by_its_recorded_sha(repo, tmp_path):
+    plans = {"worker-1": contribute, "worker-2": nominating("worker-1"), "worker-3": building_on("worker-2")}
+    async with Session.start(swarm(plans, live=1), name="s", principal=PROGRAM, root=tmp_path, cwd=repo) as session:
+        came_to = await population(session, "worker", GOAL, attempts=3)
+        committed = await of_type(session, "repo.committed")
+        rewritten = await of_type(session, "repo.rewritten")
+        entries = {event.stream: event.data["fields"] for event in await outcomes_posted(session)}
+
+    assert came_to == {"worker-1": "contribute", "worker-2": "nominate", "worker-3": "contribute"}
+    nominated, built = (event.data for event in committed)
+    assert (nominated["made_in"], built["made_in"]) == ("@worker-1", "@worker-3")
+    assert built["parents"] == [nominated["sha"]]
+    assert entries["board/outcomes/worker-2"]["sha"] == nominated["sha"]
+    assert entries["board/outcomes/worker-3"]["sha"] == built["sha"]
+    tree = git("ls-tree", "--name-only", built["sha"], cwd=repo).split()
+    assert {"worker-1.txt", "worker-3.txt"} <= {*tree}
+    assert rewritten == []
+
+
+@pytest.mark.parametrize(
+    ("workspace", "why"),
+    [
+        ("shared", "in `shared`, every worker works in one checkout, with no branch or commits of its own"),
+        ("snapshot", "a `snapshot` is a repository of its own, which holds no peer's commits"),
+    ],
+)
+async def test_a_population_outside_worktrees_is_refused_saying_why(repo, tmp_path, workspace, why):
+    worker = {"harness": harness(lambda: Worker({})), "workspace": workspace, "count": 0}
+    team = Team.model_validate({"roles": {"worker": worker}, "topology": {"git-swarm": {"role": "worker", "live": 2}}})
+    async with Session.start(team, name="s", principal=PROGRAM, root=tmp_path, cwd=repo) as session:
+        with pytest.raises(ConfigError) as caught:
+            await population(session, "worker", GOAL, attempts=2)
+        spawned = await of_type(session, "agent.spawned")
+
+    assert [str(problem) for problem in caught.value.problems] == [
+        "roles.worker.workspace: a worker builds on a peer's commit by checking out its SHA on its own branch, which a "
+        f"worktree reaches, as every worktree shares the repository's objects, and {why}: use `worktree`"
+    ]
+    assert spawned == []
 
 
 async def test_a_nomination_that_cites_no_recorded_commit_is_invalid(repo, tmp_path):
