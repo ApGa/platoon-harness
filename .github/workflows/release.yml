@@ -42,7 +42,7 @@ jobs:
         run: uv build --all-packages --no-sources
 
       - name: Check their metadata and their PyPI descriptions
-        run: uvx twine check --strict dist/*
+        run: uvx twine@7.0.0 check --strict dist/*
 
       - name: Run the command line from the wheels in an environment of its own
         run: uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version

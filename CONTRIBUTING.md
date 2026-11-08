@@ -238,8 +238,9 @@ subject too, because GitHub suggests it for the squashed commit. The job runs ag
 **What CI runs.** Each job runs on GitHub's Ubuntu runners for pull requests into any branch, so that a pull request
 stacked on another one is checked too, and for pushes to `main`. A new push cancels the run it makes stale. Each
 workflow's token reads the repository and nothing more, and a job that needs more asks only to read, as `pr-title`
-reads its pull request. Each action is pinned to a commit, with its release beside it, so that a tag moved upstream
-changes nothing CI runs, and each checkout keeps no credentials for a later step to read.
+reads its pull request. Each action is pinned to a commit, with its release beside it, and each tool `uvx` fetches is
+pinned to a release, so that a tag moved upstream or a new release changes nothing CI runs, and each checkout keeps no
+credentials for a later step to read.
 
 | Job | Checks | Fails when |
 |---|---|---|
@@ -428,7 +429,7 @@ each push to `main`, as CI's other jobs run. Its `build` job runs:
 
 ```bash
 uv build --all-packages --no-sources
-uvx twine check --strict dist/*
+uvx twine@7.0.0 check --strict dist/*
 uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
 uv sync --locked
 uv run pytest -q -m slow tests/integration/test_installed.py
@@ -436,7 +437,7 @@ uv run pytest -q -m slow tests/integration/test_installed.py
 
 `uv build` writes each package's sdist to `dist/`, then its wheel, built from the sdist, so an sdist that leaves out a
 file the wheel needs fails here. `--no-sources` builds each as PyPI would, without the workspace's sources.
-`twine check --strict` checks each distribution's metadata, and that its README renders as its PyPI description, failing
+`twine check --strict`, at the release the workflow pins, checks each distribution's metadata, and that its README renders as its PyPI description, failing
 on a warning too. `uvx` runs the command line from the two wheels in an environment of its own, installing only what
 their metadata requires, so a requirement only the workspace gave fails there. The workflow runs every step on Python
 3.12, the oldest the packages name, with `UV_PYTHON=3.12`.

@@ -194,12 +194,19 @@ def test_the_example_messages_are_ones_the_title_check_accepts():
 
 
 def test_every_action_is_pinned_to_a_commit_and_every_workflow_reads_only_by_default():
-    """A tag moved upstream changes nothing a workflow runs, and a workflow's token reads only, as the guide says."""
+    """A tag moved upstream, or a release of a tool `uvx` fetches, changes nothing a workflow runs, a workflow's token
+    reads only, and no checkout keeps credentials for a later step, as the guide says."""
     workflows = [yaml.safe_load(path.read_text()) for path in (ROOT / ".github" / "workflows").glob("*.yml")]
     jobs = [job for workflow in workflows for job in workflow["jobs"].values()]
+    checkouts = [step for step in steps() if step.get("uses", "").startswith("actions/checkout@")]
+    fetched = [line for step in steps() for line in step.get("run", "").splitlines() if line.startswith("uvx ")]
 
     assert len(actions()) == len([step for step in steps() if "uses" in step]) > 0
     assert [action for action in actions() if PINNED.fullmatch(action) is None] == []
+    assert (
+        checkouts and [step for step in checkouts if step.get("with", {}).get("persist-credentials") is not False] == []
+    )
+    assert [line for line in fetched if re.match(r"uvx (--from dist/|[\w-]+@[\d.]+ )", line) is None] == []
     assert [workflow.get("permissions") for workflow in workflows] == [{"contents": "read"}] * len(workflows)
     assert {access for job in jobs for access in job.get("permissions", {}).values()} <= {"read"}
     assert "Each action is pinned to a commit" in " ".join(TEXT.split())

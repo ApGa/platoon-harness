@@ -6,8 +6,9 @@ on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
-# The workflow's token reads the repository and nothing more, and the job reads its pull request too. The action is
-# pinned to a commit, the release beside it, so that a tag moved upstream changes nothing here.
+# The workflow's token reads the repository and nothing more. The job's own permissions replace the workflow's, so its
+# token reads its pull request and nothing else. The action is pinned to a commit, the release beside it, so that a tag
+# moved upstream changes nothing here.
 permissions:
   contents: read
 

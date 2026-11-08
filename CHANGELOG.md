@@ -725,8 +725,9 @@ named here is closed.
   `test` job sets, now makes each such test fail there, saying why, and elsewhere they skip as before.
 - **CI's actions pinned to commits, and its token reading only.** Each action a workflow uses is pinned to a commit,
   with its release beside it, where a tag its owner could move named it, so a moved tag changes nothing CI runs. Each
-  commit is the one its tag named, so nothing CI runs changed. Each workflow's token reads the repository and nothing
-  more, a job that needs more asks only to read, and each checkout keeps no credentials for a later step to read.
+  commit is the one its tag named, so nothing CI runs changed, and the release workflow runs `twine` at a release it
+  names. Each workflow's token reads the repository and nothing more, a job that needs more asks only to read, and
+  each checkout keeps no credentials for a later step to read.
 - **One version for the SDK and the command line, set in one place.** `packages/sdk/src/platoon_harness/version.py` sets
   the version both packages release at, and each package's `pyproject.toml` reads it, where five places set it, which a
   release had to change alike. A test holds the command line to requiring the SDK of its own minor release. That the two
