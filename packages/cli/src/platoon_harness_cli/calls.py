@@ -1,7 +1,7 @@
-"""Which call made a spawn, joined here once for both clients: the tool item of its spawner's whose `native_id` is the
-id the spawn's anchor holds. Either may be recorded first, so each waits for the other. A spawn that joins no call a
-client holds says so, as one of OpenHands' and one of an `exec` harness's do: their calls come through the shim and
-`ph`, each under an id of its own, which no item holds."""
+"""Which call made a spawn, joined here for the terminal's transcript, and for the page's Tool activity once it is
+built: the tool item of its spawner's whose `native_id` is the id the spawn's anchor holds. Either may be recorded
+first, so each waits for the other. A spawn that joins no call a client holds says so, as one of OpenHands' and one of
+an `exec` harness's do: their calls come through the shim and `ph`, each under an id of its own, which no item holds."""
 
 from bisect import insort
 from collections.abc import Hashable, Set
