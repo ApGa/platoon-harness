@@ -496,6 +496,18 @@ def at(projection: Projection, ref: str, seq: int) -> str | None:
     return None if row is None else f"{row['chat']}:{row['seq']}"
 
 
+def asked(projection: Projection, id: str) -> int:
+    """The journal's seq of the request of the approval `id`, which its card shows."""
+    row = projection.db.execute(
+        "SELECT lines.event FROM approvals JOIN lines ON (lines.chat, lines.seq) = (approvals.chat, approvals.seq) "
+        "WHERE approvals.id = ?",
+        (id,),
+    ).fetchone()
+    if row is None:
+        raise Error(404, f"There is no approval {id} with a card.")
+    return row[0]
+
+
 def attachment(projection: Projection, params: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
     """An attachment and the ref of its body, from any chat."""
     id = str(params.get("id") or "")

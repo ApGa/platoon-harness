@@ -60,12 +60,12 @@ named here is closed.
   it. See [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), a draft.
 - **An approval's whole ask, read before it is answered.** In the terminal, `/ask` on the approval you are at, or `a` on one
   chosen in the dock, opens the whole of what it asks, the command, the patch or the tool's input, read by its body's ref, each
-  line as it was asked and never as Markdown, and answers nothing. An ask cut where the record stops keeping it says how many
-  bytes more it asks, which Allow allows too, and one whose harness said nothing beyond its gist says so. An agent's transcript
-  draws each approval it asked for, which opens the same way, and who answered it, through what, or its role's policy. A
-  person allowed a long command or an edit having read its first 280 characters, and the transcript showed no approval. The
-  page does not show the ask yet. See
-  [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), step 2.
+  line as it was asked and never as Markdown, and answers nothing. In the page, Read it whole on a card that waits on you opens
+  the same words in the pane, `ask=`, read through `x_read`'s new `ask` pane, which a view link reads too. An ask cut where the
+  record stops keeping it says how many bytes more it asks, which Allow allows too, and one whose harness said nothing beyond
+  its gist says so. An agent's transcript draws each approval it asked for, which opens the same way, and who answered it,
+  through what, or its role's policy. A person allowed a long command or an edit having read its first 280 characters, and the
+  transcript showed no approval. See [RFC 0066](docs/rfcs/0066-an-approval-carries-the-whole-of-what-it-asks.md), step 2.
 - **What changed, in the page.** Review changes, in the top bar and on an agent's page, where it was drawn disabled, opens
   what changed in the pane in the terminal's `/review` words, each commit with Patch and Test and each workspace with
   Uncommitted diff. A diff opens in the same pane a page at a time, every word of it through the page's escaping. Test asks

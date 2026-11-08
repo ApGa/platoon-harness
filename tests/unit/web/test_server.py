@@ -18,8 +18,10 @@ from platoon_harness.drivers import DriverError, DriverInfo
 from platoon_harness.extensions import Installed
 from platoon_harness.http import SECONDS
 from platoon_harness.kernel import ManualClock
+from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime.control import BODY_LIMIT
-from platoon_harness.testing import Hang, ScriptedDriver
+from platoon_harness.testing import Ask, Hang, ScriptedDriver
+from platoon_harness_cli.approvals import UNSAID
 from platoon_harness_cli.ops import _command, cut, person_ops
 from platoon_harness_cli.review import PAGE, changes_of
 from platoon_harness_cli.web import LOOK, follow, plan_roles
@@ -452,7 +454,7 @@ async def test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_
     assert [action["op"] for action in places[0]["actions"]] == ["approval.resolve"] * 2
     assert places[0]["actions"][0]["args"]["id"] == approvals[0]["id"]
     assert provenance["ref"] == "agent/w1@1" and "heading" in {line["kind"] for line in provenance["lines"]}
-    assert unnamed.status == 404 and "provenance, attention, changes and diff" in unnamed.json()["error"]
+    assert unnamed.status == 404 and "provenance, attention, changes, diff and ask" in unnamed.json()["error"]
     assert gone.status == 404
     assert refused.status == 403 and "acts on nothing" in refused.json()["error"]
 
@@ -929,3 +931,38 @@ async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words
     assert (diff["lines"][-3:], len(diff["lines"]), read["page"]) == (added, 9, PAGE)
     assert wrong.status == 400
     assert viewed.status == 403 and "a view link reads no diff" in viewed.json()["error"]
+
+
+async def test_what_an_approval_asks_is_a_pane_of_x_read_read_whole_by_its_ref_in_the_terminal_s_words(root, clock):
+    """`ask` is what the approval its card names asks, read whole by its body's ref, a line longer than a `blob.get`
+    result holds among them, in the words the terminal's `/ask` says: how many bytes more an ask cut where the record
+    stops keeping it asks, and that nobody stated one with no body. A view link reads it, writing nothing, and an id no
+    card names is refused."""
+    line = json.dumps({"command": "x" * 20_000 + " && rm -rf *_old_*"})
+    asks = [Ask("Run it?", body=line), Ask("The big one?", body="y" * (ASK_LIMIT + 10)), Ask("Go on?"), Hang()]
+    async with Session.start(team([asks], [[Hang()]]), name="s", root=root, cwd=root) as session:
+        await in_state(session, "lead", "idle")
+        await session.send("@lead", "go")
+        async with served(session, root, clock) as web:
+            viewer, read = await Browser(web).opened("view"), []
+            for _ in asks[:-1]:
+                approval = (await until(session.approvals, session))[0]
+                await caught_up(web, session)
+                head = await session.head()
+                read.append(await viewer.view("x_read", {"pane": "ask", "id": approval["id"]}))
+                assert await session.head() == head
+                await session.resolve(approval["id"], "allow", expected_version=approval["version"])
+                await until(
+                    session.approvals, session, lambda rows, id=approval["id"]: all(row["id"] != id for row in rows)
+                )
+            unknown = await viewer.request("POST", "/v1/x_read", {"pane": "ask", "id": "nobody"})
+            unnamed = await viewer.request("POST", "/v1/x_read", {"pane": "ask"})
+
+    cut = "Cut here: it asks 10 bytes more, which the record does not keep, and Allow allows them too."
+    assert read == [
+        {"agent": "lead", "gist": "Run it?", "text": line, "below": None},
+        {"agent": "lead", "gist": "The big one?", "text": "y" * ASK_LIMIT, "below": cut},
+        {"agent": "lead", "gist": "Go on?", "text": None, "below": UNSAID},
+    ]
+    assert unknown.status == 404 and unknown.json()["error"] == "There is no approval nobody with a card."
+    assert unnamed.status == 400

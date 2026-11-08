@@ -20,7 +20,7 @@ from platoon_harness.http import Head, Rejected, Server, bearer, check_site, res
 from platoon_harness.kernel import Clock, Outcome, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
-from .. import __version__, review
+from .. import __version__, approvals, review
 from ..ops import CONFIRMED, Form, body_ref, cut, forms
 from ..provenance import read
 from ..review import changes_of, snapshots_of
@@ -301,7 +301,11 @@ class Web(Server[Request]):
                         403, "a view link reads no diff: asking for one is an act, and it acts on nothing"
                     )
                 return await self._diff(params)
-        raise replies.Error(404, "there is no such pane: the page's panes are provenance, attention, changes and diff")
+            case "ask":
+                return await self._ask(params)
+        raise replies.Error(
+            404, "there is no such pane: the page's panes are provenance, attention, changes, diff and ask"
+        )
 
     async def _snapshot(self, view: Literal["roster", "changes"]) -> list[dict[str, Any]]:
         """The rows of one of the runtime's client views, as its first snapshot gives them."""
@@ -354,6 +358,20 @@ class Web(Server[Request]):
             code = refused.refusal.code
             raise replies.Error(403 if code == "not_permitted" else 400, f"{code}: {refused.refusal.detail}") from None
         return {"rows": [row for row in rows if row["kind"] != "mention"]}
+
+    async def _ask(self, params: Mapping[str, Any]) -> dict[str, Any]:
+        """What the approval `id` asks, as its card names it, in the words the terminal's `/ask` says: the whole of it,
+        read by its body's ref, and the words below it, where it was cut or why there is no more."""
+        id = params.get("id")
+        if not isinstance(id, str):
+            raise replies.Error(400, "id is an approval's, as its card names it")
+        try:
+            request = await approvals.request(self.session, id, replies.asked(self.projection, id))
+            ask = await approvals.read(self.session, request)
+        except Refused as refused:
+            status = 404 if refused.refusal.code == "not_found" else 400
+            raise replies.Error(status, f"{refused.refusal.code}: {refused.refusal.detail}") from None
+        return asdict(ask)
 
     async def _provenance(self, params: Mapping[str, Any]) -> dict[str, Any]:
         """What the session's provenance queries say of the event `ref`, in the lines the terminal draws, and `at`, the

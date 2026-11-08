@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/reports.py`](../../packages/sdk/src/platoon_harness/primitives/reports.py), [`primitives/approvals.py`](../../packages/sdk/src/platoon_harness/primitives/approvals.py), [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [`testing/conformance.py`](../../packages/sdk/src/platoon_harness/testing/conformance.py), [architecture section 7](../architecture.md#approvals) and [section 9](../architecture.md#9-drivers), [RFC 0008](0008-driver-contract-and-wire.md) and [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | `feat: Carry an approval's whole ask as a body, redacted and bounded`, `feat: Send the whole ask from Claude Code, Codex, pi and OpenHands approvals`, `feat: Join a Codex file change approval to the patch of the item it names` and `feat: Check in check_driver that an approval shows its whole ask` |
+| Implementation | `feat: Carry an approval's whole ask as a body, redacted and bounded`, `feat: Send the whole ask from Claude Code, Codex, pi and OpenHands approvals`, `feat: Join a Codex file change approval to the patch of the item it names` and `feat: Check in check_driver that an approval shows its whole ask`; step 2, `feat: Open an approval's whole ask from the dock before answering it`, `feat: Draw an approval and who answered it in its agent's transcript` and `feat: Show an approval card's whole ask in the page` |
 
 ## Summary
 
@@ -133,6 +133,24 @@ asks, with its ask unknown, and its frames are read as before, but it fails `app
 until it sends the ask, as one that loses a denial is not. Nothing is released yet, so no runtime that refuses the fields exists
 outside this repository.
 
+### 8. Both clients show it
+
+Step 2 reads the ask in the words the command line package says for both clients, `approvals.py`: the whole of it, by its
+body's ref through `get_body`, and below it how many bytes more it asks where `cut` is more than 0, which Allow allows too,
+or, where the request names no body, a request of payload version 1 among them, that its harness said nothing beyond its
+gist. A request is found by the seq the client has of it, the attention row's `since_seq` or the card's line, as the first
+event of its stream.
+
+- **The terminal.** `/ask` on the approval the dock is at, or `a` on one chosen in the dock, opens it in a dialog that
+  answers nothing, each line through `SafeText` and never as Markdown, which would eat a command's asterisks and
+  underscores. An agent's transcript draws each approval it asked for, which opens the same way, and who answered it: a
+  person through what they said, or the role's policy. An approval's stream is named by its harness's id, so an agent's
+  focus reads every `approval/*` beside every `agent/*` and draws its own. A read takes one glob, so a focus with two is
+  read a glob at a time, and a page keeps only what every read covered.
+- **The page.** Read it whole, on a card that waits on the person, opens the pane the address names, `ask=`, read through
+  a new `x_read` pane, `ask`, by the id the card names, which a view link reads too. It is drawn as text under the page's
+  policy.
+
 ## The hard parts
 
 - **A secret outside the known set.** The mask knows the credentials the agent holds, and an ask can carry one it does not, a key
@@ -173,7 +191,7 @@ outside this repository.
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 carried | `ApprovalRequested.body` and `cut`, the host's bound, `approval.requested` at version 2, each shipped driver's ask, Codex's file change joined to its item, and `approval_shows_its_ask` | `tests/unit/primitives/test_approvals.py`, `test_host.py`, `test_check_driver.py`, `test_claude.py`, `test_codex.py`, `test_pi.py` and `test_wire.py`, and the slow conformance runs in `tests/integration/` on each real binary, Codex's file change among them | |
-| M2 shown in both clients | The terminal's dock and the page's card open an approval's whole ask before it is answered, and say where it was cut | The tests of milestone 4's stage S08 | |
+| M2 shown in both clients | The terminal's dock and the page's card open an approval's whole ask before it is answered, and say where it was cut, and an agent's transcript draws an approval and who answered it | `tests/unit/tui/test_workspace.py`, `test_transcript.py` and `test_safe.py`, `tests/unit/web/test_server.py`, and `tests/e2e/test_acts.py`, the browser's in Chromium and Firefox | |
 
 ## Open questions
 
@@ -205,4 +223,4 @@ outside this repository.
   text for a one-line ask longer than one result holds, as `test_a_one_line_ask_past_a_page_is_read_whole_by_its_ref` in
   `tests/unit/primitives/test_approvals.py` keeps. How often an ask passes it is unmeasured: a command is short, and an `Edit`, a
   `Write` or a patch carries the text it writes (UNVERIFIED).
-- The tests named in the rollout plan's M1.
+- The tests named in the rollout plan's M1 and M2.

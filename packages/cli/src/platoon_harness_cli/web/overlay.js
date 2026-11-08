@@ -170,6 +170,8 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-comment { display: grid; gap: 6px; border-top: 1px solid var(--line); }
 .x-comment textarea { font: inherit; resize: vertical; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line2); background: var(--panel); color: inherit; }
 .x-comment .x-said, .x-comment .x-about { margin: 0; }
+.x-ask .x-whole { margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.x-ask .x-below { margin: 0; padding: 0 14px 12px; color: var(--warn); font-size: 12.5px; }
 [aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
 </style>`);
 
@@ -213,15 +215,15 @@ setLive = state => {
 
 // An address that names someone who cannot be seen as shows everyone, and a board sorted by votes is sorted new, each
 // saying why. A board with no sort is sorted new too, where SwarmChat sorts it hot. The pane is one thing at a time, so
-// a thread or what had reached an agent takes it from provenance, an op's form or what changed, provenance from a form
-// or what changed, and a form from what changed. A form's `args` go with it.
-KEYS.push('provenance', 'act', 'args', 'review');
+// a thread or what had reached an agent takes it from every pane of ours, and of ours, the first `X.PANES` names that
+// the address names takes it from the rest. A form's `args` go with it.
+X.PANES = ['provenance', 'act', 'review', 'ask'];
+KEYS.push('provenance', 'act', 'args', 'review', 'ask');
 const baseReadRoute = readRoute;
 readRoute = () => {
   const r = baseReadRoute();
-  if (r.thread || r.knew) { delete r.provenance; delete r.act; delete r.review; }
-  if (r.provenance) { delete r.act; delete r.review; }
-  if (r.act) delete r.review;
+  const kept = r.thread || r.knew ? null : X.PANES.find(key => r[key]);
+  for (const key of X.PANES) if (key !== kept) delete r[key];
   if (!r.act) delete r.args;
   if (r.as && X.kind(r.as) && X.kind(r.as) !== 'agent') { toast(X.AS_AGENT); delete r.as; }
   if (r.layout === 'board' && !['new', 'active'].includes(r.sort)) {
@@ -232,11 +234,14 @@ readRoute = () => {
 };
 
 // The pane shows a pane of ours while the address names one: an event's provenance, `provenance=`, an op's form,
-// `act=`, filled in with `args=` where an action of a place in Needs you opened it with what it fixes, or what changed
-// or a diff, `review=`. SwarmChat's own route takes the pane for a thread, for what had reached an agent and for the map,
-// and otherwise leaves it to this one. A pane drawn again for the same address keeps what was typed in it, and says
-// again what it may do now.
-X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form || pane instanceof X.Review;
+// `act=`, filled in with `args=` where an action of a place in Needs you opened it with what it fixes, what changed or
+// a diff, `review=`, or what an approval asks, `ask=`. SwarmChat's own route takes the pane for a thread, for what had
+// reached an agent and for the map, and otherwise leaves it to this one. A pane drawn again for the same address keeps
+// what was typed in it, and says again what it may do now.
+X.ours = pane => pane instanceof X.Provenance || pane instanceof X.Form || pane instanceof X.Review
+  || pane instanceof X.Ask;
+// An address with none of ours, for a go that opens something else in the pane.
+X.none = {provenance: null, act: null, args: null, review: null, ask: null};
 const baseRoute = route;
 route = async function () {
   if (X.ours(S.pane)) S.paneKey = '';
@@ -244,7 +249,7 @@ route = async function () {
   const r = S.route, pane = $('#pane');
   if (r.layout === 'map' || r.thread || r.knew) return;
   const [key, Pane] = r.provenance ? ['provenance', X.Provenance] : r.act ? ['act', X.Form]
-    : r.review ? ['review', X.Review] : [];
+    : r.review ? ['review', X.Review] : r.ask ? ['ask', X.Ask] : [];
   if (!key) {
     if (X.ours(S.pane)) { S.pane.destroy(); S.pane = null; pane.classList.remove('open'); pane.replaceChildren(); }
     return;
@@ -259,8 +264,7 @@ route = async function () {
 
 // Esc closes a pane of ours as it closes SwarmChat's own.
 const baseKey = onKey;
-onKey = e => e.key === 'Escape' && !overlay.on && (S.route.provenance || S.route.act || S.route.review)
-  ? go({provenance: null, act: null, args: null, review: null}, true) : baseKey(e);
+onKey = e => e.key === 'Escape' && !overlay.on && X.PANES.some(key => S.route[key]) ? go(X.none, true) : baseKey(e);
 
 // A popover gives focus back as it closes to what had it as it opened, or to what `X.back` finds in its place once that
 // was drawn again, so the keyboard goes on from where it was.
@@ -555,7 +559,7 @@ X.openCommands = () => {
   };
   const choose = form => {
     overlay.close();
-    go({act: form.op, args: null, provenance: null, review: null, thread: null, knew: null}, true);
+    go({...X.none, act: form.op, thread: null, knew: null}, true);
   };
   input.addEventListener('input', () => { at = 0; draw(); });
   input.addEventListener('keydown', e => {
@@ -928,7 +932,8 @@ messageHtml = (m, prev, o = {}) => {
     .replace('\n</div><div class="actions">', () => `${X.card(m).s}\n</div><div class="actions">${reply.s}${provenance.s}`));
 };
 
-// An approval left for the person, as a card in the agent's chat with them.
+// An approval left for the person, as a card in the agent's chat with them, which opens the whole of what it asks
+// while it waits on them.
 X.card = m => {
   const a = m.x_approval;
   if (!a) return html``;
@@ -938,7 +943,30 @@ X.card = m => {
   if (a.state === 'moot') return html`<div class="x-card x-done" data-x-card="${a.id}" tabindex="-1">Moot: the turn that asked for it has ended</div>`;
   const why = X.cannot('approval.resolve');
   const button = (verdict, label) => html`<button class="btn" data-x-decide="${verdict}" data-x-approval="${a.id}" data-x-version="${a.version}"${X.disabled(why)}>${label}</button>`;
-  return html`<div class="x-card" data-x-card="${a.id}"><span>${first(m.from)} asks you to approve this</span>${button('allow', 'Allow')}${button('deny', 'Deny')}</div>`;
+  return html`<div class="x-card" data-x-card="${a.id}"><span>${first(m.from)} asks you to approve this</span><button class="btn" data-x-ask="${a.id}" title="The whole of what it asks, past its first 280 characters">Read it whole</button>${button('allow', 'Allow')}${button('deny', 'Deny')}</div>`;
+};
+
+// What an approval asks, in the pane the address names, `ask=`, in the words the terminal's /ask says, read through
+// x_read's ask pane as it opens: the whole of it as it was asked, as text, and below it where it was cut, or why there
+// is no more than its gist.
+X.Ask = class {
+  constructor(id) {
+    this.name = id;
+    $('#pane').innerHTML = html`<div class="phead"><h2>What it asks</h2><button class="close" data-close-pane title="Close">×</button></div><div class="scroll"><div class="x-ask"><div class="loading">Loading</div></div></div>`.s;
+    this.box = $('#pane .x-ask');
+    this.load();
+  }
+  async load() {
+    let r;
+    try { r = await api('x_read', {pane: 'ask', id: this.name}); } catch (e) {
+      if (!this.dead) this.box.innerHTML = html`<div class="note">${e.message}</div>`.s;
+      return;
+    }
+    if (this.dead) return;
+    $('#pane h2').textContent = `What ${name(r.agent)} asks`;
+    this.box.innerHTML = html`<pre class="x-whole">${r.text == null ? r.gist : r.text}</pre>${r.below ? html`<p class="x-below">${r.below}</p>` : ''}`.s;
+  }
+  destroy() { this.dead = true; }
 };
 
 // An agent's end, as the terminal says it: its report when it finished with one, and otherwise how it ended and why.
@@ -1108,7 +1136,7 @@ X.followed = null;
 X.provenance = (ref, followed) => {
   X.followed = followed ? ref : null;
   if (S.pane instanceof X.Provenance && S.pane.ref === ref) return S.pane.load();
-  go({provenance: ref, thread: null, knew: null, act: null, args: null, review: null}, true);
+  go({...X.none, provenance: ref, thread: null, knew: null}, true);
 };
 X.reveal = (at, ref) => {
   const [chat, seq] = at.split(':');
@@ -1225,7 +1253,7 @@ X.action = async el => {
   const action = row.actions[+el.dataset.xAction];
   if (action.form) {
     overlay.close();
-    return go({act: action.op, args: JSON.stringify(action.args), provenance: null, review: null, thread: null, knew: null}, true);
+    return go({...X.none, act: action.op, args: JSON.stringify(action.args), thread: null, knew: null}, true);
   }
   X.disable(el, X.WAITING);
   const r = await X.act(action.op, action.args);
@@ -1235,16 +1263,13 @@ X.action = async el => {
 
 const baseClick = onClick;
 onClick = e => {
-  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again]');
-  if (!el && (S.route.provenance || S.route.act || S.route.review) && e.target.closest('[data-close-pane]')) {
-    return go({provenance: null, act: null, args: null, review: null}, true);
-  }
+  const el = e.target.closest('[data-x-reply], [data-x-decide], [data-x-ask], [data-x-act], [data-x-action], [data-x-goto], [data-x-link], [data-x-attach], [data-x-provenance], [data-x-follow], [data-x-commands], [data-x-review], [data-x-diff], [data-x-test], [data-x-more], [data-x-line], [data-x-again]');
+  if (!el && X.PANES.some(key => S.route[key]) && e.target.closest('[data-close-pane]')) return go(X.none, true);
   if (!el) return baseClick(e);
   const d = el.dataset;
   if ('xCommands' in d) return X.openCommands();
-  if (d.xReview || d.xDiff) {
-    return go({review: d.xReview || d.xDiff, provenance: null, act: null, args: null, thread: null, knew: null}, true);
-  }
+  if (d.xReview || d.xDiff) return go({...X.none, review: d.xReview || d.xDiff, thread: null, knew: null}, true);
+  if (d.xAsk) return go({...X.none, ask: d.xAsk, thread: null, knew: null}, true);
   if (d.xTest) return X.test(el);
   if ('xMore' in d) return S.pane.more();
   if (d.xLine) return S.pane.choose(+d.xLine, e.shiftKey);

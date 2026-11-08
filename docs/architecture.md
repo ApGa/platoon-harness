@@ -1675,15 +1675,18 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   dropping frames and never events: a reader with a frame's worth waiting waits for the next, which is how a slow screen is handled.
   Its two timers decide nothing: one paces frames, and one looks for a runtime to attach to while it shows history. The transcript is
   on the Line API, a window of at most 10,000 lines read from the journal a page at a time as the person scrolls, either way, and
-  drawn through an LRU of strips keyed by width. An agent's reads its own streams and every `agent/*`, so a child of its needs no
-  name to be drawn. Live text follows below it, one tail for the agent in view, which goes with the runtime that said it. Unread
-  counts, of lines the person did not write, and read mentions come from the person's marks. Untrusted text crosses one `SafeText`
-  boundary, and a lint bans handing a label-like widget anything not visibly `Content`. Approvals never take focus: the dock gets
-  it only from the person's Tab, with no place chosen, and only the person moves its cursor. Every act also takes only keys every
-  terminal delivers, a typed command in the composer or a plain key where nothing is typed, so a chord is a shortcut and never the
-  only way, and no chord decides, stops or spends anything, since a terminal sends Alt and a letter as Esc then that letter.
-  `/provenance`, or `p` with the transcript in focus, opens the chosen line's provenance in a panel, Enter following a link and Esc
-  going back one hop, so it takes no chord. [tui.md](how-to/tui.md) is its guide.
+  drawn through an LRU of strips keyed by width. An agent's reads its own streams, every `agent/*`, so a child of its needs no
+  name to be drawn, and every `approval/*`, as an approval's id is its harness's, so its approvals and who answered them are
+  drawn, a read for each glob, kept to what every read covered. Live text follows below it, one tail for the agent in view,
+  which goes with the runtime that said it. Unread counts, of lines the person did not write, and read mentions come from the
+  person's marks. Untrusted text crosses one `SafeText` boundary, and a lint bans handing a label-like widget anything not
+  visibly `Content`. Approvals never take focus: the dock gets it only from the person's Tab, with no place chosen, and only the
+  person moves its cursor, and an approval's whole ask opens from it, read by its body's ref, before anyone answers it, as the
+  page's card opens it. Every act also takes only keys every terminal delivers, a typed command in the composer or a plain key
+  where nothing is typed, so a chord is a shortcut and never the only way, and no chord decides, stops or spends anything, since
+  a terminal sends Alt and a letter as Esc then that letter. `/provenance`, or `p` with the transcript in focus, opens the
+  chosen line's provenance in a panel, Enter following a link and Esc going back one hop, so it takes no chord.
+  [tui.md](how-to/tui.md) is its guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
   control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
   the journal one way into `swarmchat.sqlite`, a function of the events and the bodies they cite, so a rebuild gives every id again

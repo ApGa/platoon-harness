@@ -79,7 +79,11 @@ a plan login on loopback alone: see [Security](#security).
   and who needs you reads at a glance. An agent's end is one line in its chat with you, saying what the terminal says of it: its report when it
   finished with one, and otherwise how it ended and why.
 - **Approvals.** An approval left for you is a card under its question in the agent's chat with you, which says who
-  decided it and through what, or that it went moot with the turn that asked.
+  decided it and through what, or that it went moot with the turn that asked. While it waits on you, Read it whole opens
+  the whole of what it asks in the pane, which the address names, `ask=`, in the words the terminal's `/ask` says: the
+  command, the patch or the tool's input past the 280 characters its question holds, as text, each line as it was asked.
+  Where the record cut it, it says how many bytes more it asks, which Allow allows too, and where its harness said
+  nothing beyond its question, it says so.
 - **Delivered to.** Where SwarmChat says "Read by", the page says "Delivered to": the agents a message was for that a
   handover landed it in, or a tool's result showed it to, which is evidence, and when; a goal reached its agent when the
   agent's first turn began on it. It never says one understood it. A
@@ -135,7 +139,7 @@ moves drops focus from a control in it.
 | A message | The composer at the foot of a chat, which names its target, `@agent`, `#topic` or `+group`. Enter sends and Shift+Enter starts a new line | `message.send`. A text too long for a gist is cut as the terminal cuts one: its first 279 characters and an ellipsis are the gist, and the whole is the body, which the message shows |
 | A reply | Reply on a message opens its thread, with a composer at the foot that answers that message | `message.send` with `reply_to`, the entry the message is in the journal. What an agent said in its turn, and an approval, are no entry a reply can cite, so their Reply is disabled, saying so |
 | A file | Attach, beside Send, whose title says the most a body may be. A file larger is refused before it is sent, saying both sizes | The file to `/x/body`, saying how much has gone, then `message.send` with it as the body. A body keeps no name, so the gist is your text and the file's name, `TEXT (file NAME)`, or `file NAME` alone, made by the function the terminal's composer calls, and refused when the two run past 280 characters, as there |
-| An approval | A card in the agent's chat with you, Allow and Deny | `approval.resolve` with the card's version and `via` `browser` |
+| An approval | A card in the agent's chat with you, Read it whole, which opens what it asks in the pane and answers nothing, then Allow and Deny | `approval.resolve` with the card's version and `via` `browser` |
 | Needs you | The first row under All activity, with how many places there are. It opens a list of each, with its actions, read through `x_read`, so a view link and history show it too, each action disabled, saying why | Each action as the runtime's `attention` view offers it, with the version it was drawn from. One that leaves arguments to you, as a budget's Set the budget leaves you its limits, opens its op's form in the pane, as Commands does, filled in with what it fixes, for a budget the limits and estimate its scope was set to, which `budget set` replaces whole, and the address keeps them as `args=`. A place its agent's next turn settles, a lost turn, a wake past `max_hops`, a failure or a conflict of an agent's, offers Write to it, and a dead task Add it again, each opening its op's form. A conflict an agent's merge stopped on says on which files, and to tell the agent or to resolve it in your own checkout, never in its workspace, where a commit is recorded as the agent's, since the runtime never resolves one. Your checkout's has no action, and says to resolve it there. So has a failure of no agent's, saying that nothing tries it again, and a daemon that keeps failing, saying where its traceback is and what starts it anew. A mention is a message to read in its chat, and the page keeps no marks, so the list holds none |
 | An agent's acts | Its page: Interrupt, Stop below, Retire and Cancel | `agent.interrupt`, with `below` for Stop below, `agent.retire` and `agent.cancel`. What came of each is said under them |
 | The session's | Your own page: Close the session and Cancel the session | `session.close`, which drains, and `session.cancel`, which stops now |
@@ -180,13 +184,15 @@ Each request SwarmChat's page can make gets a real answer from the session, or i
 
 The page asks one read of ours beside them, `x_read`, for each pane of ours, in the terminal's words, and a view link may ask it,
 as it asks the others, but for a diff. It reads through the session's queries, which the kernel refuses for an op that writes,
-and for a diff the journal and the patch's body, which it reads and never writes, so nothing is written through it. Its `provenance` pane is one event's provenance,
+and for a diff and an ask the journal and the body, which it reads and never writes, so nothing is written through it. Its `provenance` pane is one event's provenance,
 by its ref, and the message it is in its chat, if one shows it. Its `attention` pane is every place you must act, but a mention.
 Its `changes` pane is what changed, in the lines the terminal's `/review` draws, none of them new, as the page keeps no marks. Its
 `diff` pane is, by the effect `repo diff` gave, the diff that effect read with every line of its patch, which the page draws 500
 at a time, held until the journal records it, for at most 25 s, and saying it is still `reading` past that. Asking for a diff is an
 act, so a view link reads none, as the `diff` pane refuses it, and history can ask for none, and Patch and Uncommitted diff say
-why.
+why. Its `ask` pane is what the approval its card names asks, in the words the terminal's `/ask` says: the whole of it, read
+by its body's ref, as `blob.get` gives no text for a line longer than one result holds, and below it how many bytes more it asks
+where the record cut it, or that its harness said nothing beyond its gist.
 
 ## Not built yet
 

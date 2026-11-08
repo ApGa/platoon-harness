@@ -15,6 +15,7 @@ from playwright.async_api import Browser, Locator, Page, Route, expect
 
 from platoon_harness import Session, Team
 from platoon_harness.primitives import delivery
+from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Ask, Call, Hang, Say
 from platoon_harness_cli.ops import CONFIRMED, cut
@@ -227,6 +228,60 @@ async def test_an_approval_answered_from_the_browser_and_the_terminal_at_once_ta
 
     assert [(event.data["verdict"], event.data["via"]) for event in resolved] == [("allow", winner)]
     assert len(refused) == 1 and refused[0].outcome.refusal.code == "conflict"
+    assert errors == []
+
+
+async def test_an_approval_card_shows_its_whole_ask_as_text_under_the_page_s_policy(browser: Browser, root: Path):
+    """Read it whole, on an approval's card, opens what it asks in the pane before anyone answers it: every character
+    of it, a line longer than a `blob.get` result holds among them, as text under the page's policy, so markup in it is
+    drawn and never made, and the address names it. It answers nothing, and Allow then does."""
+    hostile = (
+        '<img src=x onerror="window.__pwned=1"> <script>window.__pwned=1</script> [a](javascript:window.__pwned=1)'
+    )
+    ask = f"Bash\n{hostile} **not bold** " + "x" * 13_000 + " && rm -rf *_old_*"
+    async with (
+        Session.start(solo([Ask("Run the build?", body=ask), Say("built")]), name="s", root=root, cwd=root) as session,
+        serving("s", root) as web,
+    ):
+        approval = await asked(session)
+        page, errors = await opened(browser, web.link("control"))
+        await chat(page, "bob & you")
+        await page.locator("[data-x-ask]").click()
+        await expect(page.locator("#pane h2")).to_have_text("What bob asks", timeout=SECONDS)
+        shown = await page.locator("#pane .x-whole").evaluate("el => el.textContent")
+        made = await page.evaluate("document.querySelectorAll('#pane img, #pane script, #pane .x-ask a').length")
+        address = await page.evaluate("location.hash")
+        answered = await of_type(session, "approval.resolved")
+        await page.locator('[data-x-decide="allow"]').click()
+        await expect(page.locator(".x-card.x-done")).to_have_text("Allowed by you via browser", timeout=SECONDS)
+        pwned = await page.evaluate("window.__pwned")
+        await page.context.close()
+
+    assert shown == ask
+    assert made == 0 and pwned is None
+    assert f"ask={approval['id']}" in address
+    assert answered == []
+    assert errors == []
+
+
+async def test_a_cut_ask_says_where_it_was_cut(browser: Browser, root: Path):
+    """An ask past what the record keeps is drawn as far as it is kept, and below it how many bytes more it asks, which
+    Allow allows too, in the words the terminal says."""
+    team = solo([Ask("Write the big file?", body="y" * (ASK_LIMIT + 10)), Hang()])
+    async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
+        await asked(session)
+        page, errors = await opened(browser, web.link("view"))
+        await chat(page, "bob & you")
+        await page.locator("[data-x-ask]").click()
+        below = page.locator("#pane .x-below")
+        await expect(below).to_have_text(
+            "Cut here: it asks 10 bytes more, which the record does not keep, and Allow allows them too.",
+            timeout=SECONDS,
+        )
+        shown = await page.locator("#pane .x-whole").evaluate("el => el.textContent")
+        await page.context.close()
+
+    assert shown == "y" * ASK_LIMIT
     assert errors == []
 
 
