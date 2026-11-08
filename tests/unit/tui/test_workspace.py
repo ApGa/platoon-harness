@@ -532,13 +532,15 @@ async def test_the_composer_retargets_recalls_attaches_a_file_and_asks_before_se
         await pilot.press(*"#notes ", *"for the channel", "enter")
         await drawn(pilot, lambda text: "to: #notes" in text)
         assert screen.target == "#notes"
+        composer = screen.query_one(Composer)
+        await drawn(pilot, lambda _: composer.sent == ["for the channel"])
 
         await pilot.press("up")
-        assert screen.query_one(Composer).text == "for the channel"
+        await drawn(pilot, lambda _: composer.text == "for the channel")
         await pilot.press("down")
-        assert screen.query_one(Composer).text == ""
+        await drawn(pilot, lambda _: composer.text == "")
         await pilot.press(*"a draft", "up")
-        assert screen.query_one(Composer).text == "a draft"
+        await drawn(pilot, lambda _: composer.text == "a draft")
         await pilot.press("end", *["backspace"] * 7)
 
         await pilot.press("alt+f")
