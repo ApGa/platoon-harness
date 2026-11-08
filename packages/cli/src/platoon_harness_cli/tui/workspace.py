@@ -1007,15 +1007,22 @@ class Workspace(Screen[None]):
             note(self, said, severity="warning")
             return
         person = self.human.partition(":")[2]
-        self.app.push_screen(Tasks(live.session, f"{row['kind']}/{row['name']}", person, self._open))
+        channel = f"{row['kind']}/{row['name']}"
+        self.app.push_screen(Tasks(live.session, channel, person, self._open, self._cannot))
+
+    def _cannot(self, op: str) -> str | None:
+        """Why the person cannot run `op` now, or None when they can: on history, and where their grants hold no `op`,
+        as the page's acts say."""
+        live = self.live
+        if live is None or live.runtime != "live":
+            return f"history: {reach('resume')} resumes it to act"
+        if all(form.op != op for form in self.forms):
+            return f"your grants hold no {op}"
+        return None
 
     def _open(self, act: Act) -> None:
-        """Open an act's op's form, filled in with what its line knows, or say that the person's grants hold none."""
-        form = next((form for form in self.forms if form.op == act.op), None)
-        if form is None:
-            note(self, f"{act.label}: your grants hold no {act.op}.", severity="warning")
-        else:
-            self._run_op(form, act.args)
+        """Open the form of an act's op, which the person's grants hold, filled in with what its line knows."""
+        self._run_op(next(form for form in self.forms if form.op == act.op), act.args)
 
     @work(group="act")
     async def _test(self, action: dict[str, Any]) -> None:

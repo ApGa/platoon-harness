@@ -218,7 +218,9 @@ What you may do is a row under what it acts on, and Enter on it opens its op's f
 line knows: Add a task, or Post an entry, at the top; Claim on an open or a failed task; Complete, Fail, Release and Renew on
 one you hold, with its fence; Add it again on a dead one, citing it, as the dock's does; and Revise on an entry, with the
 version it revises and that version's fields, as a revision replaces them whole, so you change only what you mean to.
-What came of it is said as the palette says it, and the list moves with it. Esc leaves.
+What came of it is said as the palette says it, and the list moves with it. A row whose op you cannot run now is drawn
+dim, saying why, as the page draws it disabled: on history, `history: /resume resumes it to act`, and where your grants
+hold no such op, `your grants hold no task.claim`. Enter on it says so again and opens nothing. Esc leaves.
 
 ### Follow a line's provenance
 

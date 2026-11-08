@@ -66,8 +66,9 @@ named here is closed.
   Entries, Add a task or Post an entry, Claim on an open or a failed task, Complete, Fail, Release and Renew on one you
   hold, Add it again on a dead one and Revise on an entry each open their op's form, the palette's in the terminal and the
   pane's in the page, filled in with what the line knows: the queue, the task and its fence, a dead task's ref to cite, or
-  the entry, the version it revises and its fields, which a revision replaces whole. On a view link every act is disabled,
-  saying why.
+  the entry, the version it revises and its fields, which a revision replaces whole. An act the person cannot take now is
+  disabled, saying why: in either client on history and where their grants hold no such op, and in the page on a view
+  link too.
 - **Tasks and Entries in the page.** In a queue's chat, as a chat and as a board, Tasks opens its tasks in the pane, and in
   a board's chat Entries its entries, in the words the terminal's `/tasks` says, read through `x_read`'s new `tasks` and
   `entries` panes, which a view link reaches. The pane is read again whenever the feed says that what it reads moved, as the

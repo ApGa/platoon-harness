@@ -1,5 +1,6 @@
 """A queue's tasks or a board's entries, as a list a person reads, in the words both clients say, read again whenever
-the channel moves, each act a row of its own that opens its op's form filled in with what its line knows."""
+the channel moves, each act a row of its own that opens its op's form filled in with what its line knows, or that is
+drawn disabled, saying why, where the person cannot run its op now."""
 
 from collections.abc import Callable, Iterable
 
@@ -18,15 +19,16 @@ from ..channels import Act, View
 from .keymap import bindings
 from .review import STYLES
 from .rows import Row, Rows
-from .safe import SafeText
+from .safe import SafeText, note
 
 UNDER = "  ↳ "
 """What leads an act's row, under the line it acts on."""
 
 
-def rows_of(view: View) -> tuple[list[Row], dict[str, Act]]:
+def rows_of(view: View, cannot: Callable[[str], str | None]) -> tuple[list[Row], dict[str, Act]]:
     """A view's rows, every part made safe: the acts on the channel itself first, then each line, keyed by its ref,
-    with each of its acts a row under it; and the act each act's row takes, by its key."""
+    with each of its acts a row under it, dim with the reason where `cannot` says why the person cannot run its op now;
+    and the act each act's row takes, by its key."""
     rows: list[Row] = []
     acts: dict[str, Act] = {}
 
@@ -34,7 +36,9 @@ def rows_of(view: View) -> tuple[list[Row], dict[str, Act]]:
         for index, act in enumerate(offered):
             key = f"{on}#{index}"
             acts[key] = act
-            rows.append(Row(Content.assemble((lead, "dim"), SafeText(act.label, "bold")), key))
+            why = cannot(act.op)
+            label = SafeText(act.label, "bold") if why is None else SafeText(f"{act.label} · {why}", "dim")
+            rows.append(Row(Content.assemble((lead, "dim"), label), key))
 
     offer("", view.acts, "")
     for line in view.lines:
@@ -46,16 +50,25 @@ def rows_of(view: View) -> tuple[list[Row], dict[str, Act]]:
 class Tasks(ModalScreen[None]):
     """The view of `channel`, a queue's or a board's stream, as `channels.read` says it to `person`, read as it opens
     and again by `moved` whenever a frame holds an event that moves it, which the workspace's one reader of the
-    journal hands it: no timer here decides anything. Enter on an act's row opens its op's form, through `act`."""
+    journal hands it: no timer here decides anything. Enter on an act's row opens its op's form, through `act`, or
+    where `cannot` says why the person cannot run its op now, says that, as its row does, drawn again each frame."""
 
     BINDINGS = bindings("dialog")
 
-    def __init__(self, session: Session, channel: str, person: str, act: Callable[[Act], object]) -> None:
+    def __init__(
+        self,
+        session: Session,
+        channel: str,
+        person: str,
+        act: Callable[[Act], object],
+        cannot: Callable[[str], str | None],
+    ) -> None:
         super().__init__()
         self._session = session
         self.channel = channel
         self._person = person
         self._act = act
+        self._cannot = cannot
         self.view: View | None = None
         self._acts: dict[str, Act] = {}
 
@@ -69,10 +82,15 @@ class Tasks(ModalScreen[None]):
         self._read()
 
     def moved(self, events: Iterable[Event]) -> None:
-        """Read the view again when one of `events` moves it. Before the view is mounted, its first read, which mounting
-        it begins, reads what they moved."""
-        if self.is_mounted and any(channels.moves(self.channel, event) for event in events):
+        """Read the view again when one of `events` moves it, and else draw its acts again, as whether the person can
+        run each may have changed. Before the view is mounted, its first read, which mounting it begins, reads what
+        they moved."""
+        if not self.is_mounted:
+            return
+        if any(channels.moves(self.channel, event) for event in events):
             self._read()
+        elif self.view is not None:
+            self._show(self.view)
 
     @work(exclusive=True, group="tasks")
     async def _read(self) -> None:
@@ -83,11 +101,18 @@ class Tasks(ModalScreen[None]):
             title.update(SafeText(f"{self.channel}: {refused}", "red"))
             return
         title.update(SafeText(self.view.title, "bold"))
-        rows, self._acts = rows_of(self.view)
+        self._show(self.view)
+
+    def _show(self, view: View) -> None:
+        rows, self._acts = rows_of(view, self._cannot)
         self.query_one(Rows).show(rows)
 
     def on_rows_chosen(self, chosen: Rows.Chosen) -> None:
-        if (act := self._acts.get(chosen.key)) is not None:
+        if (act := self._acts.get(chosen.key)) is None:
+            return
+        if (why := self._cannot(act.op)) is not None:
+            note(self, f"{act.label}: {why}", severity="warning")
+        else:
             self._act(act)
 
     def action_leave(self) -> None:

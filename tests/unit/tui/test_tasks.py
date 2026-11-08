@@ -170,6 +170,33 @@ async def test_a_task_act_opens_its_op_s_form_prefilled(root):
     assert complete == {"queue": "tasks", "task": "1", "fence": str(fence)}
 
 
+async def test_an_act_the_person_cannot_take_now_is_drawn_disabled_saying_why_and_opens_nothing(root):
+    """Where the person's grants hold no op, its act says so, and on history every act says the session must be resumed
+    first, as the page draws each disabled with its reason; Enter on one says why again and opens no form."""
+    async with attached(team(), root) as (owner, app, pilot):
+        await owner.task_add("tasks", "fix the flaky test")
+        screen = workspace(app)
+        screen.forms = [form for form in screen.forms if form.op != "task.claim"]
+        await opened(app, pilot, "tasks", "queue")
+        ungranted = await drawn(pilot, lambda text: "↳ Claim · your grants hold no task.claim" in text)
+    app = TerminalUI("s")
+    async with app.run_test(size=(140, 32)) as pilot:
+        await drawn(pilot, lambda text: "this is its history" in text)
+        await opened(app, pilot, "tasks", "queue")
+        on_history = await drawn(pilot, lambda text: "↳ Claim · history" in text)
+        rows = app.screen.query_one(Rows)
+        rows.move_to(next(key for key in rows.keys if key.endswith("#0") and key != "#0"))
+        await pilot.press("enter")
+        await drawn(pilot, lambda _: any(notice.message.startswith("Claim: ") for notice in app._notifications))
+        told = [notice.message for notice in app._notifications]
+        still = app.screen
+
+    assert "Add a task" in ungranted and "Add a task ·" not in ungranted
+    assert "Add a task · history: /resume resumes it to act" in on_history
+    assert "↳ Claim · history: /resume resumes it to act" in on_history
+    assert "Claim: history: /resume resumes it to act" in told and isinstance(still, Tasks)
+
+
 async def test_a_board_object_reaches_no_renderer_unescaped(root):
     """An entry's gist and fields are whatever an agent wrote, and the view draws them through `SafeText`, each control
     a terminal would act on as its escape, and none of it as markup, so no link is made of it."""
