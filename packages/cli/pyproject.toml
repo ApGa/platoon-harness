@@ -21,6 +21,7 @@ classifiers = [
 ]
 dependencies = [
     "cyclopts>=4,<5",
+    "markdown-it-py>=2.2",
     "platoon-harness-sdk>=0.1,<0.2",
     "rich>=14",
     "swarmchat==0.1.0",
