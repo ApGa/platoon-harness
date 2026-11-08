@@ -42,7 +42,7 @@ amended or extended an RFC.
 | [0024](0024-a-harness-s-own-agents-are-off.md) | A harness's own agents are off | Accepted |
 | [0025](0025-what-an-agent-is-told-is-a-template.md) | What an agent is told is a template | Accepted; amended, and extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) |
 | [0026](0026-every-act-from-any-terminal.md) | Every act from any terminal | Accepted |
-| [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | Accepted |
+| [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | Accepted; amended by [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) |
 | [0028](0028-acting-from-the-page.md) | Acting from the page | Accepted; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) (a draft) |
 | [0029](0029-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | Accepted |
 | [0030](0030-openhands-is-an-extra-of-the-sdk.md) | OpenHands is an extra of the SDK | Accepted |
@@ -87,6 +87,7 @@ amended or extended an RFC.
 | [0068](0068-a-program-is-a-script-that-owns-its-session.md) | A program is a script that owns its session | Accepted |
 | [0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) | A population gives each worker one outcome, which its program records | Draft |
 | [0071](0071-an-installed-extension-s-op-is-a-command.md) | An installed extension's op is a command | Draft |
+| [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Accepted |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.

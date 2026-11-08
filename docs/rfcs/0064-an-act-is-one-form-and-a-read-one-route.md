@@ -230,9 +230,10 @@ are reverted.
 
 ## Open questions
 
-1. Whether the browser may list, start, resume or stop sessions is the owner's, as [RFC 0027](0027-the-browser-on-our-backend.md)
-   says it may not. The default, pending the owner's ruling, is that it may not: the page's palette offers the ops of the one
-   session it serves, and starts or resumes nothing. A ruling the other way would add to the palette, and tear nothing out.
+1. Whether the browser may list, start, resume or stop sessions was the owner's, as [RFC 0027](0027-the-browser-on-our-backend.md)
+   said it may not. On 2026-11-08 the owner ruled that it may, and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md)
+   does it on a page of its own, which `web` with no session serves, so the page's palette still offers the ops of the one session
+   it serves, and nothing here was torn out.
 2. Whether both palettes run `agent takeover` is the owner's to confirm: the terminal's palette kept it out until now, as an
    earlier fix said a hold for a terminal not built was a defect. The default, pending the owner's ruling, is that every write op
    a person holds runs from both, as the plan's definition of done asks, with the op's words saying what it does and that driving
