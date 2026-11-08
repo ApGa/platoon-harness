@@ -259,9 +259,10 @@ def peak(round: Round) -> int:
     return gauges.peak_resident_bytes
 
 
-def test_100_scripted_agents_reach_100000_events_with_the_runtime_s_memory_bounded(measured: Measured):
+def test_100_scripted_agents_reach_100000_events_with_the_runtime_s_memory_within_its_budget(measured: Measured):
     """Every member takes one turn a round and none fails. The runtime's peak memory, which `session.metrics` reads at
-    each round's end, stays within its budget, and so does what the second half of the events adds to it."""
+    each round's end, stays within its budget, and so does what the second half of the events adds to it. A budget is
+    all this holds: the runtime's memory grows with the journal, and no run has shown where it stops."""
     rounds = measured.rounds
     last = rounds[-1].metrics
     peaks = [peak(round) for round in rounds]
@@ -275,7 +276,7 @@ def test_100_scripted_agents_reach_100000_events_with_the_runtime_s_memory_bound
     assert [last.agents[group] for group in ("needs_you", "done", "failed")] == [0, 0, 0]
     assert last.refused == {}
     assert peaks[-1] <= PEAK
-    assert peaks[-1] - half <= GROWTH, "memory grew with the journal"
+    assert peaks[-1] - half <= GROWTH
 
 
 def test_writer_throughput_and_ack_latency_stay_within_their_budgets(measured: Measured):
