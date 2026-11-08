@@ -502,16 +502,16 @@ class Span(Model):
     """A stretch of one turn of an agent, named by `ref`, the `model.called` of its last call, which a credit row about
     it targets: its calls are those its harness reported on its turn stream from `first` to `ref`, in the turn named
     `turn`, and `writes` are the writes of content the record ties to them, which one of them chose. `claims` are the
-    claims its agent held while one of its calls was made, by the ref of each `task.claimed`, and `labels` the labels of
-    the work it was done for: its tasks', else those its agent was spawned with, else none, and None where they are
-    unknown, as where its calls were made under claims of different labels or the record cannot place a claim or its
-    end among them."""
+    claims its agent held while one of its calls was made, by the ref of each `task.claimed`, oldest first, and None
+    where the record cannot place a claim or its end to say whether it did. `labels` are the labels of the work it was
+    done for: those of the task of each claim it held or may have held, and those its agent was spawned with unless it
+    surely held one, even for its calls made before it did; None, unknown, where these differ."""
 
     ref: str
     first: str
     turn: str
     writes: tuple[str, ...]
-    claims: tuple[str, ...]
+    claims: tuple[str, ...] | None
     labels: dict[str, str] | None
 
 
@@ -1174,12 +1174,13 @@ def _written(event: Event, agent: str) -> bool:
 
 @dataclass
 class _Turn:
-    """A turn of an agent: its name, the seqs of its start and of its end, None while it runs, and the model calls its
-    harness reported in it, in the order reported."""
+    """A turn of an agent: its name, the seqs of its start and of its end, None while it runs, whether it was lost, and
+    the model calls its harness reported in it, in the order reported."""
 
     name: str
     began: int
     ended: int | None = None
+    lost: bool = False
     calls: list[Event] = field(default_factory=list)
 
 
@@ -1190,7 +1191,7 @@ def _turns(txn: Txn, agent: str) -> list[_Turn]:
         if event.type == "turn.started":
             turns.append(_Turn(event.data["turn"], event.seq))
         elif turns and turns[-1].ended is None and event.type in ("turn.ended", "turn.lost"):
-            turns[-1].ended = event.seq
+            turns[-1].ended, turns[-1].lost = event.seq, event.type == "turn.lost"
         elif turns and turns[-1].ended is None and event.type == "model.called":
             turns[-1].calls.append(event)
     return turns
@@ -1218,9 +1219,10 @@ class _Hold(NamedTuple):
 
 def _holds(txn: Txn, agent: str, turns: Sequence[_Turn], cut: Sequence[Sequence[tuple[int, int]]]) -> list[_Hold]:
     """Each claim an agent made, placed among its calls. An event the record ties to one of the agent's calls comes
-    after that call; one of its own tied to none, made in a turn of one span, at that span's start for a claim and its
-    end for an end; and any other, as a lapse, by commit order among the agent's turns, exactly between two and
-    anywhere within one. A hold its agent's end ended, or that holds still, runs past its last call."""
+    after that call; one of its own tied to none, made in a turn of one span that ended and was not lost, at that span's
+    start for a claim and its end for an end; and any other, as a lapse, by commit order among the agent's turns,
+    exactly between two and anywhere within one. A hold its agent's end ended, or that holds still, runs past its last
+    call."""
     stamps, mine = txn.view(Stamps), f"agent:{agent}"
     before = [0]
     for turn in turns:
@@ -1238,7 +1240,7 @@ def _holds(txn: Txn, agent: str, turns: Sequence[_Turn], cut: Sequence[Sequence[
             if event.seq < turn.began:
                 return first, first
             if turn.ended is None or event.seq < turn.ended:
-                if event.actor == mine and len(cut[number]) == 1:
+                if event.actor == mine and turn.ended is not None and not turn.lost and len(cut[number]) == 1:
                     return (first, first) if claiming else (last, last)
                 return first, last
         return before[-1], before[-1]
@@ -1255,14 +1257,15 @@ def _holds(txn: Txn, agent: str, turns: Sequence[_Turn], cut: Sequence[Sequence[
 
 def _labelled(
     first: int, last: int, holds: Sequence[_Hold], spawned: dict[str, str]
-) -> tuple[tuple[str, ...], dict[str, str] | None]:
-    """The claims a span of the calls from `first` to `last` held while one of them was made, and the labels of the
-    work it was done for: those of every task it held or may have held, and its agent's, `spawned`, unless it held one,
-    or None where these differ."""
+) -> tuple[tuple[str, ...] | None, dict[str, str] | None]:
+    """The claims a span of the calls from `first` to `last` held while one of them was made, or None where it may
+    have held one it did not surely hold, and the labels of the work it was done for: those of every task it held or
+    may have held, and its agent's, `spawned`, unless it surely held one, or None where these differ."""
     held = [hold for hold in holds if max(first, hold.began[1]) <= min(last, hold.ended[0] - 1)]
     maybe = [hold for hold in holds if max(first, hold.began[0]) <= min(last, hold.ended[1] - 1)]
     found = [hold.labels for hold in maybe] + ([] if held else [spawned])
-    return tuple(hold.claim for hold in held), found[0] if all(labels == found[0] for labels in found) else None
+    claims = tuple(hold.claim for hold in held) if len(held) == len(maybe) else None
+    return claims, found[0] if all(labels == found[0] for labels in found) else None
 
 
 @op("spans", query=True)

@@ -427,7 +427,7 @@ async def did(kernel: Kernel, call_id: str | None, op: str, number: int, how: Wr
     return ref_of(of_type(kernel, MADE.get(op, "task.released"))[-1])
 
 
-def labelled(found: Spans) -> list[tuple[str, tuple[str, ...], dict[str, str] | None]]:
+def labelled(found: Spans) -> list[tuple[str, tuple[str, ...] | None, dict[str, str] | None]]:
     return [(span.first, span.claims, span.labels) for span in found.spans]
 
 
@@ -588,9 +588,9 @@ async def test_a_claim_held_still_or_as_its_agent_ended_is_held_through_its_last
 async def test_a_claim_tied_to_no_call_lies_at_its_turn_s_start_where_that_turn_is_one_span_and_else_anywhere_in_it(
     kernel,
 ):
-    """As OpenHands and Codex join no tool call to a model call, a turn that is one span holds the task claimed in it;
-    in a turn that is cut, a claim tied to no call may have been made by any of its calls, so each span it may lie in
-    has unknown labels."""
+    """As OpenHands and Codex join no tool call to a model call, a turn that is one span and ended holds the task
+    claimed in it. In a turn that is cut, a claim tied to no call may have been made by any of its calls, so each span
+    it may lie in has unknown claims, and unknown labels where the task's are not its agent's."""
     await team(kernel)
     await tasks(kernel, CRAFT, SEARCH)
     await start_turn(kernel, "w", "t1")
@@ -609,12 +609,28 @@ async def test_a_claim_tied_to_no_call_lies_at_its_turn_s_start_where_that_turn_
     await called(kernel, "c6")
     await end_turn(kernel, "w")
 
-    assert labelled(spans(kernel)) == [(c1, (first,), CRAFT), (c4, (), None), (c5, (), None)]
+    assert labelled(spans(kernel)) == [(c1, (first,), CRAFT), (c4, None, None), (c5, None, None)]
+
+
+@pytest.mark.parametrize(("given", "shown"), [(CRAFT, None), ({}, {})], ids=["labelled", "unlabelled"])
+async def test_a_claim_tied_to_no_call_in_a_lost_turn_leaves_its_span_s_claims_unknown(kernel, given, shown):
+    """A lost turn may have been cut right after the call that chose the claim, so its one span may never have held
+    it: its claims are unknown, and so are its labels, unless the task's are its agent's, which here are none."""
+    await team(kernel)
+    await tasks(kernel, given)
+    await start_turn(kernel, "w")
+    c1 = await called(kernel, "c1")
+    await did(kernel, None, "task.claim", 1, how="unanchored")
+    await called(kernel, "c2")
+    result_of(await kernel.submit(kernel.runtime, "runtime.start", {"drift": []}))
+
+    assert of_type(kernel, "turn.lost") and labelled(spans(kernel)) == [(c1, None, shown)]
 
 
 async def test_a_lapse_between_turns_ends_a_hold_there_and_one_within_a_turn_leaves_its_spans_unknown(kernel, clock):
     """A lapse is the runtime's, made by no call of the claimant's, so commit order places it among the claimant's
-    turns: between two exactly, as no call is made between turns, and within one anywhere in it."""
+    turns: between two exactly, as no call is made between turns, and within one anywhere in it, so the span it may
+    end in has unknown claims and labels."""
     await team(kernel)
     await tasks(kernel, CRAFT, SEARCH)
     await start_turn(kernel, "w", "t1")
@@ -636,4 +652,4 @@ async def test_a_lapse_between_turns_ends_a_hold_there_and_one_within_a_turn_lea
     await end_turn(kernel, "w")
 
     assert [event.type for event in of_type(kernel, "lease.expired")] == ["lease.expired"] * 2
-    assert labelled(spans(kernel)) == [(c1, (first,), CRAFT), (c3, (), None)]
+    assert labelled(spans(kernel)) == [(c1, (first,), CRAFT), (c3, None, None)]

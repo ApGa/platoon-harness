@@ -1614,18 +1614,20 @@ lies in no span. So an end out of a turn lies in the span of the call joined to 
 joins it to a call, as it was made in no turn. Which span an event lies in is the record's to say, and that a span's calls made
 what lies in it is an estimator's to claim. `spans(agent)` is a query op that is no agent's tool, a `Session` method and a command,
 as `eligibility` is: each span of an agent, oldest first, a page beside its true count, with its first call, its turn and the
-writes the record ties to its calls, which one of them chose, the claims its agent held while one of its calls was made, the labels
-of the work it was done for, and `open` while its latest turn has not ended, as a tool item reported late can still join a write,
-or a claim or its end, to a call and change that turn's spans. It is worked out from the views as it is asked, so it answers alike
-after a rebuild and on a closed copy, and it refuses a person or a program `invalid`. A claim is held from its claimant's claim to
-the first of its completion, failure or release, its lease's lapse and its claimant's end, and its calls are those made after the
-call that chose the claim, through the call that chose its end, each placed as the record allows: an event tied to one of the
-claimant's calls after that call, one of the claimant's own tied to none, in a turn that is one span, at that span's start for a
-claim and its end for an end, and any other, as a lapse, by commit order among the claimant's turns, exactly between two, as no call
-is made between turns, and anywhere within one; a hold its claimant's end ended, or that holds still, runs past its last call. A
-span's labels are those of the task of each claim it held or may have held, and those its agent was spawned with unless it surely
-held one, so a span that held no task carries its spawn's labels, or none; where these differ they are None, unknown, never merged
-and never one of them guessed (§7). Where a harness's turns are cut follows from
+writes the record ties to its calls, which one of them chose, the claims its agent held while one of its calls was made, oldest
+first, or None where the record cannot place a claim or its end to say whether it did, the labels of the work it was done for, and
+`open` while its latest turn has not ended, as a tool item reported late can still join a write, or a claim or its end, to a call
+and change that turn's spans. It is worked out from the views as it is asked, so it answers alike after a rebuild and on a closed
+copy, and it refuses a person or a program `invalid`. A claim is held from its claimant's claim to the first of its completion,
+failure or release, its lease's lapse and its claimant's end, and its calls are those made after the call that chose the claim,
+through the call that chose its end, each placed as the record allows: an event tied to one of the claimant's calls after that
+call, one of the claimant's own tied to none, in a turn that is one span and ended, not lost, at that span's start for a claim and
+its end for an end, and any other, as a lapse, by commit order among the claimant's turns, exactly between two, as no call is made
+between turns, and anywhere within one; a hold its claimant's end ended, or that holds still, runs past its last call. A span's
+labels are those of the task of each claim it held or may have held, and those its agent was spawned with unless it surely held
+one, so a span that held no task carries its spawn's labels, or none, and a span that claimed a task carries the task's for its
+calls before the claim too, the default pending the owner's ruling; where these differ they are None, unknown, never merged and
+never one of them guessed (§7). Where a harness's turns are cut follows from
 what it reports: pi, Claude Code and ScriptedDriver join a tool call to the model call that chose it, so theirs are cut at writes;
 OpenHands reports its calls and joins no tool call to one, so each of its turns is one span; Codex gives no id per model call, so
 no tool call joins one, each of its turns is one span, and its calls carry no id to train by; and `exec` reports no call, so it has

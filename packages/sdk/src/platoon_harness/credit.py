@@ -201,7 +201,7 @@ async def _walk(
         if not claims or claims[-1].actor != f"agent:{agent.name}":
             return []
         claim = f"{stream}@{claims[-1].version}"
-        return [span for span in agent.spans if claim in span.claims]
+        return [span for span in agent.spans if claim in (span.claims or ())]
 
     async def takes(agent: _Agent, span: Span, found: Lineage) -> list[str]:
         """Each event its span took below the event's bound, once, but the agent's own."""

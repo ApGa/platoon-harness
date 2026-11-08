@@ -163,9 +163,11 @@ async with Session.attach(rollout_id) as ended:
 ```
 
 A span's labels are those of the task its agent held while its calls were made, else those it was spawned with, else none, `{}`;
-`None` is unknown, as where it held tasks of different labels at once, and has no key: what trains on it is yours to decide. The
-creator decides a task's labels, and its claimant trains against them, so a policy that learns to call its work hard lowers the
-baseline its claimants are measured by: watch what each label's work comes to.
+a span that claimed a task carries the task's for its calls before the claim too. `None` is unknown, as where it held tasks of
+different labels at once, and has no key: what trains on it is yours to decide. A span's `claims` are `None` where the record
+cannot say which it held, as for a claim tied to no call in a turn that was cut. The creator decides a task's labels, and its
+claimant trains against them, so a policy that learns to call its work hard lowers the baseline its claimants are measured by:
+watch what each label's work comes to.
 
 ## What a sealed launch is
 

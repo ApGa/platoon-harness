@@ -94,16 +94,18 @@ call that chose its end. Each is placed by the record alone:
 
 - an event the record ties to one of the claimant's calls, through the op's anchor, the tool item holding it and that item's
   `call_id`, comes after that call;
-- one of the claimant's own tied to no call, made in a turn that is one span, as on OpenHands and Codex, takes that span whole:
-  a claim at its start and an end at its end, as such an event lies in that span (RFC 0061);
+- one of the claimant's own tied to no call, made in a turn that is one span and ended, not lost, as on OpenHands and Codex,
+  takes that span whole: a claim at its start and an end at its end, as such an event lies in that span (RFC 0061);
 - any other, as a lapse, which the clock makes and no call of the claimant's, is placed by commit order among the claimant's turns:
   exactly between two, as no call is made between turns, and anywhere within one;
 - a hold that its claimant's end ended, or that holds still, runs past the claimant's last call.
 
-A span holds a claim when one of its calls was surely made while it was held, and may hold it when one may have been. Its labels
-are those of the task of every claim it holds or may hold, and its agent's spawn labels unless it surely holds one; where these
-all agree they are its labels, and where they differ the span's labels are None, unknown, never merged and never one of them
-guessed. A task given no labels is work with none, so a span that held it carries none, not its agent's.
+A span holds a claim when one of its calls was surely made while it was held, and may hold it when one may have been. Its claims
+are those it holds, oldest first, and None, unknown, where it may hold one it does not surely hold, as no list of what it surely
+held says so. Its labels are those of the task of every claim it holds or may hold, and its agent's spawn labels unless it surely
+holds one, even for its calls made before the claim; where these all agree they are its labels, and where they differ the span's
+labels are None, unknown, never merged and never one of them guessed. A task given no labels is work with none, so a span that
+held it carries none, not its agent's.
 
 ```python
 class Span(Model):
@@ -111,7 +113,7 @@ class Span(Model):
     first: str
     turn: str
     writes: tuple[str, ...]
-    claims: tuple[str, ...]          # each claim its agent held while one of its calls was made, by its task.claimed
+    claims: tuple[str, ...] | None   # each claim its agent held while one of its calls was made; None where unknown
     labels: dict[str, str] | None    # the labels of the work it was done for; None where unknown
 ```
 
@@ -153,8 +155,13 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
   boundaries, which are on the claimant's own report stream: every call of a turn is reported before its end. A lapse inside a
   turn is left unknown, not placed.
 - **A turn of one span.** A claim tied to no call is taken to hold from its turn's start, though the call that chose it may be the
-  turn's last. A harness ends a turn with a call that chooses no tool, so a claim is followed by a call unless the turn was cut;
+  turn's last. A harness ends a turn with a call that chooses no tool, so a claim is followed by a call unless the turn was cut,
+  which is why the rule holds only for a turn that ended: one lost, or still running, places the claim anywhere in it;
   UNVERIFIED on OpenHands and Codex, whose turns have not been read for it.
+- **What a turn's first call says.** An op of the claimant's tied to no call, in a turn that is cut, was chosen by one of its
+  calls, so it would seem to come after the turn's first. But a call can go unreported, as a `hidden_call` or a `stream_lost` gap
+  says, and a native child's calls reach its parent's report stream: the first call reported is not surely the first made, and the
+  op is placed anywhere in its turn.
 - **Incentives.** Under a keyed baseline, a harder label lowers the baseline its work is measured against. A shared policy can learn
   to call work hard to raise its claimants' advantage, as the creator decides difficulty and its claimant trains on it. That is the
   training system's to guard, by the creator's own credit or a check of labels against outcomes; nothing here can.
@@ -210,13 +217,17 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 2. Should a failure and a release be shared as a completion is? The default, built, shares every claimant's event of a hold,
    pending the owner's ruling; a ruling for completions alone narrows one set.
 3. Should DAO's next run train on `propagate@4`, or pin `version=3` until a smoke run of it? The owner decides, before any GPU run.
+4. Should a span that claimed a task carry the task's labels for its calls before the claim? The default, built, does: a span
+   that surely held a claim takes its claims' labels alone, pending the owner's ruling. A ruling for the spawn's work makes such
+   a span's labels None wherever its spawn's differ, which changes one rule of `spans` and tears out nothing; a worker that
+   looks at its queue before it claims would then have no key for the span that claims.
 
 ## Evidence
 
 - [tests/unit/primitives/test_labels.py](../../tests/unit/primitives/test_labels.py): a test for each rule of sections 1 and 2.
 - [tests/unit/primitives/test_spans.py](../../tests/unit/primitives/test_spans.py): a test for each rule of section 3, among them a
   claim made in the call that completed the task before, two claims of different labels and of alike ones held at once, a claim
-  tied to no call in a turn of one span and in a cut one, and a lapse between turns and within one.
+  tied to no call in a turn of one span, in a cut one and in a lost one, and a lapse between turns and within one.
 - [tests/unit/runtime/test_credit.py](../../tests/unit/runtime/test_credit.py): the rule of section 4, version 3 run again on the
   same journals, a property over generated journals that version 4 writes version 3's rows where no claim's events are reached,
   and the owner's case on ScriptedDriver against FakeModel acting as each agent's gateway, whose numbers section 4 gives.
