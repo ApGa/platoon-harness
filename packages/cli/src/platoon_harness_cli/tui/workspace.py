@@ -36,7 +36,7 @@ from .provenance import Provenance
 from .review import Review
 from .rows import Row, Rows
 from .safe import SafeText, note
-from .transcript import PAGE, Focus, Transcript
+from .transcript import Focus, Transcript, page_of
 
 GROUPS = (
     ("needs_you", "Needs you", "⚠", "yellow"),
@@ -286,9 +286,7 @@ class Workspace(Screen[None]):
         that scanned its most can hold none with more to come."""
         count, before = 0, through + 1
         while count < UNREAD and before > mark + 1:
-            page = await session.page(
-                after=mark, before=before, streams=focus.streams or None, match=focus.match, limit=PAGE
-            )
+            page = await page_of(session, focus, after=mark, before=before)
             count += sum(self._unread(focus, event, mark) for event in page.events)
             before = page.cursor
         return count

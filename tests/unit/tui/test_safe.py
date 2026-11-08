@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 import platoon_harness_cli.tui as tui
+from platoon_harness.testing import Ask, Hang
 from platoon_harness_cli.tui.safe import SafeText
+from platoon_harness_cli.tui.transcript import Transcript
+from platoon_harness_cli.tui.workspace import Workspace
+
+from .support import drawn, workspace
+from .test_workspace import HOSTILE, UNSAFE, attached, team
 
 TUI = Path(tui.__file__).parent
 LABELS = {"Static", "Label", "Button", "Option", "Hit", "DiscoveryHit", "Row", "Confirm"}
@@ -155,3 +161,45 @@ def test_a_link_is_followed_only_to_http_and_https():
     links = {segment.style.link for line in lines for segment in line if segment.style and segment.style.link}
 
     assert links == {"https://example.org", "http://x.org"}
+
+
+@pytest.fixture
+def root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    return tmp_path
+
+
+async def test_a_hostile_ask_reaches_no_renderer_unescaped(root):
+    """An ask is whatever a model wrote, a line of it as long as a gist and longer, and the dock's dialog and its line
+    opened in the transcript draw it through `SafeText`, each control a terminal would act on as its escape, and none of
+    it as markup or Markdown, so no link is made of it."""
+    body = f"{HOSTILE}\n**not bold** [a link](javascript:alert(1)) <b>a tag</b> {'x' * 300} ‮evil‬"
+    async with attached(team([Ask(HOSTILE, body=body), Hang()]), root) as (_, app, pilot):
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda text: "asks for approval" in text)
+        await pilot.press("alt+a", *"/ask", "enter")
+        asked = await drawn(pilot, lambda text: "\\u202eevil" in text)
+        linked = links(app)
+        await pilot.press("escape")
+        await drawn(pilot, lambda _: isinstance(app.screen, Workspace))
+        transcript = workspace(app).query_one(Transcript)
+        await pilot.press("ctrl+o")
+        opened = await drawn(pilot, lambda text: any(block.ask for block in transcript.blocks) and "evil" in text)
+
+        assert app.is_running
+        for text in (asked, opened):
+            assert not [char for char in UNSAFE if char in text]
+            assert "[@click=app.quit]x[/]" in text and "**not bold**" in text and "<b>a tag</b>" in text
+        assert linked == links(app) == []
+
+
+def links(app) -> list[str]:
+    """Each link the screen draws."""
+    update = app.screen._compositor.render_full_update()
+    return [
+        segment.style.link
+        for line in update.strips
+        for strip in line
+        for segment in strip
+        if segment.style is not None and segment.style.link
+    ]

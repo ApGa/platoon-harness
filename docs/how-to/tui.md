@@ -100,7 +100,9 @@ Each event is one line, and a line opens on demand, with Enter on the chosen lin
 body as Markdown and code, or its gist whole, then where it came from. Links are followed only to `http` and `https`. The
 transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
 was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each
-child it spawned began and ended, where the journal has it, inside the turn that spawned it. Below the lines is what the
+child it spawned began and ended, where the journal has it, inside the turn that spawned it, and each approval it asked
+for, which opens on the whole of what it asks, as `/ask` does, then who answered it: you or another person, and through
+what, `tui` or `browser`, or the role's policy. Below the lines is what the
 agent in view is saying now, live, until the journal holds it as an item, and it goes with a runtime that goes. Reading up
 stops following, and the line under the transcript counts what came since; `/follow` follows again. A page the journal
 would not give is named as lines missed.
@@ -392,7 +394,7 @@ before the session's. `^` is Ctrl.
 
 Disabled where a control for it would be, or absent from the palette: search in a transcript,
 threads, the tasks and board views beyond their channel's lines, image input, harness slash commands, model and permission
-switching, taking over an agent's native terminal, an approval and who answered it in the transcript, copying a selection from
+switching, taking over an agent's native terminal, copying a selection from
 the transcript, themes and notifications, and in provenance the interaction graph, credit drawn beside who contributed, and refs in
 a message's text followed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
 leases and credentials do not, so no control will offer it.

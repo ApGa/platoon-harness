@@ -21,6 +21,9 @@ from textual.strip import Strip
 from platoon_harness import Refused, Session
 from platoon_harness.kernel import Delta, Event, Page
 
+from .. import approvals
+from ..approvals import Ask
+from .approvals import rows_of
 from .keymap import bindings
 from .rows import CHOSEN, strip_of
 from .safe import SafeText, note
@@ -48,13 +51,13 @@ _HIDDEN = frozenset(
 @dataclass(frozen=True)
 class Focus:
     """What the focus pane shows: an agent or a channel, read from the journal as the events on the streams it names
-    and on those its glob takes. `marks` are the streams a person's mark moves on as they read it, `agent` the one whose
+    and on those its globs take. `marks` are the streams a person's mark moves on as they read it, `agent` the one whose
     live text shows below it, `children` the agents it had spawned when it was shown, and `to` the address a message
     goes to, or None for a place that takes none."""
 
     title: str
     streams: tuple[str, ...] = ()
-    match: str | None = None
+    matches: tuple[str, ...] = ()
     marks: tuple[str, ...] = ()
     agent: str | None = None
     children: frozenset[str] = frozenset()
@@ -62,20 +65,21 @@ class Focus:
 
     @classmethod
     def of_agent(cls, name: str, children: Iterable[str] = ()) -> "Focus":
-        """An agent, and how each child it spawned began and ended, read from every agent's stream, so a child it
-        spawns later is in it too, however many it spawns."""
+        """An agent, how each child it spawned began and ended, read from every agent's stream, so a child it spawns
+        later is in it too, however many it spawns, and what it asked approval for and who answered, read from every
+        approval's stream, as an approval's id is its harness's."""
         streams = (f"inbox/{name}", f"turn/{name}", f"agent/{name}")
-        return cls(
-            f"@{name}", streams, "agent/*", marks=streams, agent=name, children=frozenset(children), to=f"@{name}"
-        )
+        matches = ("agent/*", "approval/*")
+        children = frozenset(children)
+        return cls(f"@{name}", streams, matches, marks=streams, agent=name, children=children, to=f"@{name}")
 
     @classmethod
     def of_channel(cls, address: str, kind: str) -> "Focus":
         """A channel as `channel.list` names it: `#topic`, `+group`, or a queue's or board's bare name."""
         if kind == "queue":
-            return cls(address, match=f"task/{address}/*", marks=(f"queue/{address}",))
+            return cls(address, matches=(f"task/{address}/*",), marks=(f"queue/{address}",))
         if kind == "board":
-            return cls(address, match=f"board/{address}/*", marks=(f"board/{address}",))
+            return cls(address, matches=(f"board/{address}/*",), marks=(f"board/{address}",))
         stream = f"channel/{address.removeprefix('#')}"
         return cls(address, streams=(stream,), marks=(stream,), to=address)
 
@@ -90,7 +94,28 @@ class Focus:
         return self.title
 
     def holds(self, event: Event) -> bool:
-        return event.stream in self.streams or (self.match is not None and fnmatchcase(event.stream, self.match))
+        return event.stream in self.streams or any(fnmatchcase(event.stream, glob) for glob in self.matches)
+
+
+async def page_of(session: Session, focus: Focus, *, after: int = 0, before: int | None = None) -> Page:
+    """A page of the events a focus holds: a read for each of its globs, the first with its streams, as a read takes
+    one glob, kept to what every read covered, so the next page, from its `cursor`, leaves nothing out."""
+    pages = [
+        await session.page(
+            after=after, before=before, streams=(focus.streams or None) if at == 0 else None, match=glob, limit=PAGE
+        )
+        for at, glob in enumerate(focus.matches or (None,))
+    ]
+    if len(pages) == 1:
+        return pages[0]
+    if before is None:
+        cursor = min(page.cursor for page in pages)
+        covered = {event.seq: event for page in pages for event in page.events if event.seq <= cursor}
+    else:
+        cursor = max(page.cursor for page in pages)
+        covered = {event.seq: event for page in pages for event in page.events if event.seq >= cursor}
+    events = tuple(covered[seq] for seq in sorted(covered))
+    return Page(events=events, cursor=cursor, head=max(page.head for page in pages))
 
 
 def _address(stream: str) -> str:
@@ -130,9 +155,23 @@ def line_of(event: Event) -> Content | None:
             return Content.assemble(("✗ " if failed else "✓ ", "red" if failed else "green"), gist)
         case "gap.recorded":
             return Content.assemble(("gap ", "yellow"), gist)
+        case "approval.requested":
+            return Content.assemble(SafeText(f"@{event.agent}", "bold"), (" asks for approval  ", "dim"), gist, more)
+        case "approval.resolved":
+            return _answered(data)
         case _ if event.type in _HIDDEN:
             return None
     return Content.assemble(("· ", "dim"), gist, more)
+
+
+def _answered(data: dict[str, Any]) -> Content:
+    """Who answered an approval, and how: a person, through what they said, or the role's stated policy."""
+    allowed = data.get("verdict") == "allow"
+    by = data.get("resolved_by") or ""
+    who = Content("policy") if by == "policy" else _who(by)
+    via = SafeText(f" via {data['via']}", "dim") if data.get("via") and by != "policy" else Content("")
+    said = "allowed by " if allowed else "denied by "
+    return Content.assemble(("✓ " if allowed else "✗ ", "green" if allowed else "red"), said, who, via)
 
 
 def _item(agent: str, data: dict[str, Any], gist: Content, more: Any) -> Content:
@@ -154,13 +193,14 @@ def _item(agent: str, data: dict[str, Any], gist: Content, more: Any) -> Content
 class Block:
     """One line: `first`, the seq of the event that began it, which is where it stands; the event it shows, which a
     tool call's end takes over from its start; and what opening it shows: its body, read when first opened, or its
-    gist whole."""
+    gist whole, or for an approval's request, its `ask`, read when first opened."""
 
     first: int
     event: Event
     line: Content
     open: bool = False
     text: str | None = None
+    ask: Ask | None = None
 
 
 class Tail:
@@ -339,7 +379,7 @@ class Transcript(ScrollView, can_focus=True):
                 return Content.assemble(("  ↳ ", "dim"), SafeText(" ".join(event.gist.split())))
             return line_of(event) if child == focus.agent else None
         theirs = focus is not None and focus.agent is not None and event.agent not in (focus.agent, None)
-        if not (theirs and event.stream.startswith("agent/")):
+        if not (theirs and event.stream.startswith(("agent/", "approval/"))):
             return line_of(event)
         return line_of(event) if event.type == "agent.ended" and event.agent in self._children else None
 
@@ -365,9 +405,7 @@ class Transcript(ScrollView, can_focus=True):
         focus, session = self.focus_on, self._session
         assert focus is not None and session is not None
         try:
-            return await session.page(
-                after=after, before=before, streams=focus.streams or None, match=focus.match, limit=PAGE
-            )
+            return await page_of(session, focus, after=after, before=before)
         except Refused as refused:
             note(self, f"missed lines of {focus.title}: {refused}", severity="error")
             return None
@@ -441,18 +479,20 @@ class Transcript(ScrollView, can_focus=True):
         return [(block, line) for line in range(1 + (len(self._body(block)) if block.open else 0))]
 
     def _body(self, block: Block) -> list[Strip]:
-        """What an open line shows at this width: its body as Markdown, else its gist whole, then where it came from."""
+        """What an open line shows at this width: its body as Markdown, else its gist whole, or an approval's ask as it
+        was asked, then where it came from."""
         key = (block.first, self._width)
         found = self._bodies.get(key)
         if found is None:
-            event = block.event
-            said = block.text if block.text is not None else SafeText(event.gist).plain
+            event, width = block.event, max(self._width - 2, 1)
+            if block.ask is not None:
+                lines = [Strip(row.line.render_segments(), row.line.cell_length) for row in rows_of(block.ask, width)]
+            else:
+                said = block.text if block.text is not None else SafeText(event.gist).plain
+                lines = markdown(said, width, self.app.console)
             when = time.strftime("%H:%M:%S", time.localtime(event.wall_time))
             where = SafeText(f"{event.type} · {event.actor} · seq {event.seq} · {when}", "dim")
-            lines = [
-                *markdown(said, max(self._width - 2, 1), self.app.console),
-                Strip(where.render_segments(), where.cell_length),
-            ]
+            lines.append(Strip(where.render_segments(), where.cell_length))
             found = self._bodies[key] = [Strip.join([Strip.blank(2), line]) for line in lines]
         return found
 
@@ -461,15 +501,24 @@ class Transcript(ScrollView, can_focus=True):
         self._bodies.discard((block.first, self._width))
 
     def toggle(self, block: Block | None = None) -> None:
-        """Open or close a line: the chosen one, unless another is named. A body is read when first opened."""
+        """Open or close a line: the chosen one, unless another is named. A body, or an approval's ask, is read when
+        first opened."""
         block = block or self._chosen
         if block is None:
             return
         self._chosen = block
         block.open = not block.open
         ref = block.event.data.get("body") if isinstance(block.event.data, dict) else None
-        if block.open and block.text is None and isinstance(ref, str):
+        if block.open and block.event.type == "approval.requested" and block.ask is None:
+            self.run_worker(self._read_ask(block), exclusive=False)
+        elif block.open and block.text is None and isinstance(ref, str):
             self.run_worker(self._read_body(block, ref), exclusive=False)
+        self._relayout()
+
+    async def _read_ask(self, block: Block) -> None:
+        assert self._session is not None
+        block.ask = await approvals.read(self._session, block.event)
+        self._forget(block)
         self._relayout()
 
     async def _read_body(self, block: Block, ref: str) -> None:
