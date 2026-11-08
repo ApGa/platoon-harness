@@ -638,7 +638,8 @@ def test_clean_of_a_folder_that_is_not_there_has_nothing_to_do(tmp_path):
 
 
 def test_clean_follows_no_symlink_an_agent_planted(tmp_path):
-    """One at a name is removed itself, and one where a folder should be leads to nothing of ours."""
+    """One at a name is removed itself, and one where a folder should be leads to nothing of ours. Each is said, as
+    what it names stays, which may be a credential in the agent's folder still."""
     folder, yours = tmp_path / "agent", tmp_path / "yours"
     (yours / "logins").mkdir(parents=True)
     (yours / "auth.json").write_text("yours")
@@ -650,8 +651,12 @@ def test_clean_follows_no_symlink_an_agent_planted(tmp_path):
     (tmp_path / "other" / "own").mkdir()
     (tmp_path / "other" / "own" / "auth.json").symlink_to(yours / "auth.json")
 
-    assert clean(folder, KEPT) == ()
-    assert clean(tmp_path / "other", KEPT) == ()
+    assert clean(folder, KEPT) == (
+        "tmp was a symlink, which went, and what it named stays",
+        "own/auth.json stays, as a symlink on its way is not followed",
+        "own/logins stays, as a symlink on its way is not followed",
+    )
+    assert clean(tmp_path / "other", KEPT) == ("own/auth.json was a symlink, which went, and what it named stays",)
     assert not (folder / "tmp").is_symlink() and (folder / "own").is_symlink()
     assert not (tmp_path / "other" / "own" / "auth.json").is_symlink()
     assert files_in(yours) == ["auth.json", "logins/server.json"]

@@ -271,39 +271,50 @@ def _unlink_beneath(folder: Path, path: Path) -> None:
         os.close(dir_fd)
 
 
-def _remove_beneath(folder: Path, path: Path) -> None:
+def _remove_beneath(folder: Path, path: Path) -> str | None:
     """Remove `path`, a file or a whole folder at that place beneath `folder`, following no symlink an agent could
-    plant: one at its name is removed itself, and one on the way leads to nothing of ours. Nothing there is nothing to
-    remove."""
-    flags = os.O_RDONLY | os.O_DIRECTORY
+    plant, and say what stays: a symlink at its name goes, and what it names stays, and one on its way is not followed,
+    so what lies past it stays. Nothing there is nothing to remove."""
+    *parts, name = path.parts
     try:
-        parent = os.open(folder, flags) if len(path.parts) == 1 else open_beneath(folder, folder / path.parent, flags)
-    except OSError as error:
-        if error.errno in (errno.ENOENT, errno.ENOTDIR, errno.ELOOP):
-            return
-        raise
-    try:
-        found = os.lstat(path.name, dir_fd=parent)
-        if stat.S_ISDIR(found.st_mode):
-            shutil.rmtree(path.name, dir_fd=parent)
-        else:
-            os.unlink(path.name, dir_fd=parent)
+        dir_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
     except FileNotFoundError:
-        return
+        return None
+    try:
+        for part in parts:
+            try:
+                step = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=dir_fd)
+            except OSError as error:
+                if error.errno not in (errno.ENOTDIR, errno.ELOOP):
+                    raise
+                planted = stat.S_ISLNK(os.lstat(part, dir_fd=dir_fd).st_mode)
+                return "stays, as a symlink on its way is not followed" if planted else None
+            os.close(dir_fd)
+            dir_fd = step
+        found = os.lstat(name, dir_fd=dir_fd)
+        if stat.S_ISDIR(found.st_mode):
+            shutil.rmtree(name, dir_fd=dir_fd)
+        else:
+            os.unlink(name, dir_fd=dir_fd)
+        return "was a symlink, which went, and what it named stays" if stat.S_ISLNK(found.st_mode) else None
+    except FileNotFoundError:
+        return None
     finally:
-        os.close(parent)
+        os.close(dir_fd)
 
 
 def clean(folder: Path, credentials: Iterable[Path]) -> tuple[str, ...]:
     """Remove from an ended agent's `folder` what its harness kept that is no record: its `TMPDIR`, and `credentials`,
-    where beneath the folder its driver says its harness keeps one. Return what could not be removed, in words."""
-    left = []
+    where beneath the folder its driver says its harness keeps one. Return what stays of them, in words."""
+    said = []
     for path in (tmpdir(Path()), *credentials):
         try:
-            _remove_beneath(folder, path)
+            stays = _remove_beneath(folder, path)
         except OSError as error:
-            left.append(f"{path} could not be removed: {error.strerror or error}")
-    return tuple(left)
+            stays = f"could not be removed: {error.strerror or error}"
+        if stays is not None:
+            said.append(f"{path} {stays}")
+    return tuple(said)
 
 
 async def reap(folder: Path, grace: float) -> tuple[str, ...]:
