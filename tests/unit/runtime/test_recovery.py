@@ -578,6 +578,11 @@ async def test_a_diff_left_uncertain_by_a_crash_is_read_again(tmp_path, monkeypa
 
     async with Session.resume("s", root=tmp_path) as session:
         [record] = await until(lambda: of_type(session, "repo.diffed"), session)
+        await until(
+            lambda: of_type(session, "effect.finished"),
+            session,
+            lambda found: any(event.data["kind"] == "diff" for event in found),
+        )
         patch = await session.get_body(record.data["body"])
         events = await journal(session)
 
