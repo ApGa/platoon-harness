@@ -1,13 +1,16 @@
 """A program is a script that owns its session as `program:<name>`: it keeps nothing that must survive a restart, and is
-run again on the session after a crash, where the keys of its commands make each one op."""
+run again on the session after a crash, where the keys of its commands make each one op. The program is the one
+topologies.md writes, run on a scripted reviewer."""
 
 import json
-from collections.abc import Iterable, Iterator, Sequence
+import re
+from collections.abc import Iterator, Sequence
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from platoon_harness import Refused, Session, Team
+from platoon_harness import Session, Team
 from platoon_harness.testing import ScriptedDriver
 
 from .support import harness, of_type
@@ -15,6 +18,8 @@ from .test_recovery import abandon
 
 pytestmark = pytest.mark.timeout(30)
 
+GUIDE = Path(__file__).parents[3] / "docs" / "how-to" / "topologies.md"
+BLOCK = re.compile(r"^```python\n(.*?)^```$", re.M | re.S)
 PATHS = ["src/cart.py", "src/auth.py", "src/pay.py"]
 
 
@@ -34,29 +39,22 @@ class Reviewer(ScriptedDriver):
         return "stopped"
 
 
+def guide() -> dict[str, Any]:
+    """What the guide's Python defines, each block run in order."""
+    namespace: dict[str, Any] = {}
+    for block in BLOCK.findall(GUIDE.read_text()):
+        exec(block, namespace)
+    return namespace
+
+
 def reviews() -> Team:
-    """A queue only the program adds to, and a role nothing starts but the program, under `until = "program"`."""
+    """The guide's team, its reviewer on a scripted harness: a queue only the program adds to, and a role nothing starts
+    but the program, under `until = "program"`."""
     queue = {"kind": "queue", "writers": "program", "readers": "role:reviewer"}
     topology = {"until": "program", "channels": {"reviews": queue}}
-    return Team.model_validate({"roles": {"reviewer": {"harness": harness(Reviewer), "count": 0}}, "topology": topology})
-
-
-async def review(session: Session, paths: Iterable[str]) -> dict[str, str]:
-    """A program: a task on `reviews` for each path, a reviewer to do them, and the session closed once each is done,
-    giving what each came to. Each command's key says what it is for, so run again it acts once."""
-
-    async def once(key: str, op: str, **args: Any) -> Any:
-        outcome = await session.submit(op, key=key, **args)
-        if outcome.refusal is not None:
-            raise Refused.of(outcome.refusal)
-        return outcome.result
-
-    added = [await once(f"add {path}", "task.add", queue="reviews", gist=f"review {path}") for path in paths]
-    await once("spawn", "agent.spawn", name="reviewer", child_role="reviewer", goal="Review each task on `reviews`.")
-    await session.wait(tasks=[f"reviews/{task['task']}" for task in added])
-    done = await session.task_list("reviews")
-    await once("close", "session.close")
-    return {task["gist"]: task["result"] for task in done["tasks"]}
+    return Team.model_validate(
+        {"roles": {"reviewer": {"harness": harness(Reviewer), "count": 0}}, "topology": topology}
+    )
 
 
 class Crashed(Exception):
@@ -70,6 +68,7 @@ def crashing(paths: Sequence[str], after: int) -> Iterator[str]:
 
 
 async def test_a_program_run_again_after_a_crash_adds_nothing_twice(tmp_path):
+    review = guide()["review"]
     session = await Session.start(reviews(), name="s", principal="program:reviews", root=tmp_path)
     with pytest.raises(Crashed):
         await review(session, crashing(PATHS, after=2))

@@ -16,7 +16,8 @@ durable session, and gives them, you and your scripts one way to act on it.
   write no agent code to use one: a role names it, as `harness = "claude"`.
 - **Not a reader of your credentials.** Nothing here reads, copies or stores a harness's login
   ([compatibility](../reference/compatibility.md#7-auth-and-terms)), and an auth profile names variables, never values.
-- **Not a scheduler.** A team says what may happen, never what happens next: control flow belongs in a Python program.
+- **Not a scheduler.** A team says what may happen, never what happens next: control flow belongs in a
+  [Python program](../how-to/topologies.md#run-a-program-from-python).
 
 ## A session, on disk
 

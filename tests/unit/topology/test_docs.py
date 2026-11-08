@@ -31,7 +31,7 @@ def test_the_toml_and_python_forms_build_one_team_and_print_what_the_page_says()
             assert namespace["team"].show() == text.strip()
             pairs += 1
             written = None
-    assert pairs == len(PRESETS) + 4
+    assert pairs == len(PRESETS) + 5
 
 
 def test_every_preset_has_a_section():

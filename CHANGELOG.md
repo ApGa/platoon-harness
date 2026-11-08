@@ -120,6 +120,11 @@ named here is closed.
   harness's own as `act(spec, call)`, where `call(tool, arguments)` calls a tool as a `Call` step does and returns its
   result, so the code can go on from each answer, and each of its calls goes under an id of its own, as a harness's own
   calls do. A stand-in whose next step rested on an answer had to override `ScriptedDriver`'s private methods.
+- **A program, in the topologies guide.** Run a program from Python shows a script that starts its session as
+  `program:<name>` under `until = "program"`, adds a task for each path under a key that says what it is for, starts a reviewer,
+  and closes the session once each task is done, and says how to run it again on the session after a crash, adding nothing twice.
+  A test runs it on a scripted reviewer, crashed after its second task. See
+  [RFC 0068](docs/rfcs/0068-a-program-is-a-script-that-owns-its-session.md).
 - **What doctor finds, when a harness cannot start.** An agent of a session started from the sessions screen whose
   harness cannot start fails, as the workspace showed, and the terminal UI now also says what `doctor`, run in that
   terminal, finds of that harness, in the words `doctor` prints: not on PATH, or its version, the kind of its login and

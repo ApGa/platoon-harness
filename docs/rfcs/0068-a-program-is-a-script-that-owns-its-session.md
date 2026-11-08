@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`topology/spec.py`](../../packages/sdk/src/platoon_harness/topology/spec.py), [`runtime/opening.py`](../../packages/sdk/src/platoon_harness/runtime/opening.py), [architecture section 5.1](../architecture.md#51-one-write), [section 6](../architecture.md#6-operations), [section 7](../architecture.md#completion) and [section 8](../architecture.md#8-topology), [RFC 0007](0007-topology-as-grants.md), [RFC 0048](0048-a-setting-nothing-carries-out-is-refused.md) and [RFC 0050](0050-a-script-is-a-person-or-a-program.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's ruling of 2026-11-08 on its first question, which accepted this design |
-| Implementation | None yet |
+| Implementation | `refactor!: Remove the map-reduce preset, which no program runs`, `refactor!: Drop the program key from a topology, as a program is a script` and `docs: Show a program run from Python in the topologies guide` |
 
 ## Summary
 
@@ -138,7 +138,7 @@ What changes for users:
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
-| M1 programs are scripts | `map-reduce` removed; `program` and `Program` gone; `git-swarm` keeping `role` alone; `until = "program"` refused under a person's principal; `trainable_problems` no longer counting it | `tests/unit/runtime/test_opening.py::test_a_session_left_to_its_program_needs_a_program_to_own_it`, `tests/integration/test_cli.py::test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78` and `::test_a_session_whose_team_names_program_is_refused_on_resume_as_an_unknown_key`, `tests/unit/topology/test_presets.py::test_every_preset_passes_team_check` | |
+| M1 programs are scripts | `map-reduce` removed; `program` and `Program` gone; `git-swarm` keeping `role` alone; `until = "program"` refused under a person's principal; `trainable_problems` no longer counting it | `tests/unit/runtime/test_opening.py::test_a_session_left_to_its_program_needs_a_program_to_own_it`, `tests/integration/test_cli.py::test_run_refuses_a_team_left_to_its_program_naming_the_script_way_with_78` and `::test_a_session_whose_team_names_program_is_refused_on_resume_as_an_unknown_key`, `tests/integration/test_tui.py::test_a_team_left_to_its_program_is_refused_from_the_sessions_screen_naming_the_script_way`, `tests/unit/topology/test_check.py::test_a_team_that_names_a_program_is_refused_as_any_unknown_key_is` and `tests/unit/topology/test_presets.py::test_every_preset_passes_team_check` | |
 | M2 the script way, shown | The topologies guide's program, run again after a crash by a test | `tests/unit/runtime/test_programs.py::test_a_program_run_again_after_a_crash_adds_nothing_twice` | |
 
 ## Open questions

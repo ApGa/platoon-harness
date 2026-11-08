@@ -1,7 +1,8 @@
 # Topologies
 
-A topology says who may reach whom. It never says who acts next: control flow belongs in a Python program. Everything else is
-ordinary grants over relations such as `parent` and `children`, which stay true as agents come and go.
+A topology says who may reach whom. It never says who acts next: control flow belongs in a
+[Python program](#run-a-program-from-python). Everything else is ordinary grants over relations such as `parent` and `children`,
+which stay true as agents come and go.
 
 **Goal:** a team whose roles may reach whom you mean, from a preset, several presets, grants written out or a preset of your
 own, checked before it spends anything.
@@ -11,7 +12,7 @@ The TOML forms go in a team file, whose every key [the team file reference](../r
 
 Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team, as TOML and as Python, and a test
 checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each, and `run` runs
-each but git-swarm, whose session is its program's, a script that starts it.
+each but git-swarm, whose session is its program's, [a script](#run-a-program-from-python) that starts it.
 
 ```python
 from platoon_harness.team import Role, Team
@@ -252,7 +253,7 @@ writer adds to queue `to-critic`; critic claims from it. Each entry wakes its re
 
 A population with no messages and no roles to speak of: commits go to a shared repository, and nominations to a topic everyone reads.
 Its program, a Python script that starts the session as `program:<name>`, owns the session and closes it, so `run` and the terminal
-UI refuse this team, naming the script way.
+UI refuse this team, naming [the script way](#run-a-program-from-python).
 
 ```toml
 [roles.worker]
@@ -448,6 +449,74 @@ lead (claude) may message workers. Workers (codex) may message lead.
 lead adds to queue `tasks`; workers claim from it. Limits: hops 4. Closes when the session settles.
 ```
 
+## Run a program from Python
+
+A topology holds no control flow. When a team needs some, such as handing out work and closing the session once it is done, a program
+does it: a Python script that starts the session as `program:<name>` and acts through the ops a person has. `until = "program"`
+leaves the session to the program that owns it, so `run` and the terminal UI refuse such a team, naming this way. Here the program
+adds a task to `reviews` for each path, starts a reviewer to do them, and closes the session once each is done.
+
+```toml
+[roles.reviewer]
+harness = "claude"
+count = 0
+
+[topology]
+until = "program"
+
+[topology.channels.reviews]
+kind = "queue"
+writers = "program"
+readers = "role:reviewer"
+```
+
+```python
+from collections.abc import Iterable
+from typing import Any
+
+from platoon_harness import Refused, Session
+
+team = Team(
+    roles={"reviewer": Role(harness="claude", count=0)},
+    topology=Topology(until="program", channels={"reviews": Queue(writers="program", readers="role:reviewer")}),
+)
+
+
+async def review(session: Session, paths: Iterable[str]) -> dict[str, str]:
+    """A task on `reviews` for each path, a reviewer to do them, and the session closed once each is done, giving what
+    each came to. Each command's key says what it is for, so run again it acts once."""
+
+    async def once(key: str, op: str, **args: Any) -> Any:
+        outcome = await session.submit(op, key=key, **args)
+        if outcome.refusal is not None:
+            raise Refused.of(outcome.refusal)
+        return outcome.result
+
+    added = [await once(f"add {path}", "task.add", queue="reviews", gist=f"review {path}") for path in paths]
+    await once("spawn", "agent.spawn", name="reviewer", child_role="reviewer", goal="Review each task on `reviews`.")
+    await session.wait(tasks=[f"reviews/{task['task']}" for task in added])
+    done = await session.task_list("reviews")
+    await once("close", "session.close")
+    return {task["gist"]: task["result"] for task in done["tasks"]}
+
+
+async def main(paths: list[str]) -> None:
+    async with Session.start(team, name="reviews", principal="program:reviews") as session:
+        print(await review(session, paths))
+```
+
+```text
+reviewer (claude) may message no one.
+The program adds to queue `reviews`; reviewer claims from it. Closes when the program closes it.
+```
+
+A program keeps nothing that must survive a restart. If its script dies, run it again on the session, with
+`Session.resume("reviews")` in place of `Session.start`: each command it sent before is answered from the journal under the same key,
+so it adds no task and starts no reviewer twice, and it goes on from there. `Session.submit` takes a key, while `Session`'s own
+methods, such as `task_add`, choose a new one for each call, so send what must act once through `submit`, keyed by what it is for and
+not by when it was sent: a second run can read what the first did not. The session issues no owner credential, so anyone who attaches
+only reads, and it cannot detach: its runtime runs in the script's process, and the script leaving stops it, resumable.
+
 ## Check before you spend
 
 `team_check` is a pure function that reports every problem at once, with a suggestion where it can make one. It takes what is known of
@@ -466,8 +535,8 @@ any preset, harness, extension, role, group or auth profile it cannot find. It w
 path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a wake cycle that runs through a child
 that can stay, a role that lets its harness start agents of its own, saying what that gives up, a preamble that leaves out `{tools}` or
 `{ending}`, words that name a tool a role cannot hold, and a team's `preamble` that a role on a harness that reaches none of our tools
-is never told. It says nothing of `until = "program"`, as a team is checked before anyone starts it: a person's start of such a team
-is refused there.
+is never told. It says nothing of `until = "program"`, as it checks a team before anyone starts it: a person's start of such a team
+is refused, and a program's goes ahead.
 
 A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
 count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as a message from the
