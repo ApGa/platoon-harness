@@ -12,8 +12,7 @@ from platoon_harness.drivers import DriverError
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.codex import CodexDriver
 from platoon_harness.drivers.levels import CHECKED, Check, Conformance
-from platoon_harness.extensions import EXTENSIONS
-from platoon_harness.extensions import DRIVERS, load
+from platoon_harness.extensions import DRIVERS, EXTENSIONS, load
 from platoon_harness.runtime.paths import read_conformance, write_conformance
 from platoon_harness_cli import machine
 from platoon_harness_cli.exits import CONFIGURATION
