@@ -255,6 +255,9 @@ Shift and a click a range, and Comment sends what is written below.
 - Asking for a diff is an act, so a view link reads none, not even a commit's patch kept, as the `diff` pane refuses it, and a
   session's history can ask for none. Both say why.
 - A comment on a change no agent's workspace made has nobody to take it, and a person writes about it in the composer instead.
+- The page chooses lines in the browser, so it words what a comment is on, `lines 40 to 52 of 3f9c2a1b2c3d's patch`, and the
+  citation of those lines, the kernel's one form, `ref#La-b`, in its script, as `review.on` and `review.cites` do for the terminal.
+  Every other word of the review comes from `review.py`, and a test in each client asserts the same words for the same lines.
 
 ## Rollout plan
 

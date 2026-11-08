@@ -280,7 +280,9 @@ back to its worker through the task.
 
 A merge, rebase or cherry-pick an agent's git stopped on conflicts is the agent's to resolve. Tell it, as the conflict's Write to it
 does in the dock and under Needs you, and its next turn takes it up. Or resolve it in your own checkout, from the agent's branch, as
-you would take its work. Never resolve it in the agent's workspace: a commit made there is recorded as that agent's, whoever made it,
+you would take its work. That leaves the agent's merge stopped in its workspace, and its place stands until the agent's next turn
+begins, and comes back at the look after it while the merge stays stopped, so tell the agent too, which aborts or finishes it.
+Never resolve it in the agent's workspace: a commit made there is recorded as that agent's, whoever made it,
 since whose a commit is reads that workspace's HEAD reflog, which says the workspace made it and not who ran git, and nothing records
 who committed. That record is evidence at the workspace's assurance, never proof. The conflict's own words say so:
 
