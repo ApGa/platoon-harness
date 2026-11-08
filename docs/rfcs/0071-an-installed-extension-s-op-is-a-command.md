@@ -125,8 +125,9 @@ platoon-harness: extensions.run: runner 1.0.0's extension `run` has no commands,
 own: its ops run through the SDK, MCP, `ph` and the clients' palettes, on a session whose team names it
 ```
 
-The first is the kernel's refusal said before any session meets it: no team can name the extension, so no surface reaches
-its ops, and a name a group of the SDK's ops holds, such as `task`, is refused this way. The second is the command line's
+The first is the kernel's refusal said before any session meets it: a team may name the extension, but no session whose
+team names it can load it, so no surface reaches its ops, and a name a group of the SDK's ops holds, such as `task`, is
+refused this way. The second is the command line's
 alone: a team may still name such an extension, and its ops work everywhere else.
 
 ### 5. Help lists installed extensions from metadata

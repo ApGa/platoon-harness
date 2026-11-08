@@ -365,7 +365,7 @@ def list_installed(*, json: bool = False) -> int:
     json
         Say it as one JSON object.
     """
-    from .main import build  # It builds the command line, this command among it.
+    from .main import build  # Imported here, as main imports this module to build the command line.
 
     installed = _installed(set(build()))
     if json:
