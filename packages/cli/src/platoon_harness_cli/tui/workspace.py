@@ -15,6 +15,7 @@ from textual.content import Content
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.screen import Screen
+from textual.style import Style
 from textual.widgets import Static
 
 from platoon_harness import Refused, Session
@@ -27,7 +28,8 @@ from ..channels import Act
 from ..ops import CONFIRMED, Flag, cut, forms
 from ..provenance import shows
 from ..review import snapshots_of
-from ..roster import detail_of, why_said
+from ..roster import GROUPS, detail_of, why_said
+from . import logo
 from .approvals import Approval
 from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
@@ -38,17 +40,22 @@ from .review import Review
 from .rows import Row, Rows
 from .safe import SafeText, note
 from .tasks import Tasks
-from .transcript import Focus, Transcript, page_of, replying_to, text_of
+from .transcript import Focus, Transcript, inline, page_of, replying_to, text_of
 
-GROUPS = (
-    ("needs_you", "Needs you", "⚠", "yellow"),
-    ("working", "Working", "●", "green"),
-    ("blocked", "Blocked", "◌", "yellow"),
-    ("idle", "Idle", "○", "dim"),
-    ("done", "Done", "✓", "dim green"),
-    ("failed", "Failed", "✗", "red"),
-)
-GLYPHS = {group: (glyph, style) for group, _, glyph, style in GROUPS}
+STATES = {
+    "needs_you": ("◉", "$warning"),
+    "working": ("●", "$success"),
+    "blocked": ("◌", "$warning"),
+    "idle": ("○", "dim"),
+    "done": ("✓", "$success"),
+    "failed": ("✗", "$error"),
+    "lost": ("⊘", "$error"),
+    "unknown": ("?", "dim"),
+}
+"""Each state an agent is shown in, by its glyph and colour, the roster's groups in their order first, then an agent the
+runtime lost and a group this client does not know, which is said as unknown. A glyph says each, as colour alone does
+not."""
+NEEDS_YOU = STATES["needs_you"][0]
 UNREAD = 100
 """The most unread lines a badge counts: past it, it says `99+`."""
 CHOOSE = f"{next(key.shown for key in keys('list') if key.action == 'cursor_down')} chooses a place"
@@ -105,6 +112,18 @@ def _named(action: str) -> str:
     return next(key.name for key in KEYMAP if key.action == action)
 
 
+def _state(row: dict[str, Any]) -> str:
+    """The state an agent is shown in: its group, but lost for one the runtime lost, and unknown for a group this client
+    does not know."""
+    if row["group"] == "failed" and (row["why"] or {}).get("kind") == "lost":
+        return "lost"
+    return row["group"] if row["group"] in GROUPS else "unknown"
+
+
+def _said(state: str) -> str:
+    return GROUPS.get(state, state)
+
+
 def _harness(row: dict[str, Any]) -> str:
     """A harness as a row names it: its command, or the last part of a program's reference."""
     harness = row["harness"]
@@ -136,6 +155,18 @@ def _unmeasured(count: int) -> str:
     return f"{_some(count, 'turn')} unmeasured"
 
 
+METER = 4
+"""How many cells a limit's meter takes."""
+
+
+def _meter(spent: float, limit: float) -> Content:
+    """How much of a limit is spent, as a thin bar: the accent, then the warning colour from four fifths of it, and the
+    error's once it is spent."""
+    filled = min(round(METER * spent / limit), METER) if limit > 0 else METER
+    style = "$error" if spent >= limit else "$warning" if spent >= 0.8 * limit else "$accent"
+    return Content.assemble(("━" * filled, style), ("─" * (METER - filled), "dim"))
+
+
 class Workspace(Screen[None]):
     """One session: who is working, on what, what is blocked, what changed, and where you must act."""
 
@@ -158,6 +189,7 @@ class Workspace(Screen[None]):
         self._queued: dict[str, Any] | None = None
         self._inspected: dict[str, Any] | None = None
         self._unmarked = False
+        self._needing: set[str] | None = None
         self.forms: list[ops.Form] = []
         self.words = ""
 
@@ -167,11 +199,9 @@ class Workspace(Screen[None]):
         with Horizontal(id="body"):
             yield Navigator(id="navigator")
             with Vertical(id="focus"):
-                yield Static(id="title")
+                yield Static(id="strip")
                 yield Transcript(id="transcript")
-                yield Static(id="behind")
             yield Static(id="inspector")
-        yield Static(id="strip")
         yield Dock(id="dock")
         yield Static(id="chip")
         yield Composer(id="composer")
@@ -183,6 +213,8 @@ class Workspace(Screen[None]):
         composer.focus()
         self._lay_out(self.size.width, self.size.height)
         self.query_one("#header", Static).update(SafeText(f"{self.session_name}  attaching…", "bold"))
+        self.query_one("#inspector").border_title = Content("inspector")
+        self.app.theme_changed_signal.subscribe(self, lambda _: self._redraw())
         self._join()
 
     @work(exclusive=True, group="attach")
@@ -193,7 +225,7 @@ class Workspace(Screen[None]):
             through = await session.head()
             self.forms = forms(await session.ops())
         except Refused as refused:
-            self.query_one("#header", Static).update(SafeText(f"{self.session_name}: {refused}", "red"))
+            self.query_one("#header", Static).update(SafeText(f"{self.session_name}: {refused}", "$error"))
             return
         try:
             self.marks = await session.marks()
@@ -258,7 +290,19 @@ class Workspace(Screen[None]):
             self._mark(transcript)
         await self._read_queue(live)
         await self._inspect(live)
+        self._toast(live)
         self._redraw()
+
+    def _toast(self, live: Live) -> None:
+        """Say in a toast that an agent has come to need you while another is in view: one that needed you as the
+        screen first drew it has not come to."""
+        needing = {row["agent"] for row in live.roster if row["group"] == "needs_you"}
+        came, self._needing = needing - (self._needing if self._needing is not None else needing), needing
+        shown = self.focus_on.agent if self.focus_on else None
+        for agent in sorted(came - {shown}):
+            row = self._row(agent)
+            why = f": it {why_said(row['why'])}" if row and row["why"] else ""
+            note(self, f"@{agent} needs you{why}. {reach('next_place')} goes to it.", severity="warning")
 
     def _first_focus(self, live: Live) -> Focus:
         """The agent the session started first, or what was sent to you when it started none."""
@@ -364,10 +408,13 @@ class Workspace(Screen[None]):
         self.query_one("#banner").set_class(live.runtime != "live", "-shown")
         self.query_one("#navigator", Rows).show(self._navigator(live))
         self._set("#strip", self._strip(live))
-        self._set("#title", self._title())
-        self.query_one("#title").set_class(self.query_one(Transcript).has_focus, "-focused")
-        self._set("#behind", self._behind())
-        self.query_one("#behind").set_class(not self.query_one(Transcript).following, "-shown")
+        focus = self.query_one("#focus")
+        title: Content = self._title()
+        behind: Content = self._behind()
+        if self._shown.get("title") != title:
+            self._shown["title"] = focus.border_title = title
+        if self._shown.get("behind") != behind:
+            self._shown["behind"] = focus.border_subtitle = behind
         self._set("#inspector", self._inspector(live))
         dock = self.query_one(Dock)
         dock.show(self._dock(live))
@@ -382,27 +429,43 @@ class Workspace(Screen[None]):
             self.query_one(selector, Static).update(content)
 
     def _header(self, live: Live) -> Content:
-        counts = defaultdict(int)
+        """The session in segments: its name, how it stands, who is working and how many places need you, what is
+        blocked or failed, what changed and what is spent against each limit. Where they do not fit, the last go
+        first, and under 60 columns only the name and the counts stay, in glyphs."""
+        counts: dict[str, int] = defaultdict(int)
         for row in live.roster:
             counts[row["group"]] += 1
         acting = len(self._places(live))
+        working = (f"{STATES['working'][0]} {counts['working']}", "$success" if counts["working"] else "dim")
+        needing = (f"{NEEDS_YOU} {acting}", "bold $warning" if acting else "dim")
+        name = SafeText(self.session_name, "bold")
         if self.size.width < 60:
-            return Content.assemble(
-                SafeText(self.session_name, "bold"),
-                f" {counts['working']}● ",
-                (f"{acting}⚠", "yellow" if acting else "dim"),
-            )
-        runtime = ("live", "green") if live.runtime == "live" else ("history", "yellow")
+            return Content.assemble(name, "  ", working, "  ", needing)
+        runtime = ("live", "$success") if live.runtime == "live" else ("history", "$warning")
         standing = "waiting for you" if live.status.get("stalled") else "settled" if live.status.get("settled") else ""
-        state = live.status.get("state", "") + (f", {standing}" if standing else "")
-        parts: list[Any] = [SafeText(self.session_name, "bold"), "  ", runtime, (f" {state}   ", "dim")]
-        parts += [(f"● {counts['working']} working  ", "green")]
-        parts += [(f"⚠ {acting} need you  ", "yellow" if acting else "dim")]
-        if counts["blocked"]:
-            parts += [(f"◌ {counts['blocked']} blocked  ", "yellow")]
-        if counts["failed"]:
-            parts += [(f"✗ {counts['failed']} failed  ", "red")]
-        return Content.assemble(*parts, self._changed(live), "  ", *self._spent(live))
+        state = " · ".join(said for said in (live.status.get("state", ""), standing) if said)
+        segments: list[Content] = [
+            name,
+            Content.assemble(runtime, (f" · {state}" if state else "", "dim")),
+            Content.assemble(working, " working"),
+            Content.assemble(needing, " need you"),
+        ]
+        for group in ("blocked", "failed"):
+            if counts[group]:
+                glyph, style = STATES[group]
+                segments.append(Content.styled(f"{glyph} {counts[group]} {group}", style))
+        changed = self._changed(live)
+
+        def fits(parts: list[Content]) -> bool:
+            return sum(part.cell_length + 2 for part in parts) - 2 <= self.size.width - 2
+
+        for meters, amounts in ((True, True), (True, False), (False, True), (False, False)):
+            shown = [*segments, changed, *self._spent(live, meters=meters, amounts=amounts)]
+            if fits(shown):
+                break
+        while len(shown) > 4 and not fits(shown):
+            shown.pop()
+        return Content("  ").join(shown)
 
     def _changed(self, live: Live) -> Content:
         """What changed, as the looks found it: not observed in a session whose cwd is in no git repository, and not
@@ -416,24 +479,30 @@ class Workspace(Screen[None]):
         paths = sum(row["total"] or 0 for row in rows if row["kind"] == "workspace")
         return Content(f"{_some(commits, 'commit')}, {_some(paths, 'path')} uncommitted")
 
-    def _spent(self, live: Live) -> list[Any]:
-        """Each shared limit and what is spent against it, any metered amount with no limit, and once how many turns
-        nobody measured whole, after `spent ?` when nothing else would show."""
+    def _spent(self, live: Live, *, meters: bool, amounts: bool) -> list[Content]:
+        """Each shared limit and what is spent against it, with a meter, if `meters`, where the amount is known, and if
+        `amounts`, any metered amount with no limit, and once how many turns nobody measured whole, after `spent ?`
+        when nothing else would show."""
         limits = {row["unit"]: row for row in live.budgets if row["scope"] == "shared"}
         usage = live.ending.usage if live.ending else {}
-        said = [
-            _spend(unit, None if row["label"] == "unavailable" else row["spent"], row["label"], row["limit"])
-            for unit, row in limits.items()
-        ]
+        said: list[Content] = []
+        for unit, row in limits.items():
+            spent = None if row["label"] == "unavailable" else row["spent"]
+            measured = meters and spent is not None and row["limit"] is not None
+            meter = [" ", _meter(spent, row["limit"])] if measured else []
+            words = _spend(unit, spent, row["label"], row["limit"]).partition(" ")
+            said.append(Content.assemble(words[0], *meter, " ", words[2]))
+        if not amounts:
+            return said
         said += [
-            _spend(unit, used["amount"], used["label"], None)
+            Content(_spend(unit, used["amount"], used["label"], None))
             for unit, used in usage.items()
             if unit in ("tokens", "usd") and unit not in limits and used["amount"] is not None
         ]
         unmeasured = max((used["unmeasured"] for used in usage.values()), default=0)
         if not unmeasured:
-            return ["  ".join(said)]
-        return ["  ".join(said or ["spent ?"]), (f" ({_unmeasured(unmeasured)})", "dim")]
+            return said
+        return [*(said or [Content("spent ?")]), Content.styled(_unmeasured(unmeasured), "dim")]
 
     def _banner(self, live: Live) -> Content:
         """Why this is history, from the session's state: its runtime stopped as its owner asked, went without its
@@ -441,13 +510,13 @@ class Workspace(Screen[None]):
         state = live.status.get("state")
         resume = f" {reach('resume')} resumes it, which can spend money."
         if state in ("closed", "cancelled"):
-            return Content.styled(f"The session is {state}: this is its history.", "yellow")
+            return Content.styled(f"The session is {state}: this is its history.", "$warning")
         if state == "stopped":
-            return Content.styled(f"Its runtime stopped, as its owner asked: this is its history.{resume}", "yellow")
+            return Content.styled(f"Its runtime stopped, as its owner asked: this is its history.{resume}", "$warning")
         if state in ("open", "closing"):
             went = f"Its runtime went without its shutdown, killed or crashed: this is its history.{resume}"
-            return Content.styled(went, "red")
-        return Content.styled(f"No runtime holds this session, so this is its history.{resume}", "yellow")
+            return Content.styled(went, "$error")
+        return Content.styled(f"No runtime holds this session, so this is its history.{resume}", "$warning")
 
     def _places(self, live: Live) -> list[dict[str, Any]]:
         """Where you must act, oldest first: every row of `attention` but a mention you have read past."""
@@ -468,87 +537,127 @@ class Workspace(Screen[None]):
         return named - {""}
 
     def _navigator(self, live: Live) -> list[Row]:
+        """The session's mark, then the agents in the roster's groups, each a tree by parent of two lines, its glyph and
+        name over its state, harness and what it is doing, then the channels."""
         mentioned = self._mentions(live)
-        rows: list[Row] = []
+        rows = self._brand(live)
         members: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in live.roster:
-            members[row["group"]].append(row)
-        for group, title, glyph, style in GROUPS:
-            if not members[group]:
+            members[_state(row) if _state(row) in ("lost", "unknown") else row["group"]].append(row)
+        for state in STATES:
+            if not members[state]:
                 continue
-            rows.append(Row(Content.styled(f"{title} ({len(members[group])})", "bold dim")))
-            names = {row["agent"] for row in members[group]}
+            rows.append(Row(Content.assemble((_said(state), "dim"), (f"  {len(members[state])}", "dim"))))
+            names = {row["agent"] for row in members[state]}
             under: dict[str | None, list[dict[str, Any]]] = defaultdict(list)
-            for row in members[group]:
+            for row in members[state]:
                 under[row["parent"] if row["parent"] in names else None].append(row)
-            rows += self._tree(under, None, 0, glyph, style, mentioned)
+            rows += self._tree(under, None, 0, mentioned)
+            rows.append(Row(Content("")))
         if not live.roster:
-            rows.append(Row(Content.styled("No agents yet", "dim")))
-        rows.append(Row(Content.styled("Channels", "bold dim")))
+            rows += [Row(Content.styled("no agents yet", "dim")), Row(Content(""))]
+        rows.append(Row(Content.styled("channels", "dim")))
         for focus in self._foci(live):
             unread = self.unread.get(focus.key, 0)
             count = (f"{UNREAD - 1}+" if unread >= UNREAD else str(unread)) if unread else ""
-            mark = ("@", "yellow") if focus.key in mentioned else ""
-            rows.append(Row(Content.assemble(SafeText(focus.title), (f" {count}", "bold"), " ", mark), focus.key))
+            mark = ("@", "$warning") if focus.key in mentioned else ""
+            line = Content.assemble("  ", SafeText(focus.title), (f" {count}", "bold $accent"), " ", mark)
+            rows.append(Row(line, focus.key, lead=2))
         return rows
 
+    def _brand(self, live: Live) -> list[Row]:
+        """The logo's agents beside the session's name, how it stands and how many agents it has, where the screen is
+        tall enough to give it the rows."""
+        if self.size.height < 16:
+            return []
+        art = logo.sprite(logo.SMALL, logo.ANSI if self.app.current_theme.ansi else logo.TRUECOLOUR)
+        runtime = ("live", "$success") if live.runtime == "live" else ("history", "$warning")
+        said = [
+            SafeText(self.session_name, "bold"),
+            Content.styled(*runtime),
+            SafeText(live.status.get("state", ""), "dim"),
+            Content.styled(_some(len(live.roster), "agent"), "dim"),
+        ]
+        lead = art[0].cell_length + 2
+        return [
+            *(Row(Content.assemble(cells, "  ", words), lead=lead) for cells, words in zip(art, said, strict=True)),
+            Row(Content("")),
+        ]
+
     def _tree(
-        self,
-        under: dict[str | None, list[dict[str, Any]]],
-        parent: str | None,
-        depth: int,
-        glyph: str,
-        style: str,
-        mentioned: set[str],
+        self, under: dict[str | None, list[dict[str, Any]]], parent: str | None, depth: int, mentioned: set[str]
     ) -> list[Row]:
+        """An agent and those below it, two lines each: its glyph, which turns while it works, and its name, with any
+        mention of you unread and how many entries wait for its next handover; then its state, its harness, and what it
+        waits on or is doing, where the record says."""
         rows = []
         for row in sorted(under[parent], key=lambda found: found["agent"]):
-            detail = detail_of(row)
-            stopped = f"turn {row['stopped']}" if row["stopped"] and row["group"] == "idle" else ""
-            line = Content.assemble(
-                "  " * depth,
+            state = _state(row)
+            glyph, style = STATES[state]
+            indent = "  " * depth
+            key = f"@{row['agent']}"
+            named = Content.assemble(
+                indent,
                 (f"{glyph} ", style),
-                SafeText(f"@{row['agent']}", "bold"),
-                ("@" if f"@{row['agent']}" in mentioned else "", "yellow"),
-                SafeText(f" {_harness(row)} ", "dim"),
-                (f"↧{row['unread']} " if row["unread"] else "", "cyan"),
-                SafeText(" ".join((stopped or detail).split())),
+                SafeText(key, "bold"),
+                ("@" if key in mentioned else "", "$warning"),
+                (f" ↧{row['unread']}" if row["unread"] else "", "$accent"),
             )
-            rows.append(Row(line, f"@{row['agent']}"))
-            rows += self._tree(under, row["agent"], depth + 1, glyph, style, mentioned)
+            stopped = f"turn {row['stopped']}" if row["stopped"] and row["group"] == "idle" else ""
+            doing = " ".join((stopped or detail_of(row)).split())
+            how = Content.assemble(
+                indent + "  ",
+                SafeText(f"{_said(state)} · {_harness(row)}", style),
+                (" · " if doing else "", "dim"),
+                inline(SafeText(doing).plain).stylize("dim"),
+            )
+            spins = state == "working"
+            rows += [Row(named, key, lead=len(indent) + 2, spins=spins), Row(how, key, lead=len(indent) + 2)]
+            rows += self._tree(under, row["agent"], depth + 1, mentioned)
         return rows
 
     def _strip(self, live: Live) -> Content:
-        """The team on one line, for a screen too narrow for the navigator."""
-        return Content.assemble(
-            *(
-                part
-                for row in live.roster
-                for part in (
-                    (f"{GLYPHS[row['group']][0]}", GLYPHS[row["group"]][1]),
-                    SafeText(f"{row['agent']}  "),
-                )
-            )
-        )
+        """The team as tabs, for a screen too narrow for the navigator: each agent's glyph and name, the one in view
+        filled with the accent, a click on one showing it."""
+        shown = self.focus_on.key if self.focus_on else None
+        tabs = []
+        for row in live.roster:
+            glyph, style = STATES[_state(row)]
+            key = f"@{row['agent']}"
+            chosen = Style.from_meta({"@click": f"screen.show_row({key!r})"})
+            if key == shown:
+                tab = SafeText(f" {glyph} {key} ", "bold $background on $accent")
+            else:
+                tab = Content.assemble(" ", (glyph, style), SafeText(f" {key} "))
+            tabs.append(tab.stylize(chosen))
+        return Content(" ").join(tabs)
 
     def _title(self) -> Content:
+        """What is in view, and for an agent its role and harness, its state, and why it waits."""
         focus = self.focus_on
         if focus is None:
             return Content("")
         row = self._row(focus.agent)
         if row is None:
-            return SafeText(focus.title, "bold")
+            return SafeText(f" {focus.title} ", "bold")
+        glyph, style = STATES[_state(row)]
+        why = why_said(row["why"])
         return Content.assemble(
-            SafeText(focus.title, "bold"),
-            SafeText(f"  {row['role']} on {_harness(row)}", "dim"),
-            SafeText(f"  {row['state']}", GLYPHS[row["group"]][1]),
-            SafeText(f"  {why_said(row['why'])}"),
+            SafeText(f" {focus.title}", "bold"),
+            SafeText(f" · {row['role']} on {_harness(row)} · ", "dim"),
+            SafeText(f"{glyph} {_said(_state(row))}", style),
+            SafeText(f" · {why}" if why else "", "dim"),
+            " ",
         )
 
     def _behind(self) -> Content:
-        unseen = self.query_one(Transcript).unseen
+        """Under the transcript while it does not follow: how many lines came since, and how to follow again."""
+        transcript = self.query_one(Transcript)
+        if transcript.following:
+            return Content("")
         follow = reach("follow")
-        return Content.styled(f"↓ {unseen} new, {follow} to follow" if unseen else f"{follow} to follow", "reverse")
+        said = f"↓ {transcript.unseen} new, {follow} to follow" if transcript.unseen else f"{follow} to follow"
+        return Content.styled(f" {said} ", "bold")
 
     def _inspector(self, live: Live) -> Content:
         focus = self.focus_on
@@ -567,7 +676,7 @@ class Workspace(Screen[None]):
         if row["resting"]:
             lines.append(SafeText("resting: its harness has no process, and its next message brings it back"))
         if row["why"] is not None:
-            lines.append(SafeText(f"why {why_said(row['why'])}", "yellow"))
+            lines.append(SafeText(f"why {why_said(row['why'])}", "$warning"))
         if row["held_by"]:
             lines.append(SafeText(f"held by @{row['held_by']}"))
         lines += self._workspace(row)
@@ -580,7 +689,9 @@ class Workspace(Screen[None]):
             label = f" ({usage.get('label', 'unavailable')}{unmeasured})"
             lines.append(Content.assemble(_spend(unit, usage.get("amount"), "", None), (label, "dim")))
         gaps = [gap for gap in (live.ending.gaps if live.ending else ()) if gap["agent"] == row["agent"]]
-        lines += [SafeText(f"gap {gap['what']}, {gap['count']} on the {gap['plane']} plane", "yellow") for gap in gaps]
+        lines += [
+            SafeText(f"gap {gap['what']}, {gap['count']} on the {gap['plane']} plane", "$warning") for gap in gaps
+        ]
         lines += [
             SafeText(f"{_named(action)}: {reason}", "dim")
             for (action, agent), (reason, _) in self._refused.items()
@@ -606,7 +717,7 @@ class Workspace(Screen[None]):
         lines += [SafeText(f"  from {made['base'][:12]}")] if made.get("base") else []
         lines.append(SafeText(f"  {workspace['path']}", "dim"))
         if kept := status.get("kept"):
-            lines.append(SafeText(f"kept: {'; '.join(kept['why'])}", "yellow"))
+            lines.append(SafeText(f"kept: {'; '.join(kept['why'])}", "$warning"))
         return lines
 
     def _dock(self, live: Live) -> list[Row]:
@@ -631,7 +742,7 @@ class Workspace(Screen[None]):
             elif chosen is None and dock.has_focus and index == 0:
                 hints = [(f"{CHOOSE}  ", "bold")]
             line = Content.assemble(
-                ("⚠ ", "yellow"),
+                (f"{NEEDS_YOU} ", "$warning"),
                 (f"{place['kind']} ", "bold"),
                 SafeText(f"@{place['agent']} " if place["agent"] else ""),
                 *hints,
@@ -660,14 +771,14 @@ class Workspace(Screen[None]):
         cannot = self._unsendable(live)
         if cannot is not None:
             return SafeText(cannot, "dim")
-        parts: list[Any] = [("to: ", "dim"), SafeText(self.target or "", "bold reverse")]
+        parts: list[Any] = [("to: ", "dim"), SafeText(self.target or "", "bold $accent")]
         if (replying := self._replying()) is not None:
             parts += [("  replying to ", "dim"), SafeText(replying_to(replying), "bold")]
         if self._queued is not None:
             ways = sorted({entry["delivery"] for entry in self._queued["entries"]})
-            parts += [(f"  queued {self._queued['total']}: {', '.join(ways)}", "cyan")]
+            parts += [(f"  queued {self._queued['total']}: {', '.join(ways)}", "$accent")]
         if self.attached is not None:
-            parts += [SafeText(f"  + {self.attached[0]} ({len(self.attached[1]):,} bytes)", "magenta")]
+            parts += [SafeText(f"  + {self.attached[0]} ({len(self.attached[1]):,} bytes)", "$secondary")]
         return Content.assemble(*parts)
 
     def _footer(self, live: Live) -> Content:
@@ -676,7 +787,7 @@ class Workspace(Screen[None]):
         agent in view, then how many places need you."""
         agent = self.focus_on.agent if self.focus_on else None
         active = self.active_bindings
-        parts: list[Any] = [("/", "bold"), (" commands", "dim"), "  "]
+        parts: list[Any] = [("/", "bold $accent"), (" commands", "dim"), "  "]
         for key in (*keys("everywhere"), *keys("workspace")):
             if not key.footer:
                 continue
@@ -684,9 +795,9 @@ class Workspace(Screen[None]):
             now = next((other for other in KEYMAP if other.runs == runs), key)
             off = (now.action, agent or "") in self._refused
             label = "" if self.size.width < 60 else f" {now.name}"
-            parts += [(key.shown, "dim" if off else "bold"), (label, "dim strike" if off else "dim"), "  "]
+            parts += [(key.shown, "dim" if off else "bold $accent"), (label, "dim strike" if off else "dim"), "  "]
         if places := len(self._places(live)):
-            parts.append((f" ⚠ {places} need you ", "bold reverse yellow"))
+            parts.append((f" {NEEDS_YOU} {places} need you ", "bold $background on $warning"))
         return Content.assemble(*parts)
 
     # What a person does.
@@ -933,6 +1044,11 @@ class Workspace(Screen[None]):
 
     def action_navigator(self) -> None:
         self.toggle_class("navigator-shown" if self.size.width < 80 else "navigator-hidden")
+
+    async def action_show_row(self, key: str) -> None:
+        """Show the agent or channel a tab names, as choosing its row in the navigator does."""
+        if self.live is not None:
+            await self.show(self._focus_of(key))
 
     def action_inspector(self) -> None:
         self.toggle_class("inspector-shown")

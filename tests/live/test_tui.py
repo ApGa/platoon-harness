@@ -106,7 +106,7 @@ async def test_a_person_runs_a_team_from_the_tui_and_comes_back_to_it(tmp_path, 
         screen = workspace(app)
         await screen.show(screen._agent("w"))
 
-        await drawn(pilot, lambda text: "⚠ approval" in text, within=WITHIN)
+        await drawn(pilot, lambda text: "◉ approval" in text, within=WITHIN)
         for _ in range(len(live_places(app))):
             await pilot.press("alt+a")
             if chosen(app).get("kind") == "approval":

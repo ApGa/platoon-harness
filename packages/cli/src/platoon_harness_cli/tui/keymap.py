@@ -125,6 +125,7 @@ KEYMAP: tuple[Key, ...] = (
         footer=True,
     ),
     Key("l", "look", "look again", "Look again for sessions and how each stands", "sessions"),
+    Key("t", "app.theme", "theme", "Choose a colour theme for this run", "sessions"),
     Key("question_mark", "app.help", "help", "Show every key and typed command", "sessions", footer=True),
     Key("p", "app.command_palette", "palette", "Find a command, an op among them", "sessions"),
     Key("q", "app.leave", "quit", "Quit: a session you are in runs on", "sessions", footer=True),
@@ -167,6 +168,7 @@ KEYMAP: tuple[Key, ...] = (
     ),
     Key("alt+f", "attach_file", "file", "Attach a file to the message, as its body", "workspace"),
     Key("", "resume", "resume", "Resume this session when it is history, which can spend money", "workspace"),
+    Key("", "app.theme", "theme", "Choose a colour theme for this run", "workspace"),
     Key(
         "ctrl+t",
         "tasks",

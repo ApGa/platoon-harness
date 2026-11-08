@@ -10,32 +10,42 @@ from textual.geometry import Region, Size
 from textual.message import Message
 from textual.scroll_view import ScrollView
 from textual.strip import Strip
+from textual.timer import Timer
 
 from .keymap import bindings
 
-CHOSEN = Style(reverse=True)
+SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+"""The frames a working agent's glyph turns through while animation is on, eight a second."""
+SPIN = 1 / 8
 
 
 @dataclass(frozen=True)
 class Row:
     """One line. A row with no `key` is a heading, which the cursor passes over, and rows that share a key are one
-    choice, as a long line wrapped is."""
+    choice, as a long line wrapped is. Its first `lead` characters decorate it, as a glyph does. A row that `spins`
+    turns the character before its lead's last through the spinner's frames."""
 
     line: Content
     key: str | None = None
+    lead: int = 0
+    spins: bool = False
 
 
 def strip_of(line: Content, width: int, style: Style) -> Strip:
-    """One line at exactly `width` cells: tabs expanded, cut with an ellipsis or padded."""
+    """One line at exactly `width` cells, over `style`: tabs expanded, cut with an ellipsis or padded."""
     fitted = line.expand_tabs().truncate(width, ellipsis=True)
-    return Strip(fitted.render_segments(), fitted.cell_length).crop_extend(0, width, style)
+    return Strip(fitted.render_segments(), fitted.cell_length).crop_extend(0, width, style).apply_style(style)
 
 
 class Rows(ScrollView, can_focus=True):
     """Rows, of which one may be chosen by the keys, a click or the program. Choosing posts `Chosen`."""
 
     BINDINGS = bindings("list")
-    DEFAULT_CSS = "Rows { overflow-x: hidden; }"
+    COMPONENT_CLASSES = {"rows--chosen"}
+    DEFAULT_CSS = """
+    Rows { overflow-x: hidden; scrollbar-size-vertical: 1; }
+    Rows > .rows--chosen { background: $accent 25%; text-style: bold; }
+    """
 
     class Chosen(Message):
         def __init__(self, rows: "Rows", key: str) -> None:
@@ -47,6 +57,8 @@ class Rows(ScrollView, can_focus=True):
         super().__init__(id=id)
         self.rows: list[Row] = []
         self.cursor: str | None = None
+        self._frame = 0
+        self._spinning: Timer | None = None
 
     def show(self, rows: list[Row]) -> None:
         """Draw these rows, keeping the cursor on its key while that key is shown. The same rows draw nothing."""
@@ -57,6 +69,19 @@ class Rows(ScrollView, can_focus=True):
         if self.cursor not in keys:
             self.cursor = keys[0] if keys else None
         self.virtual_size = Size(0, len(rows))
+        self._spin_while(any(row.spins for row in rows) and self.app.animation_level != "none")
+        self.refresh()
+
+    def _spin_while(self, spinning: bool) -> None:
+        """Turn the spinner while a row spins, and let its timer go once none does. It decides nothing."""
+        if spinning and self._spinning is None:
+            self._spinning = self.set_interval(SPIN, self._turn)
+        elif not spinning and self._spinning is not None:
+            self._spinning.stop()
+            self._spinning = None
+
+    def _turn(self) -> None:
+        self._frame += 1
         self.refresh()
 
     @property
@@ -100,7 +125,7 @@ class Rows(ScrollView, can_focus=True):
             self.post_message(self.Chosen(self, self.cursor))
 
     def on_click(self, event: events.Click) -> None:
-        index = event.y + self.scroll_offset.y
+        index = event.get_content_offset_capture(self).y + self.scroll_offset.y
         if 0 <= index < len(self.rows) and (key := self.rows[index].key) is not None:
             self.cursor = key
             self.refresh()
@@ -112,7 +137,13 @@ class Rows(ScrollView, can_focus=True):
         if index >= len(self.rows):
             return Strip.blank(width, self.rich_style)
         row = self.rows[index]
-        strip = strip_of(row.line, width, self.rich_style)
+        line = row.line
+        if row.spins and self._spinning is not None:
+            at = row.lead - 2
+            line = (
+                line[:at] + Content(SPINNER[self._frame % len(SPINNER)], list(line[at : at + 1].spans)) + line[at + 1 :]
+            )
+        strip = strip_of(line, width, self.rich_style)
         if row.key is not None and row.key == self.cursor:
-            strip = Strip(Segment.apply_style(strip, post_style=CHOSEN), width)
+            strip = Strip(Segment.apply_style(strip, post_style=self.get_component_rich_style("rows--chosen")), width)
         return strip

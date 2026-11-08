@@ -62,7 +62,7 @@ async def test_the_event_loop_keeps_up_at_100_agents_with_one_live_stream(tmp_pa
     await in_state(guest, "streamer", "idle")
     app = TerminalUI("s")
     async with app.run_test(size=(120, 40)) as pilot:
-        await drawn(pilot, lambda text: "Idle (100)" in text)
+        await drawn(pilot, lambda text: "idle  100" in text)
         screen = workspace(app)
         await screen.show(Focus.of_agent("streamer"))
         live = screen.live
@@ -158,7 +158,7 @@ async def test_the_tui_attaches_to_a_100000_event_journal_within_its_budget(tmp_
     began = time.monotonic()
     async with app.run_test(size=(120, 40)) as pilot:
         last = f"round {len(rounds)} is under way"
-        await drawn(pilot, lambda text: f"Idle ({MEMBERS})" in text and last in text)
+        await drawn(pilot, lambda text: f"idle  {MEMBERS}" in text and last in text)
         attached = time.monotonic() - began
     await guest.leave()
     print(f"attached to {rounds[-1].metrics.head} events in {attached:.2f} s")

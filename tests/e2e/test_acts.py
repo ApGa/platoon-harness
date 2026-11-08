@@ -194,7 +194,7 @@ async def test_an_approval_answered_from_the_browser_and_the_terminal_at_once_ta
         await page.route("**/x/command", held)
         app = TerminalUI("s")
         async with app.run_test(size=(120, 30)) as pilot:
-            await drawn(pilot, lambda text: "⚠ approval" in text)
+            await drawn(pilot, lambda text: "◉ approval" in text)
             live = workspace(app).live
             assert live is not None
             submit = live.session.submit

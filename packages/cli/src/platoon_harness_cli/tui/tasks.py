@@ -98,7 +98,7 @@ class Tasks(ModalScreen[None]):
         try:
             self.view = await channels.read(self._session, self.channel, self._person)
         except Refused as refused:
-            title.update(SafeText(f"{self.channel}: {refused}", "red"))
+            title.update(SafeText(f"{self.channel}: {refused}", "$error"))
             return
         title.update(SafeText(self.view.title, "bold"))
         self._show(self.view)

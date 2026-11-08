@@ -102,7 +102,7 @@ async def test_a_runtime_stopped_resumed_and_killed_under_the_tui_shows_as_what_
     async with app.run_test(size=(120, 30)) as pilot:
         await drawn(pilot, lambda text: "@lead" in text and " live " in text)
         await pilot.press(*"first", "enter")
-        await drawn(pilot, lambda text: "@lead  done" in text)
+        await drawn(pilot, lambda text: "    done" in text)
 
         await ask_to_stop(guest)
         await drawn(pilot, lambda text: "Its runtime stopped, as its owner asked" in text)
@@ -111,7 +111,7 @@ async def test_a_runtime_stopped_resumed_and_killed_under_the_tui_shows_as_what_
         guest = await Session.resume("s", detach=True)
         await drawn(pilot, lambda text: " live " in text and "owner asked" not in text, within=30)
         await pilot.press(*"second", "enter")
-        await drawn(pilot, lambda text: text.count("@lead  done") == 2)
+        await drawn(pilot, lambda text: text.count("    done") == 2)
 
         running = read_running(tmp_path / "sessions" / "s")
         assert running is not None
@@ -255,7 +255,7 @@ async def test_the_sessions_screen_works_with_no_sessions_and_starts_one_on_a_de
         running = read_running(folder)
         assert running is not None and running.pid != os.getpid()
         await pilot.press("ctrl+d")
-        await drawn(pilot, lambda text: "crew" in text and "Sessions" in text)
+        await drawn(pilot, lambda text: "crew" in text and "sessions under" in text)
         assert isinstance(app.screen, Sessions) and is_held(folder)
         await pilot.press("ctrl+q")
     assert app.return_value is None and is_held(folder)
@@ -291,7 +291,7 @@ async def test_a_whole_session_takes_no_ctrl_alt_or_function_key(tmp_path):
         assert [event.data["reason"] for event in ended] == ["interrupted"]
 
         await pilot.press(*"/detach", "enter")
-        await drawn(pilot, lambda text: "crew" in text and "Sessions" in text)
+        await drawn(pilot, lambda text: "crew" in text and "sessions under" in text)
         assert isinstance(app.screen, Sessions) and is_held(folder)
         await pilot.press("q")
 

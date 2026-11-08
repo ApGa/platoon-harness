@@ -34,7 +34,7 @@ def rows_of(lines: list[Line], width: int, keyed: str) -> tuple[list[Row], dict[
         if line.ref is not None:
             key = f"{keyed}{index}"
             refs[key] = line.ref
-        text = SafeText(line.text, "yellow" if line.warn else "").wrap(max(width - KIND, 20))
+        text = SafeText(line.text, "$warning" if line.warn else "").wrap(max(width - KIND, 20))
         for at, part in enumerate(text):
             label = (f"{line.kind if at == 0 else '':<{KIND}}", "dim")
             rows.append(Row(Content.assemble(label, part), key))

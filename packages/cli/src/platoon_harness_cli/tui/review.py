@@ -20,7 +20,14 @@ from .keymap import bindings, keys
 from .rows import Row, Rows
 from .safe import SafeText, note
 
-STYLES: dict[Tone, str] = {"": "", "strong": "bold", "faint": "dim", "good": "green", "bad": "red", "warn": "yellow"}
+STYLES: dict[Tone, str] = {
+    "": "",
+    "strong": "bold",
+    "faint": "dim",
+    "good": "$success",
+    "bad": "$error",
+    "warn": "$warning",
+}
 """How the terminal draws each tone of the shared wording."""
 NUMBER = 6
 """How wide the column is that numbers a patch's lines."""
@@ -37,7 +44,7 @@ def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int, snapshots: Coll
 
 
 def _row(change: Change) -> Row:
-    lead = ("● " if change.new else "  ", "cyan") if change.kind in ("commit", "path", "more") else ""
+    lead = ("● " if change.new else "  ", "$accent") if change.kind in ("commit", "path", "more") else ""
     parts = [SafeText(text, STYLES[tone]) for text, tone in change.parts]
     return Row(Content.assemble(lead, *parts), change.key)
 
@@ -52,7 +59,7 @@ def patch_rows(diff: Diff, shown: int, width: int, chosen: tuple[int, int] | Non
     for line in lines[:shown]:
         lead = GOES_ON if line.continues else ""
         wrapped = SafeText(line.text, STYLES[line.tone]).wrap(max(width - NUMBER - len(lead), 20)) or [Content("")]
-        mark = ("┃", "cyan") if first <= line.number <= last else " "
+        mark = ("┃", "$accent") if first <= line.number <= last else " "
         for at, part in enumerate(wrapped):
             number = (f"{line.number if at == 0 else '':>{NUMBER - 1}}", "dim")
             led = (lead if at == 0 else " " * len(lead), "dim")
@@ -60,7 +67,7 @@ def patch_rows(diff: Diff, shown: int, width: int, chosen: tuple[int, int] | Non
     if shown < len(lines):
         rows.append(Row(Content.styled(f"{len(lines) - shown} more lines: Enter reads on", "bold"), MORE))
     elif diff.below is not None:
-        rows.append(Row(SafeText(diff.below, "yellow")))
+        rows.append(Row(SafeText(diff.below, "$warning")))
     return rows
 
 
@@ -174,7 +181,7 @@ class Patch(ModalScreen[None]):
             asked = await self._session.repo_diff(self._of)
             self.diff = await review.read(self._session, asked["effect"])
         except Refused as refused:
-            above.update(SafeText(f"The diff of {self._of}: {refused}", "red"))
+            above.update(SafeText(f"The diff of {self._of}: {refused}", "$error"))
             return
         said = [SafeText(self.diff.above[0], "bold"), *(SafeText(line, "dim") for line in self.diff.above[1:])]
         above.update(Content("\n").join(said))

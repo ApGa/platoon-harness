@@ -56,6 +56,11 @@ printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
 
 ## The sessions screen
 
+![The sessions screen: Platoon's agents beside the wordmark, and the mixed team's session, closed, as its history](../assets/tui-sessions.svg)
+
+*The sessions screen on the mixed team's session as a live run on DeepSeek V4.1 Flash recorded it, at 100 columns by 28
+rows.*
+
 Every session under the root, whether a runtime holds it and its state, and it works with none. With nothing where the
 project's `platoon-harness.toml` goes, in the folder you started it in, it offers once, as it opens, to write one from
 the harnesses on your PATH, as `init` does: a lead on the first, which starts workers on the second. Only `y` takes the
@@ -70,7 +75,7 @@ looked for on, but an agent in an isolated workspace keeps its harness's state i
 `doctor` names is this terminal's, not that harness's. `r` resumes a session whose runtime has gone, after saying that it can spend money. `s` stops one as its owner
 would, after one confirmation, and it stays resumable. Enter opens one: live as a guest, or as read-only history when no
 runtime holds it, with `/resume` offered to resume it. `/detach` comes back here from a session opened here, which runs
-on. `l` looks again, `?` shows every key, `p` opens the palette and `q` quits. In a form, Enter goes to the next field,
+on. `l` looks again, `t` chooses a theme, `?` shows every key, `p` opens the palette and `q` quits. In a form, Enter goes to the next field,
 and from the last sends it.
 
 ## The workspace
@@ -82,9 +87,9 @@ that spawned an OpenHands worker, read back as history.*
 
 | Part | What it answers |
 |---|---|
-| Header | Who is working, how many places need you, what is blocked or failed, what changed, as commits and paths uncommitted, `not measured` until the first look and `not observed` when the session's cwd is in no git repository, and each limit with what is spent against it, `?` where nobody could say, and how many turns nobody measured whole |
-| Navigator | Agents grouped by what you must do, Needs you, Working, Blocked, Idle, Done and Failed, as a tree by parent, with what each is on or waits for. Channels below, with how many lines you did not write lie past your mark, and a mark for a mention you have not read |
-| Focus pane | One agent, one channel or one thread at a time, so live text is never merged |
+| Header | The session's name and how it stands, who is working, how many places need you, what is blocked or failed, what changed, as commits and paths uncommitted, `not measured` until the first look and `not observed` when the session's cwd is in no git repository, and each limit with what is spent against it, a meter beside it where the amount is known, `?` where nobody could say, and how many turns nobody measured whole |
+| Navigator | Platoon's agents beside the session's name, then the agents grouped by what you must do, needs you, working, blocked, idle, done and failed, as a tree by parent, each with its glyph, its name, and under it its state, its harness and what it is on or waits for. Channels below, with how many lines you did not write lie past your mark, and a mark for a mention you have not read |
+| Focus pane | One agent, one channel or one thread at a time, so live text is never merged, its title what is in view and, for an agent, its role, harness and state |
 | Inspector, `/inspector` | Why an agent waits, whether it rests with no process until its next message, its harness, model, login kind and levels, its workspace, with its branch, the commit it started from, a line on what an isolated one still reaches, and why its stop kept it, what it spent with labels, its gaps, and what the runtime refused you |
 | Dock | Each place you must act, from the `attention` view, with its actions. A place its agent's next turn settles, a lost turn, a wake past `max_hops`, a failure or a conflict of an agent's, offers Write to it, a mention Reply, and a dead task Add it again, each opening its op's form. An agent's conflict says to tell it, or to resolve it in your own checkout, never in its workspace, where a commit is recorded as the agent's. Your checkout's has no action, and says to resolve it there, a failure of no agent's that nothing tries it again, and a daemon that keeps failing where its traceback is and what starts it anew |
 | Composer | What you write, and above it whom it goes to and what waits for that agent |
@@ -94,10 +99,57 @@ read come from your marks in `marks.sqlite`: reading a channel to its newest lin
 and acknowledges nothing an agent was handed. Leaving writes each mark still being written, so what you read stays read. It is the one file the terminal writes reading a session, history too. One that cannot be
 read or written loses only badges, which is said once.
 
+### How it looks
+
+The workspace is drawn in titled panels with thin rounded borders, the one that has focus in the accent, on a dark ink
+background with one accent colour, the logo's sky blue: the theme `platoon-ink`. `/theme`, or `t` on the sessions screen,
+chooses another of Textual's themes for this run, `ansi-dark` among them, which draws in your terminal's own colours, and
+it says the line that keeps it: `theme = "nord"` in `tui.toml`, in `$XDG_CONFIG_HOME/platoon-harness`, or
+`~/.config/platoon-harness` where that is not set, beside the user config a team loads. A name there that is none of the
+themes is said, and the default stays.
+
+Platoon's agents stand beside the session's name at the navigator's top, and larger beside the wordmark on the sessions
+screen: a sprite drawn by hand from the icon of [Platoon](https://github.com/ApGa/platoon) (MIT, © Apurva Gandhi), two
+pixels to a cell in half blocks, in the icon's blue to green, and in your terminal's own blue, cyan and green under a
+theme that keeps to them.
+
+Each agent's state has a glyph as well as a colour, so neither alone says it:
+
+| Glyph | State |
+|---|---|
+| `◉` | needs you |
+| `●` | working, turning while animation is on |
+| `◌` | blocked |
+| `○` | idle |
+| `✓` | done |
+| `✗` | failed |
+| `⊘` | lost: the runtime lost it |
+| `?` | unknown: a state this terminal does not know |
+
+The glyph of a working agent turns as a spinner, eight times a second, on a timer that decides nothing, and
+`TEXTUAL_ANIMATIONS=none` keeps it still. Where the header does not fit, the amounts spent with no limit give way to the
+meters first, then the meters go, then its segments from its end, what is spent and then what changed, and under 60
+columns it keeps the name and the counts. When an agent comes to need you while another is in view, a toast names it, why
+it waits and the key that goes to it.
+
+The mouse does what a key does, and each key still does it: a click on a row of the navigator, or a tab of the strip under
+80 columns, shows that agent or channel, as Alt+↓ goes to it; a click on a line opens it, as Enter on the chosen line
+does; and the wheel scrolls, as PgUp and PgDn do.
+
 ### The transcript
 
-Each event is one line, and a line opens on demand, with Enter on the chosen line, `/open-line` from anywhere, or a click: its
-body as Markdown and code, or its gist whole, then where it came from. Links are followed only to `http` and `https`. The
+Each event is one line, and a run of lines one speaker says stands under one heading, its name, or the sender and where
+it was sent, `@you → @lead`. A line of the runtime's own stands alone, and a turn's start is a rule across the transcript,
+with a blank row before it and before each new speaker. A line reads its words as Markdown, its emphasis and code styled
+and their marks gone. A tool call is a line of its name as its model calls it, but for our tools' `mcp__ph__`, its input
+dim, and a glyph for how it ended, `▸` while it runs, `✓` and `✗`, with the word for an ending other than completed. What
+an agent says in a turn with a gist of whitespace alone, as a model can before a tool call, says nothing and is drawn as no
+line once its body is read and blank too, or at once where it has none; one whose body is unread, cannot be read, or says
+something, is drawn. A page read back above keeps the heading its first line had, so what is on screen does not move, and
+a long run read back says its speaker again where a page began.
+
+A line opens on demand, with Enter on the chosen line, `/open-line` from anywhere, or a click: its
+body as Markdown and code, or its gist whole, then where it came from, with a tool's whole name. Links are followed only to `http` and `https`. The
 transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
 was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each child
 it spawned began and ended, inside the turn that spawned it, the spawn under the line of the tool call that made it, even when
@@ -131,7 +183,7 @@ the default pending the owner's ruling.
 ### Copy a line
 
 `/copy` sends the chosen line's text to the terminal as OSC 52, the sequence a terminal may take as text for its
-clipboard: the line as the transcript shows it, and while it is open, the text it opens on, its body as read, its gist
+clipboard: the line as the transcript shows it, who says it and its words, and while it is open, the text it opens on, its body as read, its gist
 whole or an approval's ask, as text and never as Markdown. While what it opens on is still being read, its gist goes in
 its place, which it says. Each control in it is shown as its escape, as on the screen, so what you paste acts on no
 terminal. It says how many characters it sent. Whether they reach the clipboard is the terminal's, which may take no
@@ -312,9 +364,9 @@ ruling.
 |---|---|
 | 120 columns or more | Navigator, focus pane, and the inspector beside them |
 | 80 to 119 | Navigator and focus pane, and the inspector over the focus pane |
-| 60 to 79 | The focus pane, a line of the team above the composer, and the navigator over the focus pane on `/navigator`, until Esc or a row chosen in it closes it |
-| under 60 | As 60 to 79, with the header shortened to counts and the footer to `/ commands` and keys |
-| under 16 rows | The dock, the banner and the team line give way, and the composer keeps three rows |
+| 60 to 79 | The focus pane, with the team as tabs at its top, the one in view filled with the accent, and the navigator over the focus pane on `/navigator`, until Esc or a row chosen in it closes it |
+| under 60 | As 60 to 79, with the header shortened to the name and counts and the footer to `/ commands` and keys |
+| under 16 rows | The dock, the banner, the tabs, the logo and the panels' borders give way, and the composer keeps three rows |
 
 A resize changes which parts show, and never the scroll position or the composer's target. It moves focus only by hiding
 the part that has it, which gives focus back to the composer. The snapshot tests draw the same session at
@@ -370,6 +422,7 @@ before the session's. `^` is Ctrl.
 | `r` | Resume a session whose runtime has gone, which can spend money |
 | `s` | Stop a session's runtime as its owner would, keeping it resumable |
 | `l` | Look again for sessions and how each stands |
+| `t` | Choose a colour theme for this run |
 | `?` | Show every key and typed command |
 | `p` | Find a command, an op among them |
 | `q` | Quit: a session you are in runs on |
@@ -397,6 +450,7 @@ before the session's. `^` is Ctrl.
 | `^F` | `/find` | Find the line before the chosen one whose words hold those you give, reading back a page at a time |
 | `Alt+F` | `/file` | Attach a file to the message, as its body |
 |  | `/resume` | Resume this session when it is history, which can spend money |
+|  | `/theme` | Choose a colour theme for this run |
 | `^T` | `/tasks` | Show the tasks of the queue in view, or the entries of the board in view, each act opening its op's form |
 | `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths, each opening its diff |
 |  | `/provenance` | Show an event's provenance, by the ref you give, the chosen line's unless you give another: what it rests on, what came of it and whose work it reaches |
@@ -493,6 +547,6 @@ before the session's. `^` is Ctrl.
 
 Disabled where a control for it would be, or absent from the palette:
 image input, harness slash commands, model and permission
-switching, taking over an agent's native terminal, copying a selection from
-the transcript, as `/copy` copies only the chosen line, themes and notifications, and in provenance credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
+switching, taking over an agent's native terminal, notifications outside the terminal, such as its bell or the
+desktop's, and in provenance credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,
 leases and credentials do not, so no control will offer it.

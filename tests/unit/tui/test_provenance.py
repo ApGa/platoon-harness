@@ -250,14 +250,15 @@ async def test_a_turn_s_cut_opens_the_span_it_ends_whose_row_is_the_whole_span_s
             await workspace(app).show(Focus.of_agent("w"))
             cut = f"── span {first.ref} ends ──"
             text = await drawn(pilot, lambda text: cut in text and "both are done" in text)
-            await choose(pilot, app, cut)
+            await choose(pilot, app, f"span {first.ref} ends")
             await pilot.press("p")
             await drawn(pilot, lambda text: f"Provenance of {first.ref}" in text and "Credit and rewards" in text)
             said_of = said(app)
 
-    drawn_in_order = [line.strip() for line in text.splitlines()]
+    drawn_in_order = [line.split("│")[-2].strip() if line.count("│") >= 4 else line for line in text.splitlines()]
     at = next(index for index, line in enumerate(drawn_in_order) if cut in line)
-    assert "task_complete completed" in drawn_in_order[at - 1] and "task_claim completed" in drawn_in_order[at + 1]
+    assert drawn_in_order[at - 2].startswith("✓ task_complete") and drawn_in_order[at - 1] == ""
+    assert drawn_in_order[at + 1] == "@w" and drawn_in_order[at + 2].startswith("✓ task_claim")
     assert text.count("── span ") == 1, "a turn's last span ends with the turn, which draws no cut"
     whole = f"it names a span of @w's, so a credit row on it is the whole span's: the model calls in turn {first.turn}"
     assert f"{whole} from {first.first} to this one" in said_of

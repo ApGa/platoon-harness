@@ -76,7 +76,7 @@ async def test_a_message_from_the_composer_reaches_the_target_shown_once(root):
         assert app.focused is app.screen.query_one(Composer)
 
         await pilot.press(*"fix the flaky test", "enter")
-        await drawn(pilot, lambda text: "@lead  on it" in text)
+        await drawn(pilot, lambda text: "    on it" in text)
 
         sent = [event for event in await of_type(owner, "message.sent") if event.actor == "human:you"]
         assert [(event.stream, event.gist) for event in sent] == [("inbox/lead", "fix the flaky test")]
@@ -186,7 +186,7 @@ async def test_esc_interrupts_the_agent_in_view_and_is_disabled_with_the_runtime
         assert len(refused) == 1, "a refused act submitted again"
 
         await pilot.press(*"again", "enter")
-        await drawn(pilot, lambda text: "@lead  again" in text)
+        await drawn(pilot, lambda text: "    again" in text)
         assert workspace(app)._refused == {}
 
 
@@ -578,12 +578,12 @@ async def test_a_channel_s_unread_count_and_a_mention_come_from_the_person_s_mar
             await drawn(pilot, lambda text: "#notes 3" in text)
             assert workspace(app).unread["#notes"] == 3
             await pilot.press(*"go", "enter")
-            text = await drawn(pilot, lambda text: "a question for you" in text and "⚠ 1 need you" in text)
+            text = await drawn(pilot, lambda text: "a question for you" in text and "◉ 1 need you" in text)
             assert "@lead@" in text
 
             head = await owner.head()
             await pilot.press("alt+a")
-            await drawn(pilot, lambda text: "⚠ 0 need you" in text)
+            await drawn(pilot, lambda text: "◉ 0 need you" in text)
             await pilot.press("alt+down")
             text = await drawn(pilot, lambda text: "the lead's note 2" in text)
             assert "#notes 3" not in text
@@ -702,7 +702,8 @@ async def test_alt_a_goes_round_every_place_and_yes_answers_the_one_it_is_at(roo
         row = dock_of(app).rows.index(next(row for row in dock_of(app).rows if row.key == at))
         gist = workspace(app).live.attention[at]["gist"]
         assert row_text(dock_of(app), row).endswith(f"/yes Allow  /no Deny  /ask Read it whole  {gist}")
-        assert next(iter(dock_of(app).render_line(row))).style.reverse
+        chosen, other = (next(iter(dock_of(app).render_line(at))).style for at in (row, (row + 1) % 3))
+        assert chosen.bold and chosen.bgcolor != other.bgcolor
         await pilot.press(*"/yes", "enter")
         resolved = await until(lambda: of_type(owner, "approval.resolved"), owner)
         assert [event.stream for event in resolved] == [at]
@@ -723,7 +724,7 @@ async def test_a_daemon_that_keeps_failing_is_a_place_in_the_dock(root, monkeypa
         await pilot.press(*"go", "enter")
         text = await drawn(pilot, lambda text: "daemon courier failed" in text)
 
-        assert "⚠ daemon courier failed and is restarted with backoff, its traceback in the session folder's" in text
+        assert "◉ daemon courier failed and is restarted with backoff, its traceback in the session folder's" in text
         assert [place["kind"] for place in workspace(app)._places(workspace(app).live)] == ["daemon"]
 
 
@@ -922,9 +923,9 @@ async def test_a_spoiled_marks_file_loses_only_badges(root):
         (owner.folder / "marks.sqlite").write_bytes(b"this is no database")
         app = TerminalUI("s")
         async with app.run_test(size=(120, 32)) as pilot:
-            await drawn(pilot, lambda text: "@lead" in text and "Channels" in text)
+            await drawn(pilot, lambda text: "@lead" in text and "channels" in text)
             await pilot.press(*"go", "enter")
-            await drawn(pilot, lambda text: "@lead  still here" in text)
+            await drawn(pilot, lambda text: "    still here" in text)
 
             assert app.is_running
             told = [notice.message for notice in app._notifications]
@@ -953,7 +954,7 @@ async def test_an_edited_recall_is_a_draft_neither_key_replaces(root):
     async with attached(team([Say("one")], [Say("two")]), root) as (_, app, pilot):
         composer = app.screen.query_one(Composer)
         await pilot.press(*"fix the flaky test", "enter")
-        await drawn(pilot, lambda text: "@lead  one" in text)
+        await drawn(pilot, lambda text: "    one" in text)
 
         await pilot.press("up", *" and the docs", "down")
         assert composer.text == "fix the flaky test and the docs"
@@ -980,7 +981,7 @@ async def test_a_typed_command_never_reaches_an_agent_and_any_other_slash_is_ask
         await pilot.press(*"/yes", "enter")
         await drawn(pilot, lambda _: any("Nothing here" in notice.message for notice in app._notifications))
         await pilot.press("/", "enter")
-        await drawn(pilot, lambda text: "/stop-below" in text)
+        await drawn(pilot, lambda text: "/palette" in text and "Show every key and typed command" in text)
         await pilot.press("escape")
         await pilot.pause()
 
@@ -1177,7 +1178,8 @@ async def test_ctrl_home_goes_to_the_start_of_the_transcript(root):
 
             await pilot.press("ctrl+home")
             await drawn(pilot, lambda text: "note 0" in text)
-            assert top_line(transcript).strip().endswith("note 0") and not transcript.following
+            assert top_line(transcript).strip() == "@you → #notes" and not transcript.following
+            assert transcript.render_line(1).text.strip() == "note 0"
 
             await pilot.press("ctrl+end")
             await drawn(pilot, lambda text: "note 1499" in text)
@@ -1210,11 +1212,12 @@ async def test_the_header_says_what_changed_and_each_limit_in_a_few_characters(r
     limited = Team.model_validate({**given, "budget": {"turns": 8, "tokens": 1000, "estimate": {"tokens": 10}}})
     async with attached(limited, root, size=(140, 32)) as (_, _, pilot):
         await pilot.press(*"go", "enter")
-        header = (await drawn(pilot, lambda text: "turns 1/8" in text.splitlines()[0])).splitlines()[0]
+        header = (await drawn(pilot, lambda text: " 1/8" in text.splitlines()[0])).splitlines()[0]
 
-        assert "changes not observed" in header and "/1,000" in header
+        assert "changes not observed" in header and "/1,000" in header and "turns ━━─── 1/8" not in header
+        assert re.search(r"turns [━─]{4} 1/8", header), "a limit's meter is a thin bar beside what is spent of it"
         assert "turns unmeasured" not in header
-        assert header.rstrip().endswith(("1 turn unmeasured)", "/1,000", "turns 1/8"))
+        assert header.rstrip().endswith(("1 turn unmeasured", "/1,000", " 1/8"))
 
 
 async def test_provenance_given_a_ref_opens_it_or_says_why_not(root):
@@ -1223,7 +1226,7 @@ async def test_provenance_given_a_ref_opens_it_or_says_why_not(root):
     with none given nothing opens, saying why."""
     async with attached(team([Say("on it")]), root) as (_, app, pilot):
         await pilot.press(*"fix the flaky test", "enter")
-        await drawn(pilot, lambda text: "@lead  on it" in text)
+        await drawn(pilot, lambda text: "    on it" in text)
         chosen = app.screen.query_one(Transcript).chosen
         assert chosen is not None
         filled, opened = [], {}
@@ -1320,7 +1323,7 @@ async def test_a_thread_opens_on_its_message_and_the_composer_replies_in_it(root
         await until(lambda: of_type(owner, "turn.ended"), owner)
         app = TerminalUI("s")
         async with app.run_test(size=(120, 32)) as pilot:
-            await drawn(pilot, lambda text: "@lead  asked" in text)
+            await drawn(pilot, lambda text: "    asked" in text)
             screen = workspace(app)
             transcript = screen.query_one(Transcript)
 
@@ -1342,7 +1345,7 @@ async def test_a_thread_opens_on_its_message_and_the_composer_replies_in_it(root
             ]
 
             await pilot.press(*"agreed", "enter")
-            await drawn(pilot, lambda text: "@you → #notes  agreed" in text)
+            await drawn(pilot, lambda text: "    agreed" in text)
 
             await pilot.press("alt+up")
             await drawn(pilot, lambda text: "and one for you" in text)
@@ -1350,7 +1353,7 @@ async def test_a_thread_opens_on_its_message_and_the_composer_replies_in_it(root
             text = await drawn(pilot, lambda text: "Thread inbox/you@" in text)
             assert "to: @lead  replying to @lead" in text
             await pilot.press(*"thanks", "enter")
-            await drawn(pilot, lambda text: "@you → @lead  thanks" in text)
+            await drawn(pilot, lambda text: "    thanks" in text)
 
         sent = [event for event in await of_type(owner, "message.sent") if event.actor == "human:you"]
         replies = [(event.stream, event.gist, event.data["reply_to"], event.data["thread"]) for event in sent[3:]]
@@ -1390,10 +1393,61 @@ async def test_copy_sends_the_chosen_line_s_text_as_osc_52_with_no_escape_in_it(
         await drawn(pilot, lambda _: len(copied()) == 3)
         notices = [notice.message for notice in app._notifications]
 
-    line = f"@you → #notes  {safe(HOSTILE)} ▸"
+    line = f"@you → #notes  {safe(HOSTILE)}"
     assert copied() == [line, f"{line}\n{safe(body)}", f"{line}\n{safe(HOSTILE)}"]
     assert not [char for char in UNSAFE if char in "".join(copied())]
     terminal_s = "whether they reach your clipboard is your terminal's."
     assert f"Sent the chosen line's {len(line)} characters as OSC 52: {terminal_s}" in notices
     reading = "What it opens on is still being read, so its gist went in its place: /copy again once that shows."
     assert notices[-1] == f"Sent the chosen line's {len(copied()[2])} characters as OSC 52: {terminal_s} {reading}"
+
+
+async def test_a_tab_clicked_shows_its_agent_as_alt_down_does(root):
+    """Under 80 columns the team is tabs over the transcript, the agent in view filled with the accent, and a click on
+    another tab shows that agent."""
+    spawn = Call("agent_spawn", {"name": "w1", "child_role": "worker", "goal": "work"})
+    async with attached(team([spawn], worker=[[Say("ok")]]), root, size=(70, 30)) as (_, app, pilot):
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda text: "@w1" in text.splitlines()[2])
+        screen = workspace(app)
+        tabs = screen.query_one("#strip").render_line(0).text
+        await pilot.click("#strip", offset=(tabs.index("@w1") + 1, 0))
+        await drawn(pilot, lambda _: screen.focus_on is not None and screen.focus_on.agent == "w1")
+
+
+async def test_an_agent_that_comes_to_need_you_while_another_is_in_view_is_said_in_a_toast(root):
+    """Once: a toast names it, why it waits and how to go to it, while the agent in view needing you is shown where it
+    is, so it is no toast."""
+    spawn = Call("agent_spawn", {"name": "w1", "child_role": "worker", "goal": "work"})
+    async with attached(team([spawn, Ask("May the lead?")], worker=[[Ask("May a worker?")]]), root) as (_, app, pilot):
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda _: len(workspace(app)._places(workspace(app).live)) == 2)
+        await pilot.pause()
+        toasts = [notice.message for notice in app._notifications if "needs you" in notice.message]
+
+    assert toasts == ["@w1 needs you: it asks you to approve. Alt+A or /next-place goes to it."]
+
+
+async def test_the_theme_is_tui_toml_s_or_the_default_and_theme_chooses_one_for_the_run(root, tmp_path, monkeypatch):
+    """`theme` in `tui.toml` names one of Textual's themes, a name that is none of them saying so and keeping the
+    default, and `/theme` chooses another, saying what keeps it."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    (tmp_path / "config" / "platoon-harness").mkdir(parents=True)
+    settings = tmp_path / "config" / "platoon-harness" / "tui.toml"
+    themes = []
+    for at, named in enumerate(('theme = "nord"', 'theme = "no-such"', "theme = [")):
+        settings.write_text(named)
+        monkeypatch.setenv("PLATOON_HARNESS_HOME", str(root / str(at)))
+        (root / str(at)).mkdir()
+        async with attached(team(), root / str(at)) as (_, app, pilot):
+            themes.append(app.theme)
+            notices = [notice.message for notice in app._notifications]
+            if named.endswith("["):
+                await pilot.press(*"/theme", "enter")
+                await pilot.press(*"dracula", "enter")
+                await drawn(pilot, lambda _: app.theme == "dracula")
+                notices = [notice.message for notice in app._notifications]
+
+    assert themes == ["nord", "platoon-ink", "platoon-ink"]
+    assert f'The theme is dracula for this run: `theme = "dracula"` in {settings} keeps it.' in notices
+    assert any(f"{settings} was not read, so the theme is platoon-ink" in said for said in notices)

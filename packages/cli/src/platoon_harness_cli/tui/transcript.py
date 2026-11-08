@@ -1,5 +1,6 @@
-"""The transcript: one agent's, one channel's or one thread's journal, a line per event and a line opens on demand, read
-from the journal a page at a time and drawn a line at a time, with what an agent is saying now below it."""
+"""The transcript: one agent's, one channel's or one thread's journal, a line per event under a heading for each run of
+lines one speaker says, and a line opens on demand, read from the journal a page at a time and drawn a line at a time,
+with what an agent is saying now below it."""
 
 import asyncio
 import bisect
@@ -9,6 +10,7 @@ from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from typing import Any
 
+from markdown_it import MarkdownIt
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.segment import Segment
@@ -24,6 +26,7 @@ from textual.style import Style
 from platoon_harness import Refused, Session
 from platoon_harness.kernel import Delta, Event, Page
 from platoon_harness.primitives import Span
+from platoon_harness.tools import NAMESPACE
 
 from .. import approvals
 from ..approvals import Ask
@@ -32,7 +35,7 @@ from ..output import safe
 from ..provenance import REF_IN_TEXT, shows
 from .approvals import rows_of
 from .keymap import bindings
-from .rows import CHOSEN, strip_of
+from .rows import strip_of
 from .safe import SafeText, note
 
 PAGE = 256
@@ -40,6 +43,9 @@ WINDOW = 10_000
 """The most lines a transcript holds. Past it the far end goes, and is read back from the journal when it comes near."""
 BODY_LIMIT = 256 * 1024
 _CACHE = 4096
+SPACE, HEAD = -2, -1
+"""The rows before a line, by their place in a line's rows: a blank one before a new speaker's heading or a rule, and
+the heading."""
 _LINKS = ("http://", "https://")
 _HIDDEN = frozenset(
     {
@@ -181,95 +187,187 @@ def _linked(text: Content) -> Content:
     return text
 
 
-def line_of(event: Event) -> Content | None:
+_INLINE = MarkdownIt("zero").enable(["emphasis", "backticks", "strikethrough", "escape", "entity"])
+"""Markdown within a line: emphasis, code and strikethrough, and nothing that would make it more than one line."""
+_STYLES = {"strong": "bold", "em": "italic", "s": "strike"}
+
+
+def inline(text: str) -> Content:
+    """One line of Markdown as it reads, its emphasis, code and strikethrough styled and their marks gone. The text is
+    safe already, and is never read as markup."""
+    parts: list[tuple[str, str]] = []
+    held: list[str] = []
+    for token in _INLINE.parseInline(text)[0].children or ():
+        kind = token.type.removesuffix("_open").removesuffix("_close")
+        if token.type.endswith("_open") and kind in _STYLES:
+            held.append(_STYLES[kind])
+        elif token.type.endswith("_close") and kind in _STYLES and held:
+            held.pop()
+        elif token.type == "code_inline":
+            parts.append((token.content, " ".join([*held, "$accent"])))
+        else:
+            parts.append((token.content, " ".join(held)))
+    return Content.assemble(*parts)
+
+
+def _gist(event: Event, style: str = "") -> Content:
+    """An event's gist on one line, each ref it names a link."""
+    return _linked(SafeText(" ".join(event.gist.split()), style))
+
+
+def _told(event: Event) -> Content:
+    """What an event says, as Markdown read on one line, each ref it names a link."""
+    return _linked(inline(SafeText(" ".join(event.gist.split())).plain))
+
+
+SURFACE = f"mcp__{NAMESPACE}__"
+"""What our tools' names begin with on a harness that shows them by MCP, which a line leaves out."""
+
+
+def tool_named(gist: str) -> tuple[str, str]:
+    """A tool item's gist as its name, as its model calls it but for our surface's prefix, and the rest, its input or
+    how it ended."""
+    name, _, rest = " ".join(gist.split()).partition(" ")
+    return name.removeprefix(SURFACE), rest
+
+
+@dataclass(frozen=True)
+class Said:
+    """An event as a line: who says it, which a run of lines shares under one heading, or None for a line of the
+    runtime's own, which stands alone; the mark before its words, which decorates them; its words; and whether it is
+    a rule across the transcript, as a turn's start is."""
+
+    who: Content | None
+    mark: Content
+    words: Content
+    rule: bool = False
+
+    @property
+    def text(self) -> Content:
+        """The line as words, with who says it."""
+        return self.words if self.who is None else Content.assemble(self.who, "  ", self.words)
+
+
+def _mark(glyph: str, style: str = "") -> Content:
+    return Content.styled(f"{glyph} ", style)
+
+
+NO_MARK = Content("  ")
+
+
+def line_of(event: Event, started: Event | None = None) -> Said | None:
     """An event as one line, or None for one a transcript leaves out. Any event has a line: its gist, at least, with
-    each ref it names a link."""
+    each ref it names a link. A tool call's end takes the input its start, `started`, shows."""
     data: dict[str, Any] = event.data if isinstance(event.data, dict) else {}
-    gist = _linked(SafeText(" ".join(event.gist.split())))
-    more = (" ▸", "dim") if data.get("body") else ""
+    agent = SafeText(f"@{event.agent}", "bold")
     match event.type:
         case "message.sent":
             sender = data.get("sender", event.actor)
             subject = data.get("subject")
-            about = SafeText(f"@{subject} ", "bold") if subject else Content("")
+            who = Content.assemble(_who(sender), (" → ", "dim"), SafeText(_address(event.stream)))
             if sender == "runtime" and subject:
-                return Content.assemble(("↩ ", "dim"), about, gist, more)
-            return Content.assemble(_who(sender), (" → ", "dim"), SafeText(_address(event.stream)), "  ", gist, more)
+                return Said(
+                    who, _mark("↩", "dim"), Content.assemble(SafeText(f"@{subject}", "bold"), "  ", _told(event))
+                )
+            return Said(who, NO_MARK, _told(event))
         case "item.recorded":
-            return _item(event.agent or "", data, gist, more)
+            return _item(agent, data, event, started)
         case "turn.started":
-            return Content.styled("── turn ──", "dim")
+            return Said(None, Content(""), Content.styled("turn", "dim"), rule=True)
         case "turn.ended":
             reason = data.get("reason", "")
-            return None if reason == "stopped" else Content.assemble(("■ turn ", "yellow"), SafeText(reason, "yellow"))
+            style = "dim" if reason == "finished" else "$warning"
+            return None if reason == "stopped" else Said(None, _mark("■", style), SafeText(f"turn {reason}", style))
         case "turn.lost":
-            return Content.styled("■ turn lost: the runtime went in the middle of it", "red")
+            return Said(
+                None, _mark("■", "$error"), Content.styled("turn lost: the runtime went in the middle of it", "$error")
+            )
         case "agent.ended":
             failed = data.get("status") in ("failed", "lost")
-            return Content.assemble(("✗ " if failed else "✓ ", "red" if failed else "green"), gist)
+            return Said(None, _mark("✗" if failed else "✓", "$error" if failed else "$success"), _gist(event))
         case "gap.recorded":
-            return Content.assemble(("gap ", "yellow"), gist)
+            return Said(None, _mark("!", "$warning"), Content.assemble(("gap ", "$warning"), _gist(event)))
         case "approval.requested":
-            return Content.assemble(SafeText(f"@{event.agent}", "bold"), (" asks for approval  ", "dim"), gist, more)
+            asks = Content.assemble(("asks for approval  ", "dim"), _gist(event))
+            return Said(agent, _mark("◉", "$warning"), asks)
         case "approval.resolved":
             return _answered(data)
         case _ if event.type in _HIDDEN:
             return None
-    return Content.assemble(("· ", "dim"), gist, more)
+    return Said(None, _mark("·", "dim"), _gist(event))
 
 
-def _answered(data: dict[str, Any]) -> Content:
+def _answered(data: dict[str, Any]) -> Said:
     """Who answered an approval, and how: a person, through what they said, or the role's stated policy."""
     allowed = data.get("verdict") == "allow"
     by = data.get("resolved_by") or ""
     who = Content("policy") if by == "policy" else _who(by)
     via = SafeText(f" via {data['via']}", "dim") if data.get("via") and by != "policy" else Content("")
-    said = "allowed by " if allowed else "denied by "
-    return Content.assemble(("✓ " if allowed else "✗ ", "green" if allowed else "red"), said, who, via)
+    said = Content.assemble("allowed by " if allowed else "denied by ", who, via)
+    return Said(None, _mark("✓" if allowed else "✗", "$success" if allowed else "$error"), said)
 
 
-def _cut(span: str) -> Content:
+def _cut(span: str) -> Said:
     """Where a span ends and the next of its turn begins, naming the span by its last call."""
-    return Content.assemble(("── span ", "dim"), SafeText(span, "dim"), (" ends ──", "dim"))
+    return Said(
+        None, Content(""), Content.assemble(("span ", "dim"), SafeText(span, "dim"), (" ends", "dim")), rule=True
+    )
 
 
-def _spawned(event: Event, joined: bool) -> Content:
-    """A child's spawn: under the call that made it, or where the journal has it, led as any event's line is, so it
-    stands under no line, saying it joins no known call."""
-    gist = SafeText(" ".join(event.gist.split()))
-    if joined:
-        return Content.assemble(("  ↳ ", "dim"), gist)
-    return Content.assemble(("· ", "dim"), gist, (f" · {UNJOINED}", "dim"))
+def _spawned(event: Event, under: Said | None) -> Said:
+    """A child's spawn: under the call that made it, in that call's run, or where the journal has it, led as the
+    runtime's own lines are, saying it joins no known call."""
+    if under is not None:
+        return Said(under.who, _mark("↳", "dim"), _gist(event))
+    return Said(None, _mark("·", "dim"), Content.assemble(_gist(event), (f" · {UNJOINED}", "dim")))
 
 
-def _item(agent: str, data: dict[str, Any], gist: Content, more: Any) -> Content:
-    name = SafeText(f"@{agent}", "bold")
+def _item(agent: Content, data: dict[str, Any], event: Event, started: Event | None) -> Said:
     match data.get("kind"):
         case "message":
-            return Content.assemble(name, "  ", gist, more)
+            return Said(agent, NO_MARK, _told(event))
         case "thought":
-            return Content.assemble(name, (" thinks  ", "dim"), gist.stylize("dim italic"), more)
+            return Said(
+                agent, _mark("∴", "dim"), Content.assemble(("thinks  ", "dim"), _told(event).stylize("dim italic"))
+            )
         case "patch":
-            return Content.assemble(("± ", "cyan"), gist, more)
+            return Said(agent, _mark("±", "$accent"), _gist(event))
+    name, rest = tool_named((started or event).gist)
+    given = rest and (started is not None or data.get("phase") == "started")
+    called = Content.assemble(SafeText(name), *(("  ", SafeText(rest, "dim")) if given else ()))
     if data.get("phase") == "started":
-        return Content.assemble(("▸ ", "cyan"), gist, more)
-    failed = data.get("outcome") not in (None, "completed", "allow")
-    return Content.assemble(("✗ " if failed else "✓ ", "red" if failed else "green"), gist, more)
+        return Said(agent, _mark("▸", "$accent"), _linked(called))
+    outcome = data.get("outcome")
+    if outcome in (None, "completed", "allow"):
+        return Said(agent, _mark("✓", "$success"), _linked(called))
+    return Said(agent, _mark("✗", "$error"), Content.assemble(_linked(called), SafeText(f"  {outcome}", "$error")))
+
+
+def blank(event: Event) -> bool:
+    """Whether an event is what an agent says in its turn with a gist of whitespace alone, which says nothing if its
+    body, where it has one, is blank too."""
+    data = event.data if isinstance(event.data, dict) else {}
+    return event.type == "item.recorded" and data.get("kind") == "message" and not event.gist.strip()
 
 
 @dataclass(eq=False)
 class Block:
     """One line: `first`, the seq of the event that began it, which is where it stands; the event it shows, which a
     tool call's end takes over from its start, and a cut, standing at the next span's first call, is the last call of
-    the span it ends; and what opening it shows: its body, read when first opened, or its gist whole, or for an
-    approval's request, its `ask`, read when first opened."""
+    the span it ends; how it reads; and what opening it shows: its body, read when first opened, or its gist whole, or
+    for an approval's request, its `ask`, read when first opened."""
 
     first: int
     event: Event
-    line: Content
+    said: Said
     open: bool = False
     text: str | None = None
     ask: Ask | None = None
+
+    @property
+    def line(self) -> Content:
+        """The line as its words read, with who says them: what `/find` looks in and `/copy` sends."""
+        return self.said.text
 
     @property
     def reading(self) -> bool:
@@ -341,10 +439,16 @@ class Transcript(ScrollView, can_focus=True):
     way, drawn through an LRU of strips keyed by width, and below them `tail`, what the agent in view is saying now,
     which the screen keeps. Following is one state, kept here: reading up stops it, and the newest line or the follow
     key starts it again. An agent's turns are cut where `spans` says, read as the agent is shown and again as each of
-    its turns ends, and each cut is drawn once the window holds both calls it stands between."""
+    its turns ends, and each cut is drawn once the window holds both calls it stands between. What an agent says in
+    its turn with a gist of whitespace alone is read, and drawn as no line once its body is known to be blank too, as
+    one with no body is."""
 
     BINDINGS = [*bindings("transcript"), *bindings("panel")]
-    DEFAULT_CSS = "Transcript { overflow-x: hidden; }"
+    COMPONENT_CLASSES = {"transcript--chosen"}
+    DEFAULT_CSS = """
+    Transcript { overflow-x: hidden; scrollbar-size-vertical: 1; }
+    Transcript > .transcript--chosen { background: $accent 22%; }
+    """
 
     class Moved(Message):
         """Following started or stopped."""
@@ -369,6 +473,7 @@ class Transcript(ScrollView, can_focus=True):
         self._rows: list[tuple[Block, int]] = []
         self._tools: dict[str, Block] = {}
         self._join: Join[Block] = Join()
+        self._resumed: set[Block] = set()
         self._children: set[str] = set()
         self._calls: dict[str, Event] = {}
         self._cuts: dict[str, str] = {}
@@ -383,7 +488,19 @@ class Transcript(ScrollView, can_focus=True):
         self._tail_lines: list[Strip] = []
         self._lines: LRUCache[tuple[int, int], Strip] = LRUCache(_CACHE)
         self._bodies: LRUCache[tuple[int, int], list[Strip]] = LRUCache(_CACHE // 16)
+        self._blank: LRUCache[str, bool] = LRUCache(_CACHE)
+        self.reading_bodies: dict[str, list[Block]] = {}
+        """The bodies being read to learn whether the lines waiting on them say anything."""
         self._width = 0
+
+    def on_mount(self) -> None:
+        self.app.theme_changed_signal.subscribe(self, self._themed)
+
+    def _themed(self, _: object) -> None:
+        """Draw every line again in the theme's colours, which a strip drawn holds."""
+        self._lines.clear()
+        self._bodies.clear()
+        self.refresh()
 
     @property
     def blocks(self) -> list[Block]:
@@ -409,7 +526,7 @@ class Transcript(ScrollView, can_focus=True):
         None, which is following. A page read for an earlier beginning is not put in."""
         self._shown += 1
         self._blocks, self._rows, self._tools, self._join, self._chosen = [], [], {}, Join(), None
-        self._calls, self._cut_at = {}, {}
+        self._calls, self._cut_at, self._resumed = {}, {}, set()
         self._children = set(self.focus_on.children) if self.focus_on else set()
         self._before, self._after = before, after
         self.following, self.unseen = after is None, 0
@@ -480,9 +597,9 @@ class Transcript(ScrollView, can_focus=True):
         while cut > 1 and self._blocks[cut - 1].first >= reach:
             cut -= 1
             reach = min(reach, self._extent(self._blocks[cut])[0])
-        gone = self._blocks[cut:]
+        gone = set(self._blocks[cut:])
         del self._blocks[cut:]
-        self._rows = self._rows[: len(self._rows) - sum(len(self._lines_of(block)) for block in gone)]
+        self._rows = self._rows[: next(index for index, (block, _) in enumerate(self._rows) if block in gone)]
         self._keep_held()
         self._after, self.following = self._blocks[-1].first, False
 
@@ -492,6 +609,7 @@ class Transcript(ScrollView, can_focus=True):
         self._tools = {native: block for native, block in self._tools.items() if block in held}
         self._join.keep(held)
         self._cut_at = {start: block for start, block in self._cut_at.items() if block in held}
+        self._resumed &= held
         newest = self.through if self._after is None else self._after
         self._calls = {ref: call for ref, call in self._calls.items() if self._before <= call.seq <= newest}
 
@@ -500,15 +618,18 @@ class Transcript(ScrollView, can_focus=True):
         self.tail = tail
         self._layout()
 
-    def _line(self, event: Event) -> Content | None:
-        """The line an event makes here, or None: for one a transcript leaves out, and for another agent's own but a
-        spawn of this agent's, which says it joins no known call until it joins one, and the end of a child of its."""
+    def _line(self, event: Event) -> Said | None:
+        """The line an event makes here, or None: for one a transcript leaves out, for what an agent says that is known
+        to say nothing, and for another agent's own but a spawn of this agent's, which says it joins no known call until
+        it joins one, and the end of a child of its."""
         focus = self.focus_on
+        if blank(event) and (not isinstance(body := event.data.get("body"), str) or self._blank.get(body)):
+            return None
         if event.type == "agent.spawned" and focus is not None and focus.agent is not None:
             child = event.data.get("name")
             if event.data.get("parent") == f"agent:{focus.agent}":
                 self._children.add(child or "")
-                return _spawned(event, joined=False)
+                return _spawned(event, None)
             return line_of(event) if child == focus.agent else None
         theirs = focus is not None and focus.agent is not None and event.agent not in (focus.agent, None)
         if not (theirs and event.stream.startswith(("agent/", "approval/"))):
@@ -529,19 +650,51 @@ class Transcript(ScrollView, can_focus=True):
         if native and (started := self._tools.get(native)) is not None:
             if event.seq > started.first:
                 self._forget(started)
-                started.event, started.line = event, line
+                started.event, started.said = event, line_of(event, started.event) or line
             return None
         block = Block(event.seq, event, line)
         if native and event.data.get("phase") == "started":
             self._tools[native] = block
+        if blank(event):
+            self._learn(block, event.data["body"])
         self._join.take(event, block)
         joined = self._join.spawns_of(block)
         if self._join.call_of(block) is not None:
             joined.append(block)
         for spawn in joined:
             self._forget(spawn)
-            spawn.line = _spawned(spawn.event, joined=True)
+            spawn.said = _spawned(spawn.event, call.said if (call := self._join.call_of(spawn)) else None)
         return block
+
+    def _learn(self, block: Block, ref: str) -> None:
+        """Read the body of a line whose gist is whitespace alone, once for every line that cites it, to learn whether
+        it says anything."""
+        waiting = self.reading_bodies.setdefault(ref, [])
+        waiting.append(block)
+        if len(waiting) == 1:
+            self.run_worker(self._read_blank(ref), exclusive=False)
+
+    async def _read_blank(self, ref: str) -> None:
+        """Let go of the lines whose body is blank too, which say nothing. A body that cannot be read, or that is cut
+        where it is read, is not known to be blank, and its lines stay, opening on what was read."""
+        assert self._session is not None
+        try:
+            found = await self._session.get_body(ref, limit=BODY_LIMIT)
+        except Refused:
+            self.reading_bodies.pop(ref, None)
+            return
+        said = found.decode(errors="replace")
+        self._blank[ref] = not said.strip() and len(found) < BODY_LIMIT
+        waiting = self.reading_bodies.pop(ref, [])
+        if not self._blank[ref]:
+            for block in waiting:
+                block.text = SafeText(said).plain
+            return
+        gone = set(waiting)
+        self._blocks = [block for block in self._blocks if block not in gone]
+        if self._chosen in gone:
+            self._chosen = self._blocks[-1] if self._blocks and self.following else None
+        self._relayout()
 
     def _cut_before(self, call: Event) -> Block | None:
         """The cut a model call of the agent in view stands at, when it begins a span after another of its turn and
@@ -595,28 +748,46 @@ class Transcript(ScrollView, can_focus=True):
         self._spans_from = began
         self._cut_where_held()
 
-    def _rows_of(self, blocks: Iterable[Block]) -> list[tuple[Block, int]]:
-        """The rows lines are drawn in: each where its first event stands, but a spawn joined to a call, drawn under
-        it."""
-        return [
-            row
-            for block in blocks
-            if self._join.call_of(block) is None
-            for line in (block, *self._join.spawns_of(block))
-            for row in self._lines_of(line)
-        ]
+    def _rows_of(self, blocks: Iterable[Block], before: Block | None = None) -> list[tuple[Block, int]]:
+        """The rows lines are drawn in, below the line `before`: each where its first event stands, but a spawn joined
+        to a call, drawn under it, and each led by the rows that lead it."""
+        rows = []
+        for block in blocks:
+            if self._join.call_of(block) is not None:
+                continue
+            for line in (block, *self._join.spawns_of(block)):
+                rows += self._head(line, before) + self._lines_of(line)
+                before = line
+        return rows
+
+    def _head(self, block: Block, before: Block | None) -> list[tuple[Block, int]]:
+        """The rows that lead a line below `before`: a blank row before a rule or a new speaker's heading, but at the
+        top and under a rule, then the heading, for a line whose speaker the line above is not, and for one a page was
+        read back above, which keeps the heading it had, so what is on screen does not move."""
+        said, above = block.said, None if before is None else before.said
+        if said.rule:
+            return [] if above is None else [(block, SPACE)]
+        if said.who is None:
+            return []
+        goes_on = above is not None and above.who is not None and above.who.plain == said.who.plain
+        if goes_on and block not in self._resumed:
+            return []
+        return ([] if above is None or above.rule or goes_on else [(block, SPACE)]) + [(block, HEAD)]
 
     def _draw(self, new: list[Block], *, above: bool = False) -> int:
         """Draw new lines below those held, or `above` them, and say how many rows went above. A spawn joined to a
-        call moves the lines it joins, so then all are laid out again, keeping the line at the top of the screen."""
+        call moves the lines it joins, so then all are laid out again, keeping the line at the top of the screen. Lines
+        read above keep the heading the line below them has, so what is on screen does not move."""
         if any(self._join.call_of(block) is not None or self._join.spawns_of(block) for block in new):
             self._relayout()
             return 0
-        rows = self._rows_of(new)
         if above:
+            rows = self._rows_of(new)
+            if self._rows:
+                self._resumed.add(self._rows[0][0])
             self._rows[:0] = rows
             return len(rows)
-        self._rows += rows
+        self._rows += self._rows_of(new, self._rows[-1][0] if self._rows else None)
         return 0
 
     async def _page(self, *, after: int = 0, before: int | None = None) -> Page | None:
@@ -693,22 +864,29 @@ class Transcript(ScrollView, can_focus=True):
     def _lines_of(self, block: Block) -> list[tuple[Block, int]]:
         return [(block, line) for line in range(1 + (len(self._body(block)) if block.open else 0))]
 
+    def _indent(self, block: Block) -> int:
+        """How far a line stands in: under its speaker's heading, and a spawn under its call further."""
+        return (2 if block.said.who is not None else 0) + (2 if self._join.call_of(block) is not None else 0)
+
     def _body(self, block: Block) -> list[Strip]:
-        """What an open line shows at this width: its body as Markdown, else its gist whole, or an approval's ask as it
-        was asked, then where it came from."""
+        """What an open line shows at this width, under its words: its body as Markdown, else its gist whole, or an
+        approval's ask as it was asked, then where it came from, with a tool's whole name."""
         key = (block.first, self._width)
         found = self._bodies.get(key)
         if found is None:
-            event, width = block.event, max(self._width - 2, 1)
+            event, indent = block.event, self._indent(block) + 2
+            width = max(self._width - indent, 1)
             if block.ask is not None:
                 lines = [Strip(row.line.render_segments(), row.line.cell_length) for row in rows_of(block.ask, width)]
             else:
                 said = block.text if block.text is not None else SafeText(event.gist).plain
                 lines = markdown(said, width, self.app.console)
             when = time.strftime("%H:%M:%S", time.localtime(event.wall_time))
-            where = SafeText(f"{event.type} · {event.actor} · seq {event.seq} · {when}", "dim")
+            data = event.data if isinstance(event.data, dict) else {}
+            tool = f" · tool {event.gist.split()[0]}" if data.get("kind") == "tool" and event.gist.split() else ""
+            where = SafeText(f"{event.type}{tool} · {event.actor} · seq {event.seq} · {when}", "dim")
             lines.append(Strip(where.render_segments(), where.cell_length))
-            found = self._bodies[key] = [Strip.join([Strip.blank(2), line]) for line in lines]
+            found = self._bodies[key] = [Strip.join([Strip.blank(indent), line]) for line in lines]
         return found
 
     def _forget(self, block: Block) -> None:
@@ -749,14 +927,15 @@ class Transcript(ScrollView, can_focus=True):
         self._relayout()
 
     def _relayout(self) -> None:
-        """Lay every line out again, keeping the line at the top of the screen where it is."""
+        """Lay every line out again, keeping the line at the top of the screen where it is, or where the row above it
+        went, the line it led."""
         top = self._rows[int(self.scroll_y)] if self._rows and int(self.scroll_y) < len(self._rows) else None
         self._rows = self._rows_of(self._blocks)
         self._layout()
         if self.following:
             self._place(None)
-        elif top is not None and top in self._rows:
-            self._place(self._rows.index(top))
+        elif top is not None and (kept := top if top in self._rows else (top[0], 0)) in self._rows:
+            self._place(self._rows.index(kept))
 
     def _layout(self) -> None:
         width = self.scrollable_content_region.width
@@ -915,25 +1094,47 @@ class Transcript(ScrollView, can_focus=True):
         if (ref := event.style.meta.get("ref")) is not None:
             self.post_message(self.Named(ref))
             return
-        index = event.y + int(self.scroll_y)
-        if 0 <= index < len(self._rows):
+        index = event.get_content_offset_capture(self).y + int(self.scroll_y)
+        if 0 <= index < len(self._rows) and self._rows[index][1] != SPACE:
             self.toggle(self._rows[index][0])
+
+    def _as_drawn(self, block: Block, width: int) -> Content:
+        """A line as it is drawn: in from the left under its speaker, its mark, its words, and `▸` where it opens on a
+        body, or a rule across the width."""
+        said = block.said
+        if said.rule:
+            return Content.assemble(
+                ("── ", "dim"), said.words, " ", ("─" * max(width - said.words.cell_length - 4, 0), "dim")
+            )
+        data = block.event.data if isinstance(block.event.data, dict) else {}
+        more = (" ▸", "dim") if data.get("body") else ""
+        return Content.assemble(" " * self._indent(block), said.mark, said.words, more)
+
+    def _strip(self, block: Block, line: int, width: int) -> Strip:
+        style = self.rich_style
+        if line == SPACE:
+            return Strip.blank(width, style)
+        if line == HEAD:
+            assert block.said.who is not None
+            return strip_of(block.said.who, width, style)
+        if line > 0:
+            return self._body(block)[line - 1].crop_extend(0, width, style).apply_style(style)
+        strip = self._lines.get((block.first, width))
+        if strip is None:
+            strip = self._lines[(block.first, width)] = strip_of(self._as_drawn(block, width), width, style)
+        if block is self._chosen and self.has_focus:
+            strip = Strip(
+                Segment.apply_style(strip, post_style=self.get_component_rich_style("transcript--chosen")), width
+            )
+        return strip
 
     def render_line(self, y: int) -> Strip:
         index = y + int(self.scroll_y)
         width = self.scrollable_content_region.width
-        style = self.rich_style
         if index < len(self._rows):
-            block, line = self._rows[index]
-            if line == 0:
-                strip = self._lines.get((block.first, width))
-                if strip is None:
-                    strip = self._lines[(block.first, width)] = strip_of(block.line, width, style)
-                if block is self._chosen and self.has_focus:
-                    strip = Strip(Segment.apply_style(strip, post_style=CHOSEN), width)
-                return strip
-            return self._body(block)[line - 1].crop_extend(0, width, style)
-        tail = index - len(self._rows)
-        if tail < len(self._tail_lines):
-            return self._tail_lines[tail].crop_extend(0, width, style)
-        return Strip.blank(width, style)
+            strip = self._strip(*self._rows[index], width)
+        elif (tail := index - len(self._rows)) < len(self._tail_lines):
+            strip = self._tail_lines[tail].crop_extend(0, width, self.rich_style).apply_style(self.rich_style)
+        else:
+            return Strip.blank(width, self.rich_style)
+        return strip

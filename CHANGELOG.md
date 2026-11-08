@@ -36,6 +36,28 @@ named here is closed.
   saying what may be given, and they are recorded on `task.added` and `agent.spawned`. A tool that takes them shows a model
   each label's values as an `enum`, and leaves the argument out where the team declares none. Before, nothing on the record
   said what kind of work a task or a spawn was. This is step 1 of RFC 0078, a draft.
+- **A new look for the terminal UI.** The workspace is drawn in titled panels with thin rounded borders, the one with
+  focus in the accent, on the theme `platoon-ink`: dark ink with one accent, the logo's sky blue. Each agent in the
+  navigator is two lines, a glyph and its name over its state, its harness and what it is doing, the glyph saying its
+  state as its colour does, a working agent's turning while animation is on. The header is segments, the session's name
+  and how it stands, the counts with their glyphs, what changed and each limit with a thin meter, giving way where they
+  do not fit, and under 80 columns the team is tabs over the transcript, the agent in view filled with the accent. A
+  toast says when an agent comes to need you while another is in view. Before, the screen was plain text on panels with
+  no title, an agent's state was a glyph beside its name alone, and nothing said an agent came to need you but the
+  header's count.
+- **Themes in the terminal.** `/theme`, or `t` on the sessions screen, chooses one of Textual's themes for the run,
+  `ansi-dark` among them for the terminal's own colours, and `theme = "nord"` in `~/.config/platoon-harness/tui.toml`
+  keeps one. This reverses, at the owner's request, the default that themes wait.
+- **Platoon's agents in the terminal.** A sprite of the Platoon project's logo, its round-headed agents in their
+  blue-to-green gradient, drawn by hand from its icon (MIT, Apurva Gandhi) in half blocks, stands small beside the
+  session's name at the navigator's top and larger beside the wordmark on the sessions screen, in the terminal's own
+  colours under a theme that keeps to them.
+- **A transcript in runs.** An agent's lines stand under one heading, its name, and a sender's under `@you → @lead`, a
+  turn's start is a rule, a line's words read as Markdown, and a tool call reads as its name, as its model calls it but
+  for our tools' `mcp__ph__`, its input dim and a glyph for how it ended, its whole name in the line opened. What an agent
+  says in a turn with a gist of whitespace alone is drawn as no line once its body is read and blank too, as the page's
+  chats leave it out. Before, each line led with its speaker, a tool's line showed its raw name and how it ended alone,
+  Markdown showed its marks, and a model's blank text before a tool call was an empty line.
 - **A line copied in the terminal.** `/copy` sends the chosen line's text to the terminal as OSC 52: the line as the
   transcript shows it and, while it is open, the text it opens on, or its gist while that is still being read, which it
   says, each control shown as its escape, so what is pasted acts on no terminal. Whether it reaches the clipboard is the

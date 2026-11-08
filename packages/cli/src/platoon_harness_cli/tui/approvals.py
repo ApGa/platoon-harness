@@ -21,7 +21,7 @@ def rows_of(ask: Ask, width: int) -> list[Row]:
     """An ask's lines wrapped at `width`, each made safe and never read as markup or Markdown, so what it asks is
     drawn as it was asked, or its gist where it has no text, then the words below it."""
     lines = [SafeText(line) for line in (ask.gist if ask.text is None else ask.text).split("\n")]
-    lines += [] if ask.below is None else [SafeText(ask.below, "yellow")]
+    lines += [] if ask.below is None else [SafeText(ask.below, "$warning")]
     rows: list[Row] = []
     for line in lines:
         parts: list[Content] = line.wrap(max(width, 20)) or [Content("")]
@@ -60,7 +60,7 @@ class Approval(ModalScreen[None]):
             request = await approvals.request(self._session, self._approval, self._at)
             self.ask = await approvals.read(self._session, request)
         except Refused as refused:
-            asked.update(SafeText(f"What approval {self._approval} asks: {refused}", "red"))
+            asked.update(SafeText(f"What approval {self._approval} asks: {refused}", "$error"))
             return
         asked.update(SafeText(f"What @{self.ask.agent} asks", "bold"))
         self._draw()

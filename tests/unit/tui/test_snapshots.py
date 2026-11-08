@@ -1,7 +1,7 @@
-"""The workspace's layout at each size the guide names, the review and the provenance panel, as snapshots, on a
-session's history so nothing moves: a session of scripted harnesses, and the mixed team's session as a live run of it
-recorded it, which no live run has recorded yet. The docs show the recorded session's snapshots once there is one, and
-the scripted session's until then."""
+"""The workspace's layout at each size the guide names, the sessions screen, the review and the provenance panel, as
+snapshots, on a session's history so nothing moves, with animation off, so a working agent's glyph is still: a session
+of scripted harnesses, and the mixed team's session as a live run of it recorded it. The docs show the recorded
+session's snapshots once there is one, and the scripted session's until then."""
 
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -13,14 +13,17 @@ from textual.app import App
 
 from platoon_harness import Session, Team
 from platoon_harness.annotations import Annotation
+from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers import AgentSpec
 from platoon_harness.kernel import Event
 from platoon_harness.primitives import Contributors, Interactions, Lineage, Uses
 from platoon_harness.testing import Do, Say, ScriptedDriver
-from platoon_harness_cli.tui.app import CSS, TerminalUI
+from platoon_harness_cli.tui.app import CSS, INK, TerminalUI
 from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.review import Patch
+from platoon_harness_cli.tui.sessions import Sessions
+from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import Workspace
 
 from ...recorded import RECORDED, finish_of, restored
@@ -35,6 +38,7 @@ SNAPSHOTS = Path(__file__).parent / "__snapshots__" / "test_snapshots"
 ASSETS = Path(__file__).parents[3] / "docs" / "assets"
 SCRIPTED_SNAPSHOTS = {
     **{f"tui-{size}.svg": f"test_the_workspace_s_layout_at_each_size[{size}].raw" for size in SIZES},
+    "tui-sessions.svg": "test_the_sessions_screen_shows_the_logo_beside_the_wordmark.raw",
     "tui-review.svg": "test_review_lists_what_changed.raw",
     "tui-patch.svg": "test_the_review_draws_a_patch.raw",
     "tui-provenance.svg": "test_the_provenance_panel_draws_each_link_with_how_it_is_known.raw",
@@ -43,6 +47,7 @@ SCRIPTED_SNAPSHOTS = {
 """Each screenshot the docs show, in docs/assets, by the snapshot below that draws it from a scripted session."""
 RECORDED_SNAPSHOTS = {
     **{f"tui-{size}.svg": f"test_the_recorded_mixed_team_s_layout_at_each_size[{size}].raw" for size in SIZES},
+    "tui-sessions.svg": "test_the_recorded_mixed_team_s_sessions_screen.raw",
     "tui-review.svg": "test_the_recorded_mixed_team_s_review_lists_what_changed.raw",
     "tui-provenance.svg": "test_the_recorded_mixed_team_s_provenance_of_the_lead_s_answer.raw",
 }
@@ -94,12 +99,48 @@ def history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(_history(tmp_path))
 
 
+def still(app: App) -> App:
+    """An app with animation off, as `TEXTUAL_ANIMATIONS=none` turns it off, so a working agent's glyph is still."""
+    app.animation_level = "none"
+    return app
+
+
+def settled(screen: object) -> bool:
+    """Whether the workspace has drawn its header from how the session ended, which it reads after its status, and its
+    transcript knows what each line of whitespace says, so that both are drawn as they stay."""
+    if not isinstance(screen, Workspace) or screen.live is None or screen.live.ending is None:
+        return False
+    header = screen.query_one("#header")
+    return str(header.content) == str(screen._header(screen.live)) and not screen.query_one(Transcript).reading_bodies
+
+
 @pytest.mark.parametrize("size", SIZES)
 def test_the_workspace_s_layout_at_each_size(snap_compare, history, size):
     async def ready(pilot) -> None:
-        await drawn(pilot, lambda text: "kestrel" in text and "Done: the worker" in text)
+        await drawn(pilot, lambda text: "Done: the worker" in text and settled(pilot.app.screen))
 
-    assert snap_compare(TerminalUI("s"), terminal_size=SIZES[size], run_before=ready)
+    assert snap_compare(still(TerminalUI("s")), terminal_size=SIZES[size], run_before=ready)
+
+
+@pytest.fixture
+def at_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A home of the test's own, in which the sessions screen shows where the sessions are, and a team where it starts,
+    so it offers to write none."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / PROJECT_FILE).write_text("")
+
+
+def looked(screen: object) -> bool:
+    """Whether the sessions screen has listed the sessions it found."""
+    return isinstance(screen, Sessions) and bool(screen.found)
+
+
+def test_the_sessions_screen_shows_the_logo_beside_the_wordmark(snap_compare, history, at_home):
+    async def ready(pilot) -> None:
+        await drawn(pilot, lambda text: "platoon-harness" in text and looked(pilot.app.screen))
+
+    assert snap_compare(still(TerminalUI()), terminal_size=(100, 28), run_before=ready)
 
 
 @pytest.fixture
@@ -116,25 +157,25 @@ def test_the_recorded_mixed_team_s_layout_at_each_size(snap_compare, recorded, s
     answer = finish_of(RECORDED, "lead")["data"]["gist"]
 
     async def ready(pilot) -> None:
-        await drawn(pilot, lambda text: answer[:30] in " ".join(text.split()) and ended(pilot.app.screen))
+        await drawn(pilot, lambda text: answer[:20] in " ".join(text.split()) and settled(pilot.app.screen))
 
-    assert snap_compare(TerminalUI(recorded), terminal_size=SIZES[size], run_before=ready)
+    assert snap_compare(still(TerminalUI(recorded)), terminal_size=SIZES[size], run_before=ready)
 
 
-def ended(screen: object) -> bool:
-    """Whether the workspace's header has read how the session ended, which it reads after its status, so that both
-    are drawn as they stay: below 60 columns the header shows neither."""
-    header = screen.query_one("#header") if isinstance(screen, Workspace) else None
-    return header is not None and (screen.size.width < 60 or "tokens" in str(header.content))
+def test_the_recorded_mixed_team_s_sessions_screen(snap_compare, recorded, at_home):
+    async def ready(pilot) -> None:
+        await drawn(pilot, lambda text: "platoon-harness" in text and looked(pilot.app.screen))
+
+    assert snap_compare(still(TerminalUI()), terminal_size=(100, 28), run_before=ready)
 
 
 def test_the_recorded_mixed_team_s_review_lists_what_changed(snap_compare, recorded):
     async def listed(pilot) -> None:
-        await drawn(pilot, lambda text: "uncommitted" in text and ended(pilot.app.screen))
+        await drawn(pilot, lambda text: "uncommitted" in text and settled(pilot.app.screen))
         await pilot.press("alt+d")
         await drawn(pilot, lambda text: "What changed" in text and "tally/money.py" in text)
 
-    assert snap_compare(TerminalUI(recorded), terminal_size=(120, 32), run_before=listed)
+    assert snap_compare(still(TerminalUI(recorded)), terminal_size=(120, 32), run_before=listed)
 
 
 def drawn_whole(screen: object) -> bool:
@@ -147,13 +188,13 @@ def test_the_recorded_mixed_team_s_provenance_of_the_lead_s_answer(snap_compare,
     answer = f"{finish['stream']}@{finish['version']}"
 
     async def asked(pilot) -> None:
-        await drawn(pilot, lambda text: "The session is closed" in text and ended(pilot.app.screen))
+        await drawn(pilot, lambda text: "The session is closed" in text and settled(pilot.app.screen))
         await pilot.press("slash", *"provenance", "enter")
         await drawn(pilot, lambda _: isinstance(pilot.app.screen, Form))
         await pilot.press("home", "ctrl+k", *answer, "enter")
         await drawn(pilot, lambda text: f"Provenance of {answer}" in text and drawn_whole(pilot.app.screen))
 
-    assert snap_compare(TerminalUI(recorded), terminal_size=(120, 48), run_before=asked)
+    assert snap_compare(still(TerminalUI(recorded)), terminal_size=(120, 48), run_before=asked)
 
 
 WHEN = 1_700_000_000
@@ -191,7 +232,7 @@ def test_review_lists_what_changed(snap_compare, reviewed):
         await pilot.press("alt+d")
         await drawn(pilot, lambda text: "What changed" in text and "notes.txt" in text)
 
-    assert snap_compare(TerminalUI("s"), terminal_size=(120, 32), run_before=opened)
+    assert snap_compare(still(TerminalUI("s")), terminal_size=(120, 32), run_before=opened)
 
 
 SHA = "3f9c2a1b2c3d4e5f60718293a4b5c6d7e8f90a1b"
@@ -265,6 +306,11 @@ class Read:
 class Patched(App[None]):
     CSS = CSS
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_theme(INK)
+        self.theme = INK.name
+
     def on_mount(self) -> None:
         self.push_screen(Patch(Read(), SHA[:12]))  # type: ignore[arg-type]
 
@@ -309,6 +355,8 @@ class Panel(App[None]):
     def __init__(self, session: Answered, ref: str | None) -> None:
         super().__init__()
         self._session, self._ref = session, ref
+        self.register_theme(INK)
+        self.theme = INK.name
 
     def on_mount(self) -> None:
         self.push_screen(Provenance(self._session, self._ref))  # type: ignore[arg-type]

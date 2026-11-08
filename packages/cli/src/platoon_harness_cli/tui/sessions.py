@@ -15,10 +15,12 @@ from textual.widgets import Static
 from platoon_harness import ConfigError, Refused, Session
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.runtime.paths import find_root, listing
+from platoon_harness.version import __version__
 
 from ..machine import Starter, finding
 from ..sessions import ask_to_stop
 from ..teams import Source
+from . import logo
 from .dialogs import Confirm, Form
 from .keymap import bindings, keys
 from .rows import Row, Rows
@@ -37,18 +39,48 @@ class Sessions(Screen[None]):
         self.found: dict[str, dict[str, Any]] = {}
 
     def compose(self) -> ComposeResult:
-        yield Static(id="header")
+        yield Static(id="brand")
         yield Rows(id="sessions")
         yield Static(id="said")
         yield Static(id="footer")
 
     def on_mount(self) -> None:
         self.query_one(Rows).focus()
-        footer = [part for key in keys("sessions") if key.footer for part in ((key.shown, "bold"), f" {key.name}  ")]
+        self.query_one(Rows).border_title = Content("sessions")
+        footer = [
+            part
+            for key in keys("sessions")
+            if key.footer
+            for part in ((key.shown, "bold $accent"), (f" {key.name}  ", "dim"))
+        ]
         self.query_one("#footer", Static).update(Content.assemble(*footer))
+        self.app.theme_changed_signal.subscribe(self, lambda _: self._brand())
         self.action_look()
         if not Path(PROJECT_FILE).exists(follow_symlinks=False):
             self.offer_team()
+
+    def on_resize(self) -> None:
+        self._brand()
+
+    def _brand(self) -> None:
+        """The logo's agents beside the wordmark and where the sessions are: large where the screen has room for it,
+        and else small."""
+        large = self.size.width >= 64 and self.size.height >= 24
+        art = logo.sprite(
+            logo.LARGE if large else logo.SMALL, logo.ANSI if self.app.current_theme.ansi else logo.TRUECOLOUR
+        )
+        root = find_root()
+        home = Path.home()
+        shown = str(root) if not root.is_relative_to(home) else "~" if root == home else f"~/{root.relative_to(home)}"
+        said = [
+            Content.assemble(("platoon-harness", "bold"), (f" {__version__}", "dim")),
+            Content.styled("the agent harnesses you already use, as one team", "dim"),
+            Content(""),
+            SafeText(f"sessions under {shown}", "dim"),
+        ]
+        said = [Content("")] * ((len(art) - len(said)) // 2) + said
+        lines = [Content.assemble(cells, "   ", said[at] if at < len(said) else "") for at, cells in enumerate(art)]
+        self.query_one("#brand", Static).update(Content("\n").join(lines))
 
     def on_screen_resume(self) -> None:
         self.action_look()
@@ -56,9 +88,7 @@ class Sessions(Screen[None]):
     @work(exclusive=True, group="look")
     async def action_look(self) -> None:
         root = find_root()
-        self.query_one("#header", Static).update(
-            Content.assemble(("Sessions", "bold"), SafeText(f" under {root}", "dim"))
-        )
+        self._brand()
         found: dict[str, dict[str, Any]] = {}
         for listed in await asyncio.to_thread(listing, root):
             state = None
@@ -73,7 +103,7 @@ class Sessions(Screen[None]):
             Row(
                 Content.assemble(
                     SafeText(f"{name:<32} ", "bold"),
-                    ("live " if row["live"] else "—    ", "green" if row["live"] else "dim"),
+                    ("● live    " if row["live"] else "○ history ", "$success" if row["live"] else "dim"),
                     SafeText(row["state"] or "unknown"),
                 ),
                 name,
