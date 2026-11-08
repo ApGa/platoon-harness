@@ -124,9 +124,13 @@ check, in the same folder under the root, keeping what it found the same way. `c
 check that returns a result of another class than the driver's, or of another harness's name, is refused, as it would speak for a
 driver it did not check, and would replace what was kept of that harness. A check that breaks, or returns no `Conformance`, is
 refused too, saying why, as another distribution ships it, and `doctor --check` goes on past it. A
-result is pinned to the class that implements the driver, and for a class outside the SDK now also to the distribution and version
-that hold it, so that an upgrade of an extension reads `unverified` until checked again, as an upgrade of the SDK does
-([RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md)).
+result is pinned to the class that implements the driver, and now also to the release, the distribution and its version, of each
+distribution outside the SDK whose driver entry points name the package of that class or of a class it is built on, so that an
+upgrade of an extension reads `unverified` until checked again, as an upgrade of the SDK does
+([RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md)). A subclass of `AcpDriver` in a distribution of its own is
+pinned to that distribution and to `platoon-harness-acp`, which does its driving. A release is read from metadata, as entry points
+name it, so a class built on one from a distribution that names no driver of its own pins nothing of that distribution, which
+the pin then leaves unsaid.
 
 `opencode` is `AcpDriver` on `opencode acp`, inheriting the shell's proxy variables, refusing a start with no model, as OpenCode then
 sends prompts to a hosted model nobody chose, and naming `platoon_harness_acp.check:opencode`, which runs `check_driver` on it

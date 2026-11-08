@@ -205,12 +205,12 @@ def _pin(profile: Profile, conformance: Conformance | None) -> str | None:
 
 def implementation(driver: object) -> str:
     """The class that implements a driver, by module and name, which a result is pinned to, as a name is the driver's
-    own to give, and for a class an installed distribution's driver entry point names, which releases apart from the
-    SDK, that distribution and its version too, so that an upgrade of it reads as one."""
+    own to give, and the release of each installed distribution outside the SDK whose driver entry points name the
+    package of that class or of a class it is built on, which release apart from the SDK, so that an upgrade of any of
+    them reads as one."""
     made = type(driver)
-    named = f"{made.__module__}:{made.__qualname__}"
-    release = _release(made.__module__.partition(".")[0])
-    return named if release is None else f"{named}, {release}"
+    releases = dict.fromkeys(filter(None, (_release(base.__module__.partition(".")[0]) for base in made.__mro__)))
+    return ", ".join((f"{made.__module__}:{made.__qualname__}", *releases))
 
 
 @functools.cache

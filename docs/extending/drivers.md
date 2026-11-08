@@ -632,9 +632,11 @@ and names what makes one: `doctor --check` for the harnesses `levels.CHECKED` na
 any other, which `doctor --check` also runs where the driver names a check. A wire program
 is checked as above, and its result kept the same way, by the name its `describe` gives. A name is a driver's own to give, so a
 result is pinned to the class that implements the driver too, and a program calling itself `claude` earns nothing from what was kept
-of the claude driver's checks. A class that an installed distribution's driver entry point names, outside the SDK, is pinned with
-that distribution and its version, as `platoon_harness_acp.opencode:OpenCodeDriver, platoon-harness-acp 0.1.0`, so an upgrade of it
-reads `unverified` until it is checked again, as an upgrade of the SDK does.
+of the claude driver's checks. A class outside the SDK is pinned with the release, the distribution and its version, of each
+installed distribution whose driver entry points name its package or the package of a class it is built on, as
+`platoon_harness_acp.opencode:OpenCodeDriver, platoon-harness-acp 0.1.0`, or for a subclass of `AcpDriver` in a distribution of
+your own, yours and then `platoon-harness-acp`, so an upgrade of any of them reads `unverified` until it is checked again, as an
+upgrade of the SDK does. A base class from a distribution that names no driver of its own is not pinned.
 
 ```python
 from platoon_harness.drivers.levels import Profile, implementation, levels

@@ -71,9 +71,10 @@ named here is closed.
   to run it. `platoon-harness doctor --check` runs it, through `check_harness`, for each harness it finds whose driver names one,
   and keeps what it found as it keeps a result of the SDK's own checks, refusing one of another class than the driver's, or of
   another harness's name, as it would speak for a driver it did not check, and one from a check that breaks or finds no
-  result, saying why, and going on. A result is pinned too to the distribution and version that hold a driver class
-  outside the SDK, so an upgrade of an extension reads `unverified` until it is checked again, and a result kept of such a
-  driver before this reads `unverified` once. `doctor --json` says of each harness it finds whether a check of it ships, as
+  result, saying why, and going on. A result is pinned too to the release, the distribution and its version, of each
+  distribution outside the SDK whose driver entry points name the package of the driver's class or of a class it is built
+  on, as a subclass of `AcpDriver` in another distribution is, so an upgrade of an extension reads `unverified` until it is
+  checked again, and a result kept of such a driver before this reads `unverified` once. `doctor --json` says of each harness it finds whether a check of it ships, as
   `checkable`. See
   [RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft.
 - **ACP agents run as a team's harness.** `platoon-harness-acp`, the first first-party extension, a distribution of its own

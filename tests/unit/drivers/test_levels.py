@@ -20,6 +20,7 @@ from platoon_harness.drivers.levels import (
     unmet_by,
 )
 from platoon_harness.drivers.pi import PiDriver
+from platoon_harness.extensions import DRIVERS, load
 from platoon_harness.testing import harnesses
 from platoon_harness_acp import OpenCodeDriver
 
@@ -313,3 +314,34 @@ def test_a_result_is_pinned_to_the_release_of_a_driver_outside_the_sdk():
             driver="opencode", implementation=pinned, version="2.2.6", sdk=__version__, host=HOST, checks=checks
         )
         assert speaks_for(profile, result) is speaks
+
+
+AGENT = """
+from platoon_harness_acp import AcpDriver
+
+
+class MyAgentDriver(AcpDriver):
+    name = "my-agent"
+
+    def __init__(self):
+        super().__init__(("my-agent", "--acp"))
+"""
+"""A driver of another agent of ACP, as the driver guide has one written: a subclass that names its command."""
+
+
+def test_a_result_is_pinned_to_the_release_of_each_distribution_its_driver_s_class_is_built_on(tmp_path, monkeypatch):
+    """A driver of another agent of ACP is a subclass in a distribution of its own, and the ACP extension does its
+    driving, so an upgrade of either reads as one."""
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "levels_agent.py").write_text(AGENT)
+    info = site / "levels_agent-1.2.0.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: levels-agent\nVersion: 1.2.0\n")
+    (info / "entry_points.txt").write_text(f"[{DRIVERS}]\nmy-agent = levels_agent:MyAgentDriver\n")
+    monkeypatch.syspath_prepend(site)
+
+    made = implementation(load(DRIVERS, "my-agent")())
+
+    release = metadata.version("platoon-harness-acp")
+    assert made == f"levels_agent:MyAgentDriver, levels-agent 1.2.0, platoon-harness-acp {release}"

@@ -1208,10 +1208,10 @@ Absence means unsupported, as in ACP.
 - **Conformance.** `check_driver(factory, folder=...)` runs named checks and reports all failures at once, against a loopback model
   that logs each request exactly as it arrived. So "tool in the first model request" and "delivered text in the next prompt" are tested
   against ground truth, and "connected" counts for nothing. Unsupported is a skip with a reason, never a pass. Results pin to the
-  driver, by the name it gives and the class that implements it, with the release of the distribution that holds a class outside
-  the SDK, the harness version it said, the SDK and the host, as a check proves the driver's code and the binary together where
-  they ran, and a result pinned elsewhere, or to a version nobody said, says nothing of this agent. A wire `describe` runs the
-  program once and starts no harness.
+  driver, by the name it gives and the class that implements it, with the release of each distribution outside the SDK that
+  holds that class or a class it is built on and names a driver of its own, the harness version it said, the SDK and the host,
+  as a check proves the driver's code and the binary together where they ran, and a result pinned elsewhere, or to a version
+  nobody said, says nothing of this agent. A wire `describe` runs the program once and starts no harness.
 - **A driver says its version where it can.** `describe` gives the harness version it would run when it can tell without starting
   one, which a check before any cost holds a kept result to, and `ready` the one that runs, which the levels hold it to.
 - **A result is made where it runs.** `platoon-harness doctor --check` runs every check, through `check_harness`, on each harness the
