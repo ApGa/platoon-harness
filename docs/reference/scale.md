@@ -12,8 +12,8 @@ throughput, and no budget of time is under 50 ms, as twice a few milliseconds wo
 budget twice what was measured catches what doubles a cost, not what adds a half to it: a writer slowed by 4 ms a
 commit, which made a round two fifths longer, passed the budgets a review held it to. The run takes some minutes and its
 budgets fit this hardware, so no CI job runs it: run it by hand before each release, on hardware like this, and say what
-it printed in the pull request. Under `-n`, its tests and the attach share one worker, as `--dist loadgroup` in
-`pyproject.toml` keeps an `xdist_group` on one.
+it printed in the pull request. Run it without `-n`: under it, each worker that takes one of its tests makes the run
+anew, at the same time as the others.
 
 ```bash
 uv run pytest -q -s -m slow tests/integration/test_scale.py \

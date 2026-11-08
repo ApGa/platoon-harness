@@ -2,7 +2,8 @@
 plane, drive 100,000 events through the real kernel and runtime, and what that costs is measured and held to budgets
 set from what docs/reference/scale.md publishes. The run is slow and its budgets fit the hardware that page describes,
 so it runs by hand before each release and no CI job runs it. Each test prints what it measured. Every test reads one
-run, so the tests share one worker under xdist, whose `--dist loadgroup` keeps an `xdist_group` on one."""
+run, which each xdist worker that takes one of them makes anew, at the same time as the others, so run it without
+`-n`."""
 
 import asyncio
 import contextlib
@@ -30,7 +31,7 @@ from ..conftest import end_runtimes
 from .scale import EVENTS, Round, drive, hardware, nth, team
 from .scripts import MEMBERS
 
-pytestmark = [pytest.mark.slow, pytest.mark.timeout(1800), pytest.mark.xdist_group("scale")]
+pytestmark = [pytest.mark.slow, pytest.mark.timeout(1800)]
 
 KiB, MiB = 2**10, 2**20
 WALKED = 8
