@@ -13,6 +13,13 @@ named here is closed.
 
 ### New features
 
+- **A Python API reference.** [docs/reference/python.md](docs/reference/python.md) shows every name
+  `tests/public_api.txt` lists, by the module whose `__all__` holds it, as a stub declares it in its source's own words,
+  with its docstring, and each method of a class's own, and marks each module and name STATUS calls experimental,
+  quoting its row. `uv run python -m platoon_harness_cli.reference python > docs/reference/python.md` makes it
+  from the list and the docstrings, and refuses to where a row of STATUS and the marks disagree. Below 1.0 the policy
+  CHANGELOG states holds for every name it shows, and that 0.1.0 promises each, with no experimental namespace, is
+  the default, pending the owner's ruling.
 - **An extension tutorial.** [docs/extending/extensions.md](docs/extending/extensions.md) writes the sample
   extension package step by step: its package, its op's arguments, its view, its op, its preset and the extension
   that names them, installed and named by a team, its vote cast from Python on stand-ins, checked by

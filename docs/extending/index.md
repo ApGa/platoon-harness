@@ -96,9 +96,9 @@ owns, and [architecture §14](../architecture.md#14-training) is its design.
 
 ## Rules your code keeps
 
-- **Public names alone.** Code outside the kernel reaches the SDK by the names `tests/public_api.txt` lists, and an
-  extension reaches the kernel by its `__all__`, as the SDK's own primitives do. If an extension needs a private name,
-  the kernel is wrong.
+- **Public names alone.** Code outside the kernel reaches the SDK by the names `tests/public_api.txt` lists, which
+  [the Python API reference](../reference/python.md) shows, and an extension reaches the kernel by its `__all__`, as the
+  SDK's own primitives do. If an extension needs a private name, the kernel is wrong.
 - **An op waits on nothing.** An op is synchronous, does no I/O and runs inside one transaction. Work in the world is an
   effect: an op asks for it with `txn.effect`, and a daemon does it and reports
   ([architecture §5.4](../architecture.md#54-effects)).

@@ -295,10 +295,12 @@ to the code, and names the command when they differ.
 |---|---|---|
 | [docs/reference/cli.md](docs/reference/cli.md) | The command definitions | `tests/unit/cli/test_commands.py` |
 | [docs/reference/team-file.md](docs/reference/team-file.md) | The team file's schema, from `Team` down, and the presets | `tests/unit/cli/test_team_file.py` |
+| [docs/reference/python.md](docs/reference/python.md) | `tests/public_api.txt`, the docstrings, and what STATUS calls experimental | `tests/unit/docs/test_python_reference.py` |
 | The key table in [docs/how-to/tui.md](docs/how-to/tui.md) | The terminal UI's bindings | `tests/unit/tui/test_keymap.py` |
 
 ```bash
 uv run python -m platoon_harness_cli.reference > docs/reference/cli.md
+uv run python -m platoon_harness_cli.reference python > docs/reference/python.md
 uv run python -m platoon_harness_cli.team_file > docs/reference/team-file.md
 uv run python -m platoon_harness_cli.tui.keymap docs/how-to/tui.md
 ```
@@ -374,7 +376,7 @@ primitive, needs:
 - an RFC first, as it changes the op table and so the command line
   ([When a change needs an RFC](#when-a-change-needs-an-rfc));
 - names under the [naming law](docs/architecture.md#naming-law);
-- its public names in `tests/public_api.txt`;
+- its public names in `tests/public_api.txt`, and [docs/reference/python.md](docs/reference/python.md) made again;
 - for each promise it makes in [architecture §7](docs/architecture.md#7-primitive-semantics), a test named for it;
 - its row in [STATUS](docs/STATUS.md), naming the tests that hold it;
 - [docs/reference/cli.md](docs/reference/cli.md) made again, as the command line derives its commands from the op table.

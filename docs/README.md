@@ -59,6 +59,8 @@ Each example has a README that says what it does and how to run it.
   definitions.
 - [Team file](reference/team-file.md): every table and key of a team file, with its type and default, and every preset,
   made from the schema.
+- [Python API](reference/python.md): every public name of the SDK and the ACP extension, with its signature and
+  docstring, and what STATUS calls experimental marked, made from `tests/public_api.txt` and the docstrings.
 - [Compatibility](reference/compatibility.md): what each upstream is, how we use it, and what is known about it.
 - [Scale](reference/scale.md): 100 agents and 100,000 events on the real stack, what each measurement came to, on what
   hardware, and the budget a slow test holds it to.
