@@ -25,7 +25,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.timeout(180)]
 
 LAG = 0.050
 APPEND = 0.060
-ATTACH = 0.9
+ATTACH = 0.86
 """The longest an attach may take to draw a session of 100,000 events, the roster and the first agent's transcript:
 twice the most docs/reference/scale.md says was measured."""
 

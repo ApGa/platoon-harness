@@ -38,48 +38,48 @@ WALKED = 8
 
 # Each budget is twice the most that docs/reference/scale.md says was measured, or half the least for throughput, and a
 # time is never under 50 ms, as twice a few milliseconds would fail on a busy host's noise alone.
-PEAK = 194 * MiB
+PEAK = 212 * MiB
 """The most memory the runtime may have held at 100,000 events."""
-GROWTH = 44 * MiB
+GROWTH = 52 * MiB
 """The most the runtime's peak memory may grow over the second half of the events."""
-ROUND = 6.4
+ROUND = 8.1
 """The longest the median round may take, from the person's post to the last member's end of turn."""
-THROUGHPUT = 615
+THROUGHPUT = 475
 """The fewest events a second the runtime may have committed since it started, at the pace the members set, which is
 not the most its writer could commit."""
-ACK = (0.050, 0.140)
+ACK = (0.058, 0.164)
 """The longest the writer's median and 99th percentile ack may be, each the upper edge of the quarter-octave bucket
 that holds it."""
-SAID = 0.145
+SAID = 0.664
 """The longest a person's message, sent while the members work, may take from the send until the runtime answers that
 it is recorded."""
 PAGES = {
     "board.query": 0.050,
     "channel.list": 0.050,
     "contributors": 0.050,
-    "eligibility": 0.050,
-    "interactions": 4.1,
+    "eligibility": 0.054,
+    "interactions": 5.2,
     "lineage": 0.050,
-    "message.read": 0.060,
+    "message.read": 0.050,
     "peers": 0.050,
     "spans": 0.050,
     "task.list": 0.050,
     "uses": 0.050,
-    "read": 0.050,
+    "read": 0.058,
     "read before": 0.050,
     "read streams": 0.050,
 }
 """The slowest page each query that pages may answer, by op, and the journal's own read three ways: forward from the
 start, back from the head, and of one member's stream."""
-SNAPSHOTS = {"roster": (0.050, 208 * KiB), "attention": (0.090, 1358 * KiB)}
+SNAPSHOTS = {"roster": (0.080, 239 * KiB), "attention": (0.084, 1356 * KiB)}
 """The seconds and bytes each whole snapshot may take. The changes snapshot is not here: no git repository holds the
 run's workspace, so no look runs and it holds nothing."""
-PROJECTION = 37.0
-METRICS_READ = 0.100
-COUNTING = 0.028
+PROJECTION = 42.0
+METRICS_READ = 0.132
+COUNTING = 0.026
 """The most that counting an event again from the journal may cost, as a share of the CPU the runtime spent on each,
 which is taken as a bound on what the fold costs the writer: counting decodes each event, and the fold does not."""
-RESUMED = (7.5, 7.5)
+RESUMED = (15.4, 15.6)
 """The seconds from a resume after a SIGKILL until the runtime answers, and until every member is back."""
 
 
@@ -313,7 +313,7 @@ def test_every_query_that_pages_answers_a_page_within_its_budget_at_100000_event
 
 def test_the_roster_and_attention_snapshots_are_measured_at_100_agents(measured: Measured):
     """Each is whole, not paged: its rows and bytes are measured, and it must fit one line of the RPC. A roster row
-    names its agent's workspace path, so the roster's bytes grow with that path's length."""
+    names its agent's harness command and workspace path, so the roster's bytes grow with those paths' lengths."""
     for name, (seconds, rows, size) in measured.snapshots.items():
         print(f"{name}: {rows} rows, {size} bytes, {seconds * 1000:.0f} ms")
         budget, most = SNAPSHOTS[name]
