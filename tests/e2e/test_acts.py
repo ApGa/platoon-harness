@@ -266,10 +266,11 @@ async def test_an_approval_card_shows_its_whole_ask_as_text_under_the_page_s_pol
 
 async def test_a_cut_ask_says_where_it_was_cut(browser: Browser, root: Path):
     """An ask past what the record keeps is drawn as far as it is kept, and below it how many bytes more it asks, which
-    Allow allows too, in the words the terminal says."""
-    team = solo([Ask("Write the big file?", body="y" * (ASK_LIMIT + 10)), Hang()])
+    Allow allows too, in the words the terminal says. One whose record holds no body is drawn as its gist, and below it
+    that what more it asks is unknown."""
+    team = solo([Ask("Write the big file?", body="y" * (ASK_LIMIT + 10)), Ask("Go on?"), Hang()])
     async with Session.start(team, name="s", root=root, cwd=root) as session, serving("s", root) as web:
-        await asked(session)
+        approval = await asked(session)
         page, errors = await opened(browser, web.link("view"))
         await chat(page, "bob & you")
         await page.locator("[data-x-ask]").click()
@@ -279,9 +280,16 @@ async def test_a_cut_ask_says_where_it_was_cut(browser: Browser, root: Path):
             timeout=SECONDS,
         )
         shown = await page.locator("#pane .x-whole").evaluate("el => el.textContent")
+        await session.resolve(approval["id"], "allow", expected_version=approval["version"])
+        await page.locator(f'[data-x-card]:not([data-x-card="{approval["id"]}"]) [data-x-ask]').click()
+        await expect(below).to_have_text(
+            "What it asks beyond its gist is unknown: the record holds no more of it.", timeout=SECONDS
+        )
+        unknown = await page.locator("#pane .x-whole").evaluate("el => el.textContent")
         await page.context.close()
 
     assert shown == "y" * ASK_LIMIT
+    assert unknown == "Go on?"
     assert errors == []
 
 

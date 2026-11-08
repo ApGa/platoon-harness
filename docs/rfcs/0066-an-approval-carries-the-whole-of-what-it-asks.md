@@ -135,11 +135,11 @@ outside this repository.
 
 ### 8. Both clients show it
 
-Step 2 reads the ask in the words the command line package says for both clients, `approvals.py`: the whole of it, by its
-body's ref through `get_body`, and below it how many bytes more it asks where `cut` is more than 0, which Allow allows too,
-or, where the request names no body, a request of payload version 1 among them, that its harness said nothing beyond its
-gist. A request is found by the seq the client has of it, the attention row's `since_seq` or the card's line, as the first
-event of its stream.
+Step 2 reads the ask in the words the command line package says for both clients, `approvals.py`: the whole of it, by its body's
+ref through `get_body`, and below it how many bytes more it asks where `cut` is more than 0, which Allow allows too, or, where the
+request names no body, a request of payload version 1 among them, that what it asks beyond its gist is unknown, as section 1 says:
+the record holds no more of it, and its harness may have said more. A request is found by the seq the client has of it, the
+attention row's `since_seq` or the card's line, as the first event of its stream.
 
 - **The terminal.** `/ask` on the approval the dock is at, or `a` on one chosen in the dock, opens it in a dialog that
   answers nothing, each line through `SafeText` and never as Markdown, which would eat a command's asterisks and

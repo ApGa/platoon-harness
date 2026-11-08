@@ -7,8 +7,9 @@ from platoon_harness import Refused, Session
 from platoon_harness.kernel import Event
 from platoon_harness.primitives.approvals import ASK_LIMIT
 
-UNSAID = "Its harness did not say what it asks beyond its gist, so there is no more to read."
-"""What stands below an ask nobody stated: one whose harness sent none, or one recorded before a request carried it."""
+UNKNOWN = "What it asks beyond its gist is unknown: the record holds no more of it."
+"""What stands below an ask the record holds no body of: one its driver could not say, or one recorded before a request
+carried it. Its harness may have said more."""
 
 
 @dataclass(frozen=True)
@@ -35,11 +36,11 @@ async def request(session: Session, id: str, seq: int) -> Event:
 async def read(session: Session, request: Event) -> Ask:
     """What an approval's `request` asks: its body, read whole by its ref, as `blob.get` gives no text for a line longer
     than one result holds, which a one-line ask can be. A request of payload version 1 names no body and no cut, and
-    reads as an ask nobody stated."""
+    what it asks beyond its gist is unknown, as for any request with no body."""
     agent, gist = request.agent or "", request.gist
     ref, cut = request.data.get("body"), request.data.get("cut")
     if ref is None:
-        return Ask(agent, gist, None, UNSAID)
+        return Ask(agent, gist, None, UNKNOWN)
     try:
         text = (await session.get_body(ref, limit=ASK_LIMIT)).decode(errors="replace")
     except Refused as refused:

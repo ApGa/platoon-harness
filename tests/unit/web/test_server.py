@@ -21,7 +21,6 @@ from platoon_harness.kernel import ManualClock
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Ask, Hang, ScriptedDriver
-from platoon_harness_cli.approvals import UNSAID
 from platoon_harness_cli.ops import _command, cut, person_ops
 from platoon_harness_cli.review import PAGE, changes_of
 from platoon_harness_cli.web import LOOK, follow, plan_roles
@@ -936,8 +935,8 @@ async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words
 async def test_what_an_approval_asks_is_a_pane_of_x_read_read_whole_by_its_ref_in_the_terminal_s_words(root, clock):
     """`ask` is what the approval its card names asks, read whole by its body's ref, a line longer than a `blob.get`
     result holds among them, in the words the terminal's `/ask` says: how many bytes more an ask cut where the record
-    stops keeping it asks, and that nobody stated one with no body. A view link reads it, writing nothing, and an id no
-    card names is refused."""
+    stops keeping it asks, and that what more one with no body asks is unknown. A view link reads it, writing nothing,
+    and an id no card names is refused."""
     line = json.dumps({"command": "x" * 20_000 + " && rm -rf *_old_*"})
     asks = [Ask("Run it?", body=line), Ask("The big one?", body="y" * (ASK_LIMIT + 10)), Ask("Go on?"), Hang()]
     async with Session.start(team([asks], [[Hang()]]), name="s", root=root, cwd=root) as session:
@@ -962,7 +961,12 @@ async def test_what_an_approval_asks_is_a_pane_of_x_read_read_whole_by_its_ref_i
     assert read == [
         {"agent": "lead", "gist": "Run it?", "text": line, "below": None},
         {"agent": "lead", "gist": "The big one?", "text": "y" * ASK_LIMIT, "below": cut},
-        {"agent": "lead", "gist": "Go on?", "text": None, "below": UNSAID},
+        {
+            "agent": "lead",
+            "gist": "Go on?",
+            "text": None,
+            "below": "What it asks beyond its gist is unknown: the record holds no more of it.",
+        },
     ]
     assert unknown.status == 404 and unknown.json()["error"] == "There is no approval nobody with a card."
     assert unnamed.status == 400

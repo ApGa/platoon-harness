@@ -125,9 +125,9 @@ place you must act, and `/yes` and `/no` take its first and second action, Allow
 the version it was drawn from. On an approval, `/ask` opens the whole of what it asks before you answer it, the command,
 the patch or the tool's input, past the 280 characters its gist holds, each line as it was asked and never as Markdown, and
 answers nothing: Esc goes back. An ask cut where the record stops keeping it says how many bytes more it asks, which Allow
-allows too, and one whose harness said nothing beyond its gist says so. An action that leaves arguments to you, as a
-budget's Set the budget leaves you its limits, opens its op's form, the palette's, filled in with what it fixes: for a
-budget, the limits and estimate its scope was set to, which `budget set` replaces whole. With the dock reached by
+allows too, and one whose record holds no body says that what it asks beyond its gist is unknown. An action that leaves
+arguments to you, as a budget's Set the budget leaves you its limits, opens its op's form, the palette's, filled in with
+what it fixes: for a budget, the limits and estimate its scope was set to, which `budget set` replaces whole. With the dock reached by
 Shift+Tab, the arrows choose a place, Enter goes to it, `y` and `n` take the same two actions, and `a` reads an
 approval's ask whole. Only you move where you are: a place that goes,
 answered here or by another client, takes it with it, so a key never acts on a place you did not choose. An answer another client gave as you pressed shows

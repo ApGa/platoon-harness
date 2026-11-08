@@ -19,7 +19,6 @@ from platoon_harness.kernel import ManualClock
 from platoon_harness.primitives import delivery
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
-from platoon_harness_cli.approvals import UNSAID
 from platoon_harness_cli.ops import _command, person_ops
 from platoon_harness_cli.tui import live as live_module
 from platoon_harness_cli.tui import transcript as transcript_module
@@ -787,7 +786,7 @@ async def test_a_chosen_place_shows_its_actions_before_its_gist_so_a_narrow_scre
 async def test_an_approval_s_whole_ask_opens_from_the_dock_before_it_is_answered(root):
     """What follows a gist's 280 characters is what a person most needs to see, so `/ask`, or `a` in the dock, opens
     the whole of it, each line as it was asked and never as Markdown, answering nothing; an ask past what the record
-    keeps says where it was cut, and one nobody stated says so."""
+    keeps says where it was cut, and one with no body says that what more it asks is unknown."""
     command = "cd build && " + "make target_%d && " * 40 % tuple(range(40)) + "rm -rf *_old_* ~/.cache"
     big = "y" * (ASK_LIMIT + 10)
     asks = [Ask("Run the build?", body=f"Bash\n{command}"), Ask("Write the big file?", body=big), Ask("Go on?")]
@@ -825,7 +824,7 @@ async def test_an_approval_s_whole_ask_opens_from_the_dock_before_it_is_answered
         await pilot.press("escape", *"/yes", "enter")
         resolved = await until(lambda: of_type(owner, "approval.resolved"), owner, lambda found: len(found) == 3)
 
-    assert said == ["Go on?", UNSAID]
+    assert said == ["Go on?", "What it asks beyond its gist is unknown: the record holds no more of it."]
     assert [event.data["verdict"] for event in resolved] == ["allow", "deny", "allow"]
     assert {event.data["via"] for event in resolved} == {"tui"}
 

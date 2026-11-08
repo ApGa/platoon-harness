@@ -7,7 +7,6 @@ from typing import Any
 from textual.app import App, ComposeResult
 
 from platoon_harness.kernel import Event, Page
-from platoon_harness_cli.approvals import UNSAID
 from platoon_harness_cli.tui import transcript as transcript_module
 from platoon_harness_cli.tui.transcript import Focus, Transcript
 
@@ -221,7 +220,7 @@ async def test_an_approval_and_who_answered_it_are_drawn_in_its_agent_s_transcri
     """An agent's approvals are on streams of their own, `approval/<id>`, as the id is its harness's, so its focus
     reads every approval's and draws its own: what it asked, which opens on the whole ask, drawn as it was asked, and
     who answered, a person through what they said or the role's policy. One recorded before a request carried its ask
-    opens on its gist, saying nobody stated more."""
+    opens on its gist, saying what more it asks is unknown."""
     command = "rm -rf *_old_* # and __this__"
     journal = Journal(
         [
@@ -258,7 +257,7 @@ async def test_an_approval_and_who_answered_it_are_drawn_in_its_agent_s_transcri
             command,
             "Cut here: it asks 7 bytes more, which the record does not keep, and Allow allows them too.",
             "Go on?",
-            UNSAID,
+            "What it asks beyond its gist is unknown: the record holds no more of it.",
         ]
 
 

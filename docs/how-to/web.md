@@ -123,8 +123,8 @@ a plan login on loopback alone: see [Security](#security).
   decided it and through what, or that it went moot with the turn that asked. While it waits on you, Read it whole opens
   the whole of what it asks in the pane, which the address names, `ask=`, in the words the terminal's `/ask` says: the
   command, the patch or the tool's input past the 280 characters its question holds, as text, each line as it was asked.
-  Where the record cut it, it says how many bytes more it asks, which Allow allows too, and where its harness said
-  nothing beyond its question, it says so.
+  Where the record cut it, it says how many bytes more it asks, which Allow allows too, and where the record holds no
+  more than its question, it says that what more it asks is unknown.
 - **Delivered to.** Where SwarmChat says "Read by", the page says "Delivered to": the agents a message was for that a
   handover landed it in, or a tool's result showed it to, which is evidence, and when; a goal reached its agent when the
   agent's first turn began on it. It never says one understood it. A
@@ -233,7 +233,7 @@ at a time, held until the journal records it, for at most 25 s, and saying it is
 act, so a view link reads none, as the `diff` pane refuses it, and history can ask for none, and Patch and Uncommitted diff say
 why. Its `ask` pane is what the approval its card names asks, in the words the terminal's `/ask` says: the whole of it, read
 by its body's ref, as `blob.get` gives no text for a line longer than one result holds, and below it how many bytes more it asks
-where the record cut it, or that its harness said nothing beyond its gist.
+where the record cut it, or, where the record holds no body, that what it asks beyond its gist is unknown.
 
 ## Not built yet
 
