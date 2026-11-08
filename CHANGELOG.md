@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **An extension tutorial.** [docs/extending/extensions.md](docs/extending/extensions.md) writes the sample
+  extension package step by step: its package, its op's arguments, its view, its op, its preset and the extension
+  that names them, installed and named by a team, its vote cast from Python on stand-ins, checked by
+  `check_extension`, with what each check holds and what none checks, and how to publish a package of your own. It
+  says that an extension's op is never asked about before it runs. A test runs its steps against the sample. The
+  drivers guide's account of `check_extension` moved there.
 - **Every way to extend platoon-harness, on one page.** [docs/extending/index.md](docs/extending/index.md) names
   each way in, a driver by `exec`, the wire, a Python package or ACP, an extension and each of its parts, a preset,
   an isolation, a program, a training system and an estimator, how platoon-harness finds your code, by its two

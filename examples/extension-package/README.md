@@ -6,6 +6,8 @@ through MCP or `ph`, from the command line, and from the terminal's palette and 
 
 **Prerequisites:** a checkout of this repository with its packages installed, by `uv sync`, as
 [Install](../../docs/getting-started/install.md#install-from-a-checkout) says. The package needs no harness, key or model.
+[Write an extension](../../docs/extending/extensions.md) builds it step by step, and says how to publish a package of
+your own.
 
 | File | What it is |
 |---|---|
@@ -96,7 +98,7 @@ opens where the page's address names it, `#provenance=<ref>`.
 ## 5. Check it
 
 `check_extension`, from `platoon_harness.testing`, holds an extension to what a core primitive keeps to, every failure at
-once: see [Extensions](../../docs/extending/drivers.md#extensions). This one passes, and the result names what no check
+once: see [Check it](../../docs/extending/extensions.md#11-check-it). This one passes, and the result names what no check
 runs, its preset: nothing in it says the topology `pair_review` returns is valid.
 
 ## How the tests hold it

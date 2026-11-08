@@ -5,6 +5,7 @@ A driver presents one harness session to the runtime through seven methods. One 
 `openhands` extra, [below](#openhands-a-wire-worker). The driver of agents that speak ACP, `opencode` among them, ships
 as a first-party extension, `platoon-harness-acp`, [below](#acp-agents-a-first-party-extension).
 This page is for everyone else: how to write a driver, in Python or any other language, and how to prove it works.
+[Extending platoon-harness](index.md) lists every other way in.
 
 There are three ways in, cheapest first.
 
@@ -719,19 +720,5 @@ raises, of its own or of a subclass's, fails its turn saying what it raised, and
 
 ### Extensions
 
-`check_extension` holds an extension to what a core primitive keeps to: `names`, `naming_law`, `schemas`, `descriptions`,
-`public_api_only`, and with a `scenario` to run, `rebuild_equals_live`.
-
-```python
-from platoon_harness.testing import check_extension
-
-result = await check_extension(extension, folder=tmp_path / "session", scenario=cast_three_votes)
-assert result.failed == (), str(result)
-```
-
-Its result, `ExtensionChecks`, also names in `unchecked` each part the extension declares that no check runs, its daemons,
-its presets and its isolation, saying what that leaves unknown, and prints each on an `unchecked` line after the checks.
-So a pass never reads as more than ran: it says nothing of what a daemon does or which effects it performs, whether the
-topology a preset returns is valid, or whether an isolation confines. The SDK's `bwrap` passes, and its result says that
-nothing in it says Bubblewrap confines. [The sample extension package](../../examples/extension-package/README.md)
-passes, with its preset unchecked.
+`check_extension` does for an extension what `check_driver` does for a driver: [Write an extension](extensions.md#11-check-it)
+runs it on the sample extension package, and says what each check holds an extension to and what no check covers.

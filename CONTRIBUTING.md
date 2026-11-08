@@ -348,8 +348,9 @@ page's form with no core edit ([architecture §17](docs/architecture.md#17-exten
 preset. An extension's name is its command group's, so one named as a command of the command line's own, such as `run`,
 has no command, and the command line says why; and no session can load one named as an extension of the SDK's own, which
 every session holds, such as `task` or `lease`.
-Hold it to what a core primitive keeps with `check_extension` from `platoon_harness.testing`
-([Drivers, Extensions](docs/extending/drivers.md#extensions)).
+Hold it to what a core primitive keeps with `check_extension` from `platoon_harness.testing`.
+[Write an extension](docs/extending/extensions.md) builds that package step by step, checks it and says how to publish
+one.
 
 ## Add a topology preset
 

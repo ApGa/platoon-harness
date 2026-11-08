@@ -14,7 +14,7 @@ rules your code keeps, and links the guide to each.
 | A harness driven from any language | A program that speaks JSON-RPC on stdio | The `wire` driver | A role's `harness = { command = [...], mode = "wire" }` | [A program: the wire](drivers.md#a-program-the-wire) |
 | A driver in Python | A class with the seven methods of `Driver` | The `platoon_harness.drivers` entry-point group, or `module:attr` | A role's `harness`, by the driver's name | [A Python package](drivers.md#a-python-package) |
 | A driver of an agent that speaks ACP | A subclass of `AcpDriver`, from the first-party extension `platoon-harness-acp`, that names the agent's command | The `platoon_harness.drivers` entry-point group, or `module:attr` | A role's `harness`, by the driver's name | [ACP agents](drivers.md#acp-agents-a-first-party-extension) |
-| An extension | An `Extension`, of [the parts below](#an-extensions-parts) | The `platoon_harness.extensions` entry-point group, or `module:attr` | A team's `extensions = [...]` | [The sample extension package](../../examples/extension-package/README.md) |
+| An extension | An `Extension`, of [the parts below](#an-extensions-parts) | The `platoon_harness.extensions` entry-point group, or `module:attr` | A team's `extensions = [...]` | [Write an extension](extensions.md) |
 | A topology preset | A function that returns a `Topology` | An extension's `presets` | A team's `[topology.<name>]` table | [Write your own preset](../how-to/topologies.md#write-your-own-preset) |
 | An isolation | An object with `refusal()` and `wrap(writable, readable, hidden)` | An extension's `isolation` | A team that names the extension, and a role's `workspace = "isolated"` | [Where an isolated agent runs](../how-to/workspaces.md#where-an-isolated-agent-runs) |
 | A program | A Python script that starts its session as `program:<name>` and drives it through the session's ops | Nothing: you run it | `until = "program"`, which leaves the session to the program | [Programs](#programs) |
@@ -111,7 +111,8 @@ owns, and [architecture §14](../architecture.md#14-training) is its design.
 - **Names follow the law.** Ops are imperative, `<extension>.<verb>`, events are past tense, and a driver's name is the
   command you type ([the naming law](../architecture.md#naming-law)).
 - **Prove it.** `check_driver` and `check_extension`, from `platoon_harness.testing`, hold a driver and an extension to
-  what the SDK's own keep, and report every failure at once. A skip is never a pass.
+  what the SDK's own keep, and report every failure at once
+  ([conformance](drivers.md#conformance), [check it](extensions.md#11-check-it)). A skip is never a pass.
 
 [Architecture §3](../architecture.md#3-laws) states each law, with the test of its name.
 

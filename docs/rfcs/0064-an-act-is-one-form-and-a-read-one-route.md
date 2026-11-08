@@ -84,8 +84,7 @@ came of its act: done, with the op's result as text, or the refusal.
 
 Before an op in `CONFIRMED`, the form asks once. `CONFIRMED` is the command line package's list, the ops that end an agent or the
 session, erase a body, or run a commit's code as you, so an extension's op is never asked about: none needs it yet. Architecture
-section 17, STATUS and the page's guide say so, and the extension guide, which milestone 4 plans and nobody has written yet, is to
-say it too.
+section 17, STATUS, the page's guide and [the extension guide](../extending/extensions.md#10-cast-a-vote) say so.
 
 ### 3. In the terminal
 
