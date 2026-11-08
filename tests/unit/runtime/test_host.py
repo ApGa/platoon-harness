@@ -2126,3 +2126,57 @@ async def test_a_driver_that_cannot_say_where_its_credentials_are_leaves_them_an
 
     assert held(folder) == ["own/auth.json", "own/logins"]
     assert "bob's driver did not say where its harness keeps credentials, so they stay" in caplog.text
+
+
+async def test_an_authority_hears_of_an_end_whose_driver_broke_saying_where_its_credentials_are(tmp_path):
+    """A driver that raises what no driver should fails the stop, which says why, and its harness's `TMPDIR` goes and
+    the authority hears all the same."""
+    told: list[AgentOutcome] = []
+
+    class Listening(LocalAuthority):
+        async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
+            told.append(outcome)
+
+    team = solo_with(keeping())
+    async with Session.start(team, authority=Listening(team), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        folder = agent_folder(session.folder, "bob")
+
+        async def broken(role: str) -> DriverInfo:
+            raise RuntimeError("a bug in describe")
+
+        session._runtime.host.describe = broken
+        await session.retire("@bob")
+        [failed] = await until(lambda: stops(session, "effect.failed"), session)
+
+    assert failed.data["error"] == "RuntimeError: a bug in describe"
+    assert held(folder) == ["own/auth.json", "own/logins"]
+    assert [outcome.status for outcome in told] == ["retired"]
+
+
+async def test_an_authority_hears_of_an_end_whose_stop_a_shutdown_cut_as_its_driver_described_itself(tmp_path):
+    """A wire program describes itself by running, which a shutdown can cut short, and its harness's `TMPDIR` goes and
+    the authority hears all the same."""
+    told: list[AgentOutcome] = []
+    describing = asyncio.Event()
+
+    class Listening(LocalAuthority):
+        async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
+            told.append(outcome)
+
+    team = solo_with(keeping())
+    async with Session.start(team, authority=Listening(team), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        folder = agent_folder(session.folder, "bob")
+
+        async def answering(role: str) -> DriverInfo:
+            describing.set()
+            await asyncio.Event().wait()
+            raise AssertionError
+
+        session._runtime.host.describe = answering
+        await session.retire("@bob")
+        await asyncio.wait_for(describing.wait(), SECONDS)
+
+    assert held(folder) == ["own/auth.json", "own/logins"]
+    assert [outcome.status for outcome in told] == ["retired"]

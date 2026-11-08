@@ -733,8 +733,8 @@ class Host:
         with it. With no link, a crash may have left it, and `reap` proves what is ours. A link stays until its harness
         has stopped, so a shutdown that cuts this short can still stop it. Each step is safe to repeat, so a repeat
         finishes what the last one began, and a workspace gone at a repeat, which an earlier attempt may have removed,
-        is not looked for. Its harness's scratch and credentials go, and then the authority hears how the agent ended
-        last, both even when a step before fails."""
+        is not looked for. Then its harness's scratch and credentials go, and last the authority hears how the agent
+        ended, each even when a step before it fails."""
         name, retried = effect.data["agent"], effect.attempts > 0
         folder = agent_folder(self._folder, name)
         record = self._kernel.query(self._kernel.runtime, "agent.records", {"agent": name}).result[0]
@@ -766,21 +766,24 @@ class Host:
                         end_snapshot, workspace, folder, top, left, retried=retried, wrap=wrap
                     )
         finally:
-            await self._clean(name, record["role"])
-            outcome = AgentOutcome(status=record["status"], report=self._report_of(effect.data.get("cause")))
-            await self._authority.finish(AgentRef(agent=name, role=record["role"]), outcome)
+            try:
+                await self._clean(name, record["role"])
+            finally:
+                outcome = AgentOutcome(status=record["status"], report=self._report_of(effect.data.get("cause")))
+                await self._authority.finish(AgentRef(agent=name, role=record["role"]), outcome)
         return ended
 
     async def _clean(self, agent: str, role: str) -> None:
         """Remove what an ended agent's harness kept in its folder that is no record, its `TMPDIR` and the credentials
-        its driver names, and say in the log what could not be removed."""
+        its driver names, and say in the log what stays of them. Its `TMPDIR` goes even when its driver cannot say."""
+        credentials: tuple[Path, ...] = ()
         try:
             credentials = (await self.describe(role)).credentials
         except (ConfigError, DriverError) as error:
-            credentials = ()
             log.error("%s's driver did not say where its harness keeps credentials, so they stay: %s", agent, error)
-        for left in await asyncio.to_thread(clean, agent_folder(self._folder, agent), credentials):
-            log.error("%s's stop: %s", agent, left)
+        finally:
+            for stays in await asyncio.to_thread(clean, agent_folder(self._folder, agent), credentials):
+                log.error("%s's stop: %s", agent, stays)
 
     async def _test(self, effect: Effect) -> dict[str, Any]:
         """Run the team's `test` command at a commit, in a clean detached checkout of it in the session's subfolder, as
