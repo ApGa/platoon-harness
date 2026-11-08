@@ -142,6 +142,30 @@ async def test_past_the_most_a_view_reads_it_says_how_many_more_and_what_reads_t
     )
 
 
+async def test_where_a_board_s_view_stops_each_entry_says_it_may_have_more_and_offers_no_revise(root, monkeypatch):
+    """Versions come in the order they were written, so where the view stops, a later version of any entry it read may
+    lie past it: each says so, and offers no Revise, which would revise a version that may not be the latest."""
+    monkeypatch.setattr(channels, "MOST", 32)
+    async with Session.start(team(), name="s", root=root, cwd=root) as session:
+        await in_state(session, "lead", "idle")
+        await session.board_post("notes", "plan", "first")
+        for number in range(31):
+            await session.board_post("notes", f"note{number}", "a note")
+        await session.board_revise("notes", "plan", "second", 1)
+        view = await read(session, "board/notes", "you")
+        cursor = (await session.board_query("notes", history=True, limit=32))["cursor"]
+
+    command = f"platoon-harness board query s --board notes --history --after {cursor}"
+    assert [(line.kind, said(line)) for line in view.lines[:2]] == [
+        ("entry", "plan  1 version read before the view stopped, maybe not all, so no Revise is offered"),
+        ("version", "v1  @you  first"),
+    ]
+    assert view.lines[0].parts[1][1] == "warn"
+    assert [line.kind for line in view.lines] == ["entry", "version"] * 32 + ["more"]
+    assert not any(line.acts for line in view.lines)
+    assert said(view.lines[-1]) == f"1 more past these, which `{command}` reads"
+
+
 def event(type: str, stream: str) -> Event:
     """An event of `type` on `stream`, and nothing else of it said, as `moves` reads nothing else."""
     return Event.model_construct(type=type, stream=stream)

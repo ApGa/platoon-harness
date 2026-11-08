@@ -116,8 +116,9 @@ a plan login on loopback alone: see [Security](#security).
   through `x_read` as it opens, and again whenever the feed says that what it reads moved: an event of one of its tasks or
   entries, a claim or a lease's expiry among them, which its chat never hears of, or for a queue an agent's end. No timer
   of the page's decides anything, so a claim stands until the runtime records its lease's expiry. It reads 256 tasks or
-  versions at most, and past them says how many more there are and the command that reads on. Each act it offers opens
-  its op's form, as Acting says. Esc or × closes it.
+  versions at most, and past them says how many more there are and the command that reads on, and where Entries stops
+  short, each entry says its versions read may not be all, and offers no Revise. Each act it offers opens its op's form,
+  as Acting says. Esc or × closes it.
 - **Messages.** A message shows its gist, or its body when the body is text that begins or ends with the gist, as a
   message the terminal sent with a long text does. A body longer than 20,000 characters, what a SwarmChat message shows, is
   cut there, saying so, and a body a message does not show whole comes as a file, which SwarmChat's own viewer opens whole.

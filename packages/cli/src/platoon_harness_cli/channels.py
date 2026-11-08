@@ -123,32 +123,31 @@ async def _entries(session: Session, board: str) -> View:
     entries: dict[str, list[dict[str, Any]]] = {}
     for version in versions:
         entries.setdefault(version["name"], []).append(version)
-    lines = [line for name, held in entries.items() for line in _entry(board, name, held)]
     command = f"platoon-harness board query {session.name} --board {board} --history"
-    lines += _more(total - len(versions), cursor, command)
+    more = _more(total - len(versions), cursor, command)
+    lines = [line for name, held in entries.items() for line in _entry(board, name, held, cut=bool(more))]
+    lines += more
     nothing = Line("nothing", (("No entries yet.", "faint"),))
     return View(
         f"Entries on {board}", tuple(lines or [nothing]), (Act("Post an entry", "board.post", {"board": board}),)
     )
 
 
-def _entry(board: str, name: str, versions: list[dict[str, Any]]) -> list[Line]:
+def _entry(board: str, name: str, versions: list[dict[str, Any]], *, cut: bool) -> list[Line]:
     """An entry's line, with how many versions it has, then a line for each, oldest first: who wrote it, its gist and
     its fields. Revise opens filled in with the version it revises and that version's fields, as a version replaces
-    them whole, so a person who changes one keeps the others."""
-    latest = versions[-1]
-    fields = {"fields": latest["fields"]} if latest["fields"] else {}
-    revise = Act(
-        "Revise", "board.revise", {"board": board, "name": name, "expected_version": latest["version"], **fields}
-    )
-    lines = [
-        Line(
-            "entry",
-            ((name, "strong"), (f"  {_some(len(versions), 'version')}", "faint")),
-            f"board/{board}/{name}",
-            (revise,),
-        )
-    ]
+    them whole, so a person who changes one keeps the others. Where the read was `cut`, a version of any entry may lie
+    past where it stopped, as versions come in the order they were written, so the line says its versions may not be
+    all and offers no Revise, which would revise one that may not be the latest."""
+    key, count = f"board/{board}/{name}", f"  {_some(len(versions), 'version')}"
+    if cut:
+        said = f"{count} read before the view stopped, maybe not all, so no Revise is offered"
+        lines = [Line("entry", ((name, "strong"), (said, "warn")), key)]
+    else:
+        latest = versions[-1]
+        fields = {"fields": latest["fields"]} if latest["fields"] else {}
+        revised = {"board": board, "name": name, "expected_version": latest["version"], **fields}
+        lines = [Line("entry", ((name, "strong"), (count, "faint")), key, (Act("Revise", "board.revise", revised),))]
     for version in versions:
         parts: tuple[Part, ...] = (
             (f"v{version['version']}", "faint"),

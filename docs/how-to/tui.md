@@ -212,7 +212,9 @@ The list is read again whenever the journal holds an event on one of its tasks' 
 end, which gives back each task the agent held, and at no other time: no timer of the terminal's decides anything. A claim
 stands until the runtime records that its lease expired, which its own timer fires on the session's clock, so a deadline
 already past on your clock still reads claimed until then. It reads 256 tasks or versions at most, a page at a time, and past
-them says how many more there are and the `task list` or `board query` command that reads on.
+them says how many more there are and the `task list` or `board query` command that reads on. A board's versions come in the
+order they were written, so where its list stops short, each entry says its versions read may not be all, and offers no
+Revise, which would revise a version that may not be the latest.
 
 What you may do is a row under what it acts on, and Enter on it opens its op's form, the palette's, filled in with what the
 line knows: Add a task, or Post an entry, at the top; Claim on an open or a failed task; Complete, Fail, Release and Renew on
