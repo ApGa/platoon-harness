@@ -230,11 +230,13 @@ class _Population:
 
     async def _retire_if_idle(self, worker: _Worker) -> None:
         """A worker whose turn ended with nothing more to come for it, as a failed turn leaves one, is retired, and
-        its outcome is then `failed`. One waiting on something is left to it, and one that is at work again the kernel
-        refuses to retire."""
+        its outcome is then `failed`. One waiting on something is left to it, and one that is at work again, or has
+        ended, the kernel refuses to retire `conflict`. Any other refusal is raised."""
         worker.asked = worker.turn_ended
         if (await self.session.status(worker.name))["state"] == "idle":
-            await self.session.submit("agent.retire", agent=worker.name)
+            retired = await self.session.submit("agent.retire", agent=worker.name)
+            if retired.refusal is not None and retired.refusal.code != "conflict":
+                raise Refused.of(retired.refusal)
 
     async def _start(self) -> None:
         record = self.record
@@ -266,7 +268,8 @@ async def population(session: Session, role: str, goal: str, *, attempts: int) -
     name, `<outcome>: <what>`, with the outcome in `fields`, and for a contribution or a nomination the `sha` of its
     commit, citing the worker's end and what it came to, and the board refuses a second. Every outcome
     counts against `attempts`, abstaining and failing too, so a population whose every worker abstains ends. A worker
-    whose turn ended with nothing more to come for it is retired, and is `failed`. A spawn refused `not_permitted` is
+    whose turn ended with nothing more to come for it is retired, and is `failed`, and a refusal to retire it other than
+    `conflict`, which says it is at work again or has ended, is raised. A spawn refused `not_permitted` is
     tried again once an agent has ended. Any other refusal ends the starting, and is raised once each worker started
     has its outcome. The population chooses nothing among the nominations: that is the person's.
 

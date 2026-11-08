@@ -74,7 +74,8 @@ returns each worker's outcome by its name, in the order they started.
   closing, ends the starting, and the population raises it once each worker it started has its outcome.
 - **Retiring.** A worker whose turn ended with nothing more to come for it, as a failed turn leaves a worker that does not stay,
   is idle for good, as nothing in a population wakes it, so the population retires it, and its outcome is `failed`. One that is
-  waiting on something is left to it.
+  waiting on something is left to it. A retirement refused `conflict` says the worker is at work again or has ended, and any
+  other refusal would leave it idle with no outcome to come, so the population raises it.
 - **Choosing.** The population chooses nothing among the nominations: that is the person's (Open questions).
 
 ### 3. One outcome for each worker

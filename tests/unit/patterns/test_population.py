@@ -223,6 +223,23 @@ async def test_every_outcome_abstaining_included_counts_against_attempts_so_a_po
     assert [event.data["name"] for event in spawned] == ["worker-1", "worker-2", "worker-3"]
 
 
+async def test_a_refusal_to_retire_an_idle_worker_other_than_conflict_is_raised(repo, tmp_path, monkeypatch):
+    """A worker its failed turn left idle is retired, which the kernel refuses `conflict` once it is at work again or
+    has ended. Any other refusal leaves the worker idle with no outcome to come, so it is raised, and the population
+    waits for nothing."""
+    plans = {"worker-1": fail}
+    async with Session.start(swarm(plans, live=1), name="s", principal=PROGRAM, root=tmp_path, cwd=repo) as session:
+        submit = session.submit
+
+        async def refusing(op: str, /, **args: Any) -> Any:
+            """Retire an agent nobody started in place of the worker, which the kernel refuses `not_found`."""
+            return await submit(op, **({**args, "agent": "nobody"} if op == "agent.retire" else args))
+
+        monkeypatch.setattr(session, "submit", refusing)
+        with pytest.raises(Refused, match="not_found: no agent nobody"):
+            await population(session, "worker", GOAL, attempts=1)
+
+
 class Crashed(Exception):
     """The program's process, gone."""
 
