@@ -66,6 +66,17 @@ named here is closed.
   out, offers Set the budget, `budget.set` with the scope the record names, filled in with the limits and estimate it was set
   to, which `budget.set` replaces whole, for you to change, where it offered nothing. A wake refused by a limit no amount can
   hold says in its gist to remove it, and its refusal `unavailable` names its scope and unit as data, as `over_budget` does. See [RFC 0064](docs/rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft.
+- **How a session runs, as a query.** `session.metrics`, with `Session.metrics()` and the command `session metrics`,
+  reads at a head the events the journal holds by type and the refusals by code, which `Counters`, a fold, counts as
+  each commits, so counting adds no journal write; the agents in each of the roster's groups; the agents by the
+  trainable level their latest start recorded; each surface's declared coverage beside the surfaces proved, and the gaps
+  by kind; and the kernel's gauges, the writer's throughput, depth, commands in flight, `busy` refusals and ack latency,
+  and the CPU and peak memory of the process holding the journal. Each metric of architecture section 16 is defined in
+  a sentence, and what nothing measured is None, never zero, with why in `unknown`: every gauge on a closed session,
+  and what an agent's harness processes use, always. A person or a program reads it, on a view credential too, and an
+  agent is refused it. That no agent holds it, and that resource use is reported and never limited, is the default
+  pending the owner's ruling. See
+  [RFC 0069](docs/rfcs/0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md), a draft.
 - **The kernel's gauges, by public names.** `Kernel.gauges()`, and `txn.gauges()` for an op, give what a live kernel
   has measured since it opened its journal for writing, as `Gauges`: the events and commits, the writes queued now and
   the most there were, the commands in flight by principal, the writes refused `busy`, which no journal holds, and each

@@ -41,8 +41,9 @@ did before then stands. [RFC 0016](rfcs/0016-plan-logins-and-credentials.md) say
   outside those folders and everything you can read elsewhere, on the same kernel. It is experimental, Linux only, and has
   passed its escape tests on one host.
 - **The network, from an agent.** Nothing confines an agent's network access, an isolated one's included.
-- **Resources.** No agent's CPU, memory or disk is limited. `session.metrics`, which is planned, is to report each
-  agent's use; that it reports use and limits none is the default, pending the owner's ruling on per-agent limits.
+- **Resources.** No agent's CPU, memory or disk is limited. `session.metrics` reports the CPU and peak memory of the
+  process holding the journal, and what an agent's harness processes use as unknown, since nothing measures it; that it
+  reports use and limits none is the default, pending the owner's ruling on per-agent limits.
 - **macOS.** Nothing has run there yet, and no isolation exists for it.
 
 ## Credentials

@@ -41,6 +41,7 @@ from platoon_harness.primitives import (
     Exposure,
     Interactions,
     Lineage,
+    Metrics,
     NotSeen,
     Policy,
     Seen,
@@ -501,6 +502,11 @@ class Session:
 
     async def wait_progress(self, id: int | None = None) -> dict[str, Any] | None:
         return await self._ask("wait.progress", id=id)
+
+    async def metrics(self) -> Metrics:
+        """How this session runs: what its record counts, the roster's groups, and what its runtime has measured since
+        it started, each None where nothing measured it, with why in `unknown`."""
+        return Metrics.model_validate(await self._ask("session.metrics"))
 
     async def ending(self) -> Ending:
         """What this session has come to so far."""

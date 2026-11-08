@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`kernel/writer.py`](../../packages/sdk/src/platoon_harness/kernel/writer.py), [`kernel/txn.py`](../../packages/sdk/src/platoon_harness/kernel/txn.py), [`primitives/clients.py`](../../packages/sdk/src/platoon_harness/primitives/clients.py), [architecture sections 5, 6 and 16](../architecture.md#16-observability), [the brief's section 12](../spec/BRIEF.md#12-reliability-security-and-scale), [RFC 0004](0004-one-operation-table.md), [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) and [RFC 0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
-| Implementation | `feat: Give the kernel's writer gauges public names` |
+| Implementation | `feat: Give the kernel's writer gauges public names`, `feat: Answer session.metrics, unknown where nothing measured` |
 
 ## Summary
 
@@ -199,7 +199,7 @@ owner's ruling (Open questions).
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 the gauges | `Gauges`, `Kernel.gauges()` and `Txn.gauges()` | `tests/unit/kernel/test_writer.py`, `test_the_writer_reports_its_depth_in_flight_and_ack_latency_by_public_names` |`feat: Give the kernel's writer gauges public names` |
-| M2 the query | `Counters`, `session.metrics`, `Session.metrics` and the command `session metrics` | `tests/unit/primitives/test_metrics.py` | |
+| M2 the query | `Counters`, `session.metrics`, `Session.metrics` and the command `session metrics` | `tests/unit/primitives/test_metrics.py` |`feat: Answer session.metrics, unknown where nothing measured` |
 | M3 measured at scale | The writer's cost of metrics and a reading's cost, held to budgets set from measurements on the real stack | Milestone 4's scale tests, `test_metrics_cost_the_writer_no_more_than_their_budget` | |
 
 ## Open questions

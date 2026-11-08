@@ -211,6 +211,7 @@ platoon_harness.primitives.cited
 platoon_harness.primitives.Compacted
 platoon_harness.primitives.Condition
 platoon_harness.primitives.Contributors
+platoon_harness.primitives.Counters
 platoon_harness.primitives.Cursor
 platoon_harness.primitives.CUT_OFF
 platoon_harness.primitives.Deliveries
@@ -241,6 +242,8 @@ platoon_harness.primitives.Lines(text,total,range,rest)
 platoon_harness.primitives.lines_of
 platoon_harness.primitives.Looks
 platoon_harness.primitives.maker
+platoon_harness.primitives.Metrics
+platoon_harness.primitives.Metrics(*,head,events,refused,agents,trainable,coverage,proved,gaps,gauges,unknown)
 platoon_harness.primitives.Mode
 platoon_harness.primitives.ModelCall
 platoon_harness.primitives.Native
@@ -430,6 +433,7 @@ platoon_harness.session.Session.head()
 platoon_harness.session.Session.interactions(*,after)
 platoon_harness.session.Session.leave(grace)
 platoon_harness.session.Session.lineage(ref,*,after)
+platoon_harness.session.Session.metrics()
 platoon_harness.session.Session.open_episode(episode)
 platoon_harness.session.Session.page(*,after,before,match,streams,limit)
 platoon_harness.session.Session.repo_diff(of)

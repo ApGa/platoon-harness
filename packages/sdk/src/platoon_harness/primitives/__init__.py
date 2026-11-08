@@ -13,6 +13,7 @@ from . import (
     eligibility,
     lifecycle,
     messages,
+    metrics,
     provenance,
     repo,
     sessions,
@@ -43,6 +44,7 @@ from .delivery import courier
 from .eligibility import Attribution, Bar, CallEligibility, Eligibility
 from .exposures import Exposures
 from .messages import Cursor, Deliveries, Entry
+from .metrics import Counters, Metrics
 from .provenance import (
     WALK_LIMIT,
     Calls,
@@ -101,11 +103,12 @@ PRIMITIVES = (
             sessions.show_manifest,
             lifecycle.session_status,
             lifecycle.session_ending,
+            metrics.session_metrics,
             lifecycle.close,
             lifecycle.cancel_session,
             lifecycle.stop,
         ],
-        views=[SessionRecord],
+        views=[SessionRecord, Counters],
     ),
     Extension("episode", ops=[sessions.open_episode, sessions.close_episode]),
     Extension("budget", ops=[budgets.set_budget, budgets.lapse, budgets.budget_status], views=[Budgets]),
@@ -199,6 +202,7 @@ __all__ = [
     "Compacted",
     "Condition",
     "Contributors",
+    "Counters",
     "Cursor",
     "Deliveries",
     "Delta",
@@ -219,6 +223,7 @@ __all__ = [
     "Lineage",
     "Lines",
     "Looks",
+    "Metrics",
     "Mode",
     "ModelCall",
     "Native",

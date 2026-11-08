@@ -67,6 +67,7 @@ COVERED = {
     "session.close": "close",
     "session.ending": "ending",
     "session.manifest": "manifest",
+    "session.metrics": "metrics",
     "session.status": "status",
     "spans": "spans",
     "task.add": "task_add",

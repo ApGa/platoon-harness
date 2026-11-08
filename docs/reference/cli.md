@@ -90,6 +90,7 @@ For example:
     - [`close`](#platoon-harness-session-close)
     - [`ending`](#platoon-harness-session-ending)
     - [`manifest`](#platoon-harness-session-manifest)
+    - [`metrics`](#platoon-harness-session-metrics)
     - [`status`](#platoon-harness-session-status)
 - [`team`](#platoon-harness-team)
     - [`check`](#platoon-harness-team-check)
@@ -557,6 +558,24 @@ Name the stored manifest of this session, which holds no secrets.
 For example:
 
     platoon-harness session manifest SESSION
+
+**Arguments**:
+
+* `SESSION`: A session, by name. `platoon-harness session list` shows them. **[required]**
+
+#### platoon-harness session metrics
+
+```console
+platoon-harness session metrics SESSION
+```
+
+Say how this session runs, from its record and from what its runtime measures.
+
+Read at `head`: `events`, how many of each type its journal holds, and `refused`, how many commands it holds refused, by code, counted as each commits; `agents`, how many stand in each of the roster's groups; `trainable`, `coverage` beside `proved`, and `gaps`, what agents' starts recorded of their trainable level and of their harnesses' coverage, and the gaps by kind; and `gauges`, what the runtime holding the session has measured of its writer and its process since it started: events and commits, depth, commands in flight, `busy` refusals, ack latency, CPU and memory. What nothing measured is None, never zero, and `unknown` says why. A person or a program reads this, never an agent: refused `not_permitted` to one, as an agent's read is evidence and a query records none.
+
+For example:
+
+    platoon-harness session metrics SESSION
 
 **Arguments**:
 

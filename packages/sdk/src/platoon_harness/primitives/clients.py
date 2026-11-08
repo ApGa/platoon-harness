@@ -490,7 +490,8 @@ def _group(agent: Agent, said: why.Why | None, needing: set[str]) -> Group:
     return "blocked" if said is not None else "idle"
 
 
-def _roster(txn: Txn) -> list[dict[str, Any]]:
+def roster(txn: Txn) -> list[dict[str, Any]]:
+    """A row per agent, live or ended, each in its group: what a person must do about it."""
     uncertain = txn.view(Effects).in_state("uncertain")
     dues = {reader: due for reader, due, _ in txn.view(Deliveries).waking() if due > txn.now}
     deliveries = txn.view(Deliveries)
@@ -558,7 +559,7 @@ def _acted(txn: Txn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def _snapshot(txn: Txn, name: str) -> list[dict[str, Any]]:
     if name == "roster":
-        return _roster(txn)
+        return roster(txn)
     return txn.view(Attention).rows() if name == "attention" else _acted(txn, txn.view(Changes).rows())
 
 
@@ -566,7 +567,7 @@ def _changed(txn: Txn, name: str, after: int) -> tuple[list[dict[str, Any]], lis
     """Rows changed past `after`, and the keys that went away. Almost any event can move a roster row, under a name
     that is not that agent's, so a roster changes as a whole whenever the journal moves."""
     if name == "roster":
-        return (_roster(txn) if txn.view(Stamps).head() > after else []), []
+        return (roster(txn) if txn.view(Stamps).head() > after else []), []
     if name == "changes":
         rows, removed = txn.view(Changes).since(after)
         return _acted(txn, rows), removed

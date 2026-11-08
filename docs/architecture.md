@@ -574,7 +574,7 @@ to do next.
 
 | Area | Commands | Queries |
 |---|---|---|
-| Session | `session.close` `session.cancel` `topology.patch` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) `episode.open` `episode.close` `budget.set` | `session.status` `session.ending` `session.manifest` `topology.show` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) `ops.list` `budget.status` |
+| Session | `session.close` `session.cancel` `topology.patch` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) `episode.open` `episode.close` `budget.set` | `session.status` `session.ending` `session.manifest` `session.metrics` `topology.show` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) `ops.list` `budget.status` |
 | Agents | `agent.spawn` `agent.finish` `agent.interrupt` `agent.cancel` `agent.retire` `agent.takeover` `agent.release` | `agent.list` `agent.status` `agent.unread` `peers` |
 | Messages | `message.send` `message.read` `channel.create` | `channel.list` |
 | Board | `board.post` `board.revise` `board.get` `board.query` | |
@@ -2024,9 +2024,32 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
 
 ## 16. Observability
 
-`session.metrics` (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) reads a fold of counters plus runtime gauges: throughput, ack latency, queue depth, failures, active and blocked agents, resource
-use, provenance coverage and training eligibility. Counters are folds, so instrumentation adds no journal writes. Display telemetry can be reduced
-freely, because credit-critical evidence is an event and deltas are not.
+`session.metrics` is a query op that is no agent's tool, a `Session` method and a command, which a person or a program reads,
+on a view credential too: how a session runs, read at a head, from counters that are folds and the kernel's gauges. `Counters`
+counts each event by its type and each journaled refusal by its code as it commits, so instrumentation adds no journal writes.
+`gauges()` is what the writer has measured since the runtime started, kept in memory (§5), with the CPU and peak memory of the
+process holding the journal. With the views it already has, each metric is a sentence:
+
+- **Throughput**: the events and the transactions committed since the runtime started, over the seconds since.
+- **Ack latency**: of every write answered since the runtime started, from joining the writer's queue to its answer after the
+  commit, the median and the 99th percentile, each its quarter-octave bucket's bound and so never below the true one, and the most.
+- **Queue depth**: the writes queued or in the open transaction now, the most there were at once, and each principal's commands
+  among them.
+- **Failures**: the refusals the journal holds, by code; the writes refused `busy`, which it never holds; and the events that say
+  something failed, `effect.failed`, `effect.uncertain`, `turn.lost`, `daemon.failed` and `task.failed`.
+- **Active and blocked agents**: how many agents stand in each of the roster's groups now, drawn by the roster's own function.
+- **Resource use**: the CPU seconds and the peak resident memory of the process holding the journal.
+- **Provenance coverage**: for each surface, how many agents' latest start declared it observed, partial or none, or declared
+  nothing, beside the surfaces a stored result proves, as `exposure` reads them; and the gaps the record holds, by kind.
+- **Training eligibility**: how many agents' latest start recorded their trainable level met, unmet or unverified, or recorded
+  none. Whether an agent's work in an episode can train is `eligibility`'s to say.
+
+What nothing measured is None, never zero, and `unknown` names it with why: every gauge where no runtime answers, as on a closed
+session, ack latency before a write is answered, peak memory anywhere but Linux, whose unit elsewhere is unchecked, and what an
+agent's harness processes use, which nothing measures. It reports use and limits none. An agent never reads it: it refuses one
+whatever its grants, as an agent's read is evidence and a query records none. Display telemetry can be reduced freely, because
+credit-critical evidence is an event and deltas are not. See
+[RFC 0069](rfcs/0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md).
 
 ## 17. Extensions and configuration
 

@@ -48,7 +48,7 @@ WALK_LIMIT = 4096
 
 _PAGE = DIGEST_ITEMS
 _SURFACES: tuple[Surface, ...] = get_args(Surface)
-_PROVED: tuple[Surface, ...] = ()
+PROVED: tuple[Surface, ...] = ()
 """The surfaces a stored result proves observed: none, as no check proves one yet."""
 _UNCARRIED = tuple(what for what, kind in GAPS.items() if not kind.carries)
 
@@ -776,7 +776,7 @@ def _standing(txn: Txn, agent: str, bound: Bound) -> tuple[Coverage, ...]:
 
 def _unproved(txn: Txn, agent: str, bound: Bound) -> tuple[Surface, ...]:
     """The surfaces no stored result proves observed, as `decide` leaves them standing for the agent below the bound."""
-    return tuple(coverage.surface for coverage in _standing(txn, agent, bound) if coverage.surface not in _PROVED)
+    return tuple(coverage.surface for coverage in _standing(txn, agent, bound) if coverage.surface not in PROVED)
 
 
 def _incident(txn: Txn, row: sqlite3.Row) -> Incident:
@@ -806,7 +806,7 @@ def _facts(txn: Txn, agent: str, event: Event, bound: Bound) -> Facts:
 
 def _exposed(txn: Txn, agent: str, event: Event, bound: Bound, open: bool) -> tuple[Seen | NotSeen | Unknown, Facts]:
     facts = _facts(txn, agent, event, bound)
-    return decide(facts, proved=_PROVED, bound=bound, head=txn.view(Stamps).head(), open=open), facts
+    return decide(facts, proved=PROVED, bound=bound, head=txn.view(Stamps).head(), open=open), facts
 
 
 def _step(kind: Back, event: Event) -> Step:

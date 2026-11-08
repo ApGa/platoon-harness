@@ -102,11 +102,15 @@ $ platoon-harness message send ci-42 --to @lead --gist "Keep the public API stab
 $ platoon-harness board post ci-42 --board notes --name spec --gist "The spec" --body-file spec.md
 $ platoon-harness agent interrupt ci-42 --agent @worker-1
 $ platoon-harness session show ci-42
+$ platoon-harness session metrics ci-42
 ```
 
 A person's message steers: it lands at the earliest boundary its harness has. An interrupt stops a turn and quiets what was waiting
 for the agent, and what you send after it wakes the agent as usual. `session show` lists where you must act with the command that
 settles each, such as `platoon-harness approval resolve ci-42 --id a7 --verdict allow --expected-version 3`.
+`session metrics` says how it runs: the events its journal holds by type, its agents by the roster's groups, and what its
+runtime has measured since it started, its writer's throughput, queue and ack latency and its process's CPU and memory, with
+what nothing measured as null and why.
 
 `events` reads and never writes, on a live session or a closed one. Each JSON line carries its `seq`: pass the last one as `--after`
 to go on exactly where you stopped. A person has no turn to park, so `wait` is no command: `events --follow` watches instead.
