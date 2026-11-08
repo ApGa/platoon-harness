@@ -16,11 +16,12 @@ named here is closed.
 - **A Python API reference.** [docs/reference/python.md](docs/reference/python.md) shows every name
   `tests/public_api.txt` lists, by the module whose `__all__` holds it, as a stub declares it in its source's own words,
   with its docstring, and a class's attributes and each method of its own whose names have no leading underscore, and
-  marks each module and name STATUS calls experimental, quoting its row.
+  marks each module and name a row of STATUS calls experimental, by its state or in its own words, quoting the row.
   `uv run python -m platoon_harness_cli.reference python > docs/reference/python.md` makes it from the list and the
-  docstrings, and refuses to where a row of STATUS and the marks disagree. Below 1.0 the policy CHANGELOG states holds
-  for every name it shows, and that 0.1.0 promises each, with no experimental namespace, is the default, pending the
-  owner's ruling.
+  docstrings, and refuses to where a row of STATUS and the marks disagree. By default, pending the owner's ruling, the
+  public API is each name `tests/public_api.txt` lists, and each attribute and method without a leading underscore that
+  a class it lists defines, of which the list records only some, and 0.1.0 promises it under the policy below 1.0
+  stated above, with no experimental namespace.
 - **An extension tutorial.** [docs/extending/extensions.md](docs/extending/extensions.md) writes the sample
   extension package step by step: its package, its op's arguments, its view, its op, its preset and the extension
   that names them, installed and named by a team, its vote cast from Python on stand-ins, checked by

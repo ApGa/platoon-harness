@@ -75,8 +75,10 @@ from platoon_harness.topology import Topology
 ```
 
 It reaches the kernel by the names its `__all__` publishes, as each of the SDK's own primitives does, and imports
-`Topology`, which a preset returns. A name `tests/public_api.txt` does not list is no one's to reach from outside:
-[the Python API reference](../reference/python.md) shows each one it lists.
+`Topology`, which a preset returns. From outside the SDK, only its public API is yours to reach: each name
+`tests/public_api.txt` lists, and each attribute and method without a leading underscore that a class it lists defines,
+such as `Txn.emit` and `Session.submit`, which [the Python API reference](../reference/python.md) shows. That 0.1.0
+promises them is the default, pending the owner's ruling.
 
 ## 3. Declare the op's arguments
 

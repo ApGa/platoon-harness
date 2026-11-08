@@ -327,17 +327,22 @@ def python_reference(root: Path) -> str:
 list, and make it again. A test holds it to them. -->
 
 Every name `tests/public_api.txt` lists, under the module whose `__all__` holds it: the SDK's, `platoon_harness` and
-the modules beneath it, and the ACP extension's, `platoon_harness_acp`. A name the list does not hold is not public,
-whatever its spelling. Below 1.0, as [CHANGELOG](../../CHANGELOG.md) says, a minor release may change any of them, and a
-patch release only fixes bugs.
+the modules beneath it, and the ACP extension's, `platoon_harness_acp`.
+
+By default, pending the owner's ruling, the public API is each name `tests/public_api.txt` lists, and each attribute and
+method without a leading underscore that a class it lists defines, of which the list records only some, and nothing
+else is, whatever its spelling. 0.1.0 promises it under the policy below 1.0 that [CHANGELOG](../../CHANGELOG.md)
+states, so a minor release may change any of it and a patch release only fixes bugs, and there is no experimental
+namespace.
 
 Each name is shown as a stub declares it, in its source's own words without comments, then its docstring: a function by
 its signature, a class by its attributes whose names have no leading underscore and its `__init__`, then each method of
 its own whose name has no leading underscore, and anything else by its assignment. A name that a module imports from
 another that lists it links there.
 
-A module or name marked **Experimental** is one that [STATUS](../STATUS.md) calls experimental: it works, but rests on
-an unstable upstream surface or lacks coverage. The mark quotes the start of the row that says so.
+A module or name marked **Experimental** is one that a row of [STATUS](../STATUS.md) calls experimental, by its state,
+which says it works but rests on an unstable upstream surface or lacks coverage, or in its own words, whatever its
+state. The mark quotes the start of the row, so it says which.
 
 ## Contents
 

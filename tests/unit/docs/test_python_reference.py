@@ -14,6 +14,11 @@ from .support import ROOT, headings
 PAGE = ROOT / "docs" / "reference" / "python.md"
 LISTED = ROOT / "tests" / "public_api.txt"
 STATUS = ROOT / "docs" / "STATUS.md"
+PROMISED = (
+    "each name `tests/public_api.txt` lists, and each attribute and method without a leading underscore that a class "
+    "it lists defines"
+)
+"""What the public API is, by default, pending the owner's ruling."""
 MARK = re.compile(
     r"^#{2,3} `(?P<name>[\w.]+)`\n\n\*\*Experimental\.\*\* \[STATUS\]\(\.\./STATUS\.md\): (?P<lead>.+)\.$", re.MULTILINE
 )
@@ -72,6 +77,15 @@ def test_each_link_within_the_page_lands_on_the_heading_it_names():
 
     assert ("`platoon_harness.session`", "platoon_harnesssession-1") in linked
     assert [(text, anchor, landing.get(anchor)) for text, anchor in linked if landing.get(anchor) != text] == []
+
+
+def test_each_page_that_says_what_0_1_0_promises_says_it_in_the_same_words():
+    """The page, the extending index, the tutorial, CHANGELOG and STATUS each say what the public API is in one set of
+    words, so none promises more or less than another while the owner's ruling is pending."""
+    pages = [PAGE, *(ROOT / "docs" / "extending" / name for name in ("index.md", "extensions.md"))]
+    pages += [ROOT / "CHANGELOG.md", STATUS]
+
+    assert [page.name for page in pages if PROMISED not in " ".join(page.read_text().split())] == []
 
 
 def test_every_module_status_calls_experimental_is_marked_so():
