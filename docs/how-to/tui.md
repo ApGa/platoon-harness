@@ -192,6 +192,22 @@ words become its gist and body as the composer's do, and Esc goes back to the pa
 workspace made, a commit that is nobody's or what your checkout holds, has nobody to take a comment, and `c` says so: write about
 it in the composer instead.
 
+### Tasks and entries
+
+On a queue's focus, chosen in the navigator, `/tasks` or Ctrl+T lists its tasks, oldest first, as `task list` gives them: each
+task's id, its state, open, claimed, done, failed or dead, and while it is claimed, by whom, which attempt that is and until when
+its lease holds, `claimed by @ada, attempt 2, lease until 14:02:11`, on the session's clock, then its gist and, once it has one,
+its result. A failed or open task says how many attempts it has had, and a dead one after how many it died. On a board's
+focus the same keys list its entries, as `board query --history` gives them: each entry's name and how many versions it has, then
+each version, who wrote it, its gist and its fields. Every word an agent wrote is drawn through `SafeText`, so a control shows
+as its escape and markup as itself.
+
+The list is read again whenever the journal holds an event on one of its tasks' or entries' streams, or for a queue an agent's
+end, which gives back each task the agent held, and at no other time: no timer of the terminal's decides anything. A claim
+stands until the runtime records that its lease expired, which its own timer fires on the session's clock, so a deadline
+already past on your clock still reads claimed until then. It reads 256 tasks or versions at most, a page at a time, and past
+them says how many more there are and the `task list` or `board query` command that reads on. Esc leaves.
+
 ### Follow a line's provenance
 
 `/provenance`, or `p` with the transcript in focus, shows where the chosen line came from: the newest line while the transcript
@@ -304,7 +320,7 @@ before the session's. `^` is Ctrl.
 | `^End` | `/follow` | Go to the newest line and follow what comes |
 | `Alt+F` | `/file` | Attach a file to the message, as its body |
 |  | `/resume` | Resume this session when it is history, which can spend money |
-| `^T` | `/tasks` | Show the tasks and the board. Not built yet: the tasks and board views are planned: a queue's or a board's channel shows its lines |
+| `^T` | `/tasks` | Show the tasks of the queue in view, or the entries of the board in view |
 | `Alt+D` | `/review` | List what changed: each workspace's commits and uncommitted paths, each opening its diff |
 |  | `/provenance` | Show the chosen line's provenance: what it rests on, what came of it and whose work it reaches |
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
@@ -352,7 +368,7 @@ before the session's. `^` is Ctrl.
 | `↑` | On the first line, what you sent or ran before |
 | `↓` | On the last line, what you sent or ran after |
 
-### A list: sessions, agents, places, help, provenance, what changed, an ask
+### A list: sessions, agents, places, help, provenance, changes, tasks, asks
 
 | Keys | Does |
 |---|---|
@@ -386,7 +402,7 @@ before the session's. `^` is Ctrl.
 | `y` | Say yes |
 | `n` or `Esc` | Say no |
 
-### A form, the help or an approval's ask
+### A form, the help, an approval's ask, or tasks or entries
 
 | Keys | Does |
 |---|---|
@@ -397,7 +413,7 @@ before the session's. `^` is Ctrl.
 ## Not built yet
 
 Disabled where a control for it would be, or absent from the palette: search in a transcript,
-threads, the tasks and board views beyond their channel's lines, image input, harness slash commands, model and permission
+threads, image input, harness slash commands, model and permission
 switching, taking over an agent's native terminal, copying a selection from
 the transcript, themes and notifications, and in provenance the interaction graph, credit drawn beside who contributed, and refs in
 a message's text followed. [STATUS.md](../STATUS.md) says what each is. A session does not fork, since native sessions, worktrees,

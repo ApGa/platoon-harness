@@ -34,12 +34,12 @@ WHERE: dict[Where, str] = {
     "transcript": "The transcript, once it has focus",
     "dock": "The dock, once it has focus",
     "composer": "The composer",
-    "list": "A list: sessions, agents, places, help, provenance, what changed, an ask",
+    "list": "A list: sessions, agents, places, help, provenance, changes, tasks, asks",
     "review": "What changed",
     "patch": "A diff",
     "provenance": "The provenance panel",
     "question": "A question",
-    "dialog": "A form, the help or an approval's ask",
+    "dialog": "A form, the help, an approval's ask, or tasks or entries",
 }
 
 TYPED: tuple[Where, ...] = ("everywhere", "workspace")
@@ -157,9 +157,8 @@ KEYMAP: tuple[Key, ...] = (
         "ctrl+t",
         "tasks",
         "tasks",
-        "Show the tasks and the board",
+        "Show the tasks of the queue in view, or the entries of the board in view",
         "workspace",
-        planned="the tasks and board views are planned: a queue's or a board's channel shows its lines",
     ),
     Key(
         "alt+d",

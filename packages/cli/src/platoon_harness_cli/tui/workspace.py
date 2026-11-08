@@ -36,6 +36,7 @@ from .provenance import Provenance
 from .review import Review
 from .rows import Row, Rows
 from .safe import SafeText, note
+from .tasks import Tasks
 from .transcript import Focus, Transcript, page_of
 
 GROUPS = (
@@ -242,6 +243,9 @@ class Workspace(Screen[None]):
         transcript = self.query_one(Transcript)
         focus = self.focus_on
         added = transcript.take(events)
+        for screen in self.app.screen_stack:
+            if isinstance(screen, Tasks):
+                screen.moved(events)
         transcript.draw(live.tail)
         if said and not events:  # Live text alone moves nothing but the transcript.
             return
@@ -986,6 +990,22 @@ class Workspace(Screen[None]):
 
         mark = self.marks.get(stream, 0)
         self.app.push_screen(Review(live.session, live.changes, mark, read, self._test, snapshots_of(live.roster)))
+
+    def action_tasks(self) -> None:
+        """Show the tasks of the queue in view, or the entries of the board in view, read again as it moves."""
+        live, focus = self.live, self.focus_on
+        if live is None:
+            return
+        kinds = ("queue", "board")
+        row = next(
+            (row for row in live.channels if focus and row["name"] == focus.title and row["kind"] in kinds), None
+        )
+        if row is None:
+            said = "Only a queue has tasks to show, and a board entries: choose one in the navigator first."
+            note(self, said, severity="warning")
+            return
+        person = self.human.partition(":")[2]
+        self.app.push_screen(Tasks(live.session, f"{row['kind']}/{row['name']}", person))
 
     @work(group="act")
     async def _test(self, action: dict[str, Any]) -> None:

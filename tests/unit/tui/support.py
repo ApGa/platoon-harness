@@ -9,6 +9,7 @@ from textual.pilot import Pilot
 
 from platoon_harness.kernel import first
 from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.live import Live
 from platoon_harness_cli.tui.workspace import Workspace
 
 # How long a wait here may take before it fails as a hang: it bounds no claim, so it is sized for the slowest machine
@@ -38,15 +39,20 @@ def workspace(app: TerminalUI) -> Workspace:
     return screen
 
 
+def _live(app: TerminalUI) -> Live | None:
+    """The live session of the workspace, whether it is the screen shown or under a dialog."""
+    return next((screen.live for screen in app.screen_stack if isinstance(screen, Workspace)), None)
+
+
 def _frames(app: TerminalUI) -> int | None:
-    live = app.screen.live if isinstance(app.screen, Workspace) else None
+    live = _live(app)
     return None if live is None else live.frames
 
 
 async def _change(app: TerminalUI, seen: int | None) -> None:
     """Return once something that could change the screen has: a frame past `seen` drawn, a worker done, or a screen
     pushed. A worker is watched and never awaited, since a task that awaits one and is cancelled cancels it too."""
-    live = app.screen.live if isinstance(app.screen, Workspace) else None
+    live = _live(app)
     running = {worker._task for worker in app.workers if not worker.is_finished and worker._task is not None}
     rivals = [asyncio.wait(running)] if running else []
     if live is not None:

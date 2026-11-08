@@ -1102,7 +1102,7 @@ inbox, its channels and groups, the tasks of a queue it uses, and its descendant
 | Config | Enforcement | Shown to the agent | UI |
 |---|---|---|---|
 | `edges` | `message.send` checked against the target's relations | `message_send`, `peers`; absent with no edges | DMs; the team view draws reachable pairs (planned: see [STATUS](STATUS.md#primitives-platoon_harnessprimitives)) |
-| `channels` | Verb and selector checked on every write and read page | Verbs by kind, only for held grants | topic: channel; board: board view (planned: see [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)); queue: tasks view (planned: see [STATUS](STATUS.md#terminal-ui-platoon_harness_clitui)) |
+| `channels` | Verb and selector checked on every write and read page | Verbs by kind, only for held grants | topic: channel; board: its entries, `/tasks` in the TUI; queue: its tasks, `/tasks` in the TUI |
 | `groups` | Membership from the live graph; generation in every broadcast | `+name` | Sidebar section |
 | `may_spawn`, `limits` | Atomic admission with reservation | `agent_spawn` only if non-empty | Tree; refusal reason |
 | `delivery` | Negotiated with the driver, degraded visibly | Nothing | "Queued until turn end" |
@@ -1756,8 +1756,11 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   page's card opens it. Every act also takes only keys every terminal delivers, a typed command in the composer or a plain key
   where nothing is typed, so a chord is a shortcut and never the only way, and no chord decides, stops or spends anything, since
   a terminal sends Alt and a letter as Esc then that letter. `/provenance`, or `p` with the transcript in focus, opens the
-  chosen line's provenance in a panel, Enter following a link and Esc going back one hop, so it takes no chord.
-  [tui.md](how-to/tui.md) is its guide.
+  chosen line's provenance in a panel, Enter following a link and Esc going back one hop, so it takes no chord. `/tasks`, on a
+  queue's or a board's focus, lists its tasks or its entries with every version, in the words of `channels.py`, read from
+  `task.list` or `board.query` again only for a frame that holds an event on one of their streams, or for a queue an agent's
+  end, which gives back each task it held, so no timer of the client's decides anything. [tui.md](how-to/tui.md) is its
+  guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
   control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
   the journal one way into `swarmchat.sqlite`, a function of the events and the bodies they cite, so a rebuild gives every id again

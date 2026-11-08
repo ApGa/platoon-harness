@@ -21,11 +21,12 @@ from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.review import Patch, Review
 from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.sessions import Sessions
-from platoon_harness_cli.tui.transcript import Transcript
+from platoon_harness_cli.tui.tasks import Tasks
+from platoon_harness_cli.tui.transcript import Focus, Transcript
 from platoon_harness_cli.tui.workspace import Dock, Navigator, Workspace
 
 from ..runtime.support import harness, in_state
-from .support import drawn
+from .support import drawn, workspace
 
 GUIDE = Path(__file__).parents[3] / "docs" / "how-to" / "tui.md"
 PLACES = {
@@ -40,6 +41,7 @@ PLACES = {
     Review: ("dialog", "review"),
     Patch: ("dialog", "patch"),
     Approval: ("dialog",),
+    Tasks: ("dialog",),
     Confirm: ("question",),
     Form: ("dialog",),
     Help: ("dialog",),
@@ -152,6 +154,35 @@ async def test_a_key_not_built_yet_and_its_typed_command_each_say_why_and_do_not
 
         moved = [(event.type, event.gist) async for event in owner.events(head) if event.actor == "human:you"]
         assert moved == [], "a key not built yet did something"
+
+
+async def test_ctrl_t_and_its_typed_command_open_the_tasks_view(tmp_path, monkeypatch):
+    """On a queue's focus, and on an agent's they say that only a queue or a board has a view to show, and open none."""
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    channels = {"tasks": {"kind": "queue", "writers": "all", "readers": "all"}}
+    lead = {"harness": harness(lambda: ScriptedDriver([]))}
+    team = Team.model_validate({"roles": {"lead": lead}, "topology": {"channels": channels}})
+    async with Session.start(team, name="s", root=tmp_path, cwd=tmp_path) as owner:
+        await in_state(owner, "lead", "idle")
+        app = TerminalUI("s")
+        async with app.run_test(size=(120, 32)) as pilot:
+            await drawn(pilot, lambda text: "@lead" in text)
+            await pilot.press("ctrl+t")
+            said = "Only a queue has tasks to show, and a board entries: choose one in the navigator first."
+            await drawn(pilot, lambda _: any(notice.message == said for notice in app._notifications))
+            on_agent = app.screen
+            await workspace(app).show(Focus.of_channel("tasks", "queue"))
+            await pilot.press("ctrl+t")
+            pressed = await drawn(pilot, lambda _: isinstance(app.screen, Tasks))
+            await pilot.press("escape")
+            await drawn(pilot, lambda _: isinstance(app.screen, Workspace))
+            await pilot.press(*"/tasks", "enter")
+            await drawn(pilot, lambda _: isinstance(app.screen, Tasks))
+            typed = app.screen
+
+    assert isinstance(on_agent, Workspace)
+    assert "Tasks on tasks" in pressed or "Reading queue/tasks" in pressed
+    assert isinstance(typed, Tasks) and typed.channel == "queue/tasks"
 
 
 async def test_the_help_shows_every_key_of_the_table_its_typed_command_and_why_one_is_not_built_at_80_columns(
