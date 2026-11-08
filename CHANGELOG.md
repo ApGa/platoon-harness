@@ -20,7 +20,9 @@ named here is closed.
   checkout's environment, where it activates nothing until a team names it, and casts a vote from each surface with no
   core edit. Slow tests, `tests/integration/test_installed_extensions.py`, build its wheel and install it in a fresh
   environment beside a rival that registers an extension called `ballot` too: a team that names `ballot` is refused there
-  before either is imported, and the sample's vote is cast through the SDK, MCP and `ph`.
+  before either is imported, and the sample's vote is cast through the SDK, MCP and `ph`. Loaded from its source, it is
+  cast from the terminal's palette and the page's form too, and drawn by its gist in the transcript and in the page's
+  Provenance pane.
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then
   keeps its first 64 KiB, cut at a character's end, and `approval.requested`, now at payload version 2, names that body, which a

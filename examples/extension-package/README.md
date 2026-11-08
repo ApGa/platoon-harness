@@ -101,3 +101,8 @@ wheel and installs it in a fresh environment beside a rival that registers an ex
 activates nothing until a team names it, a team that names `ballot` is refused before either is imported, its vote is
 cast through the SDK, MCP and `ph` and read back by `platoon-harness events`, `extension list` names it from metadata,
 and it passes `check_extension`.
+
+[`tests/unit/tui/test_sample_extension.py`](../../tests/unit/tui/test_sample_extension.py) and
+[`tests/e2e/test_extension.py`](../../tests/e2e/test_extension.py) cast its vote from the palette and from the page's
+form, and find it drawn: in the transcript, and in the Provenance pane. They load it from its source, as the checkout's
+environment does not install it.
