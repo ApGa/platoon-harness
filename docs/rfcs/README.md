@@ -90,6 +90,7 @@ amended or extended an RFC.
 | [0072](0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md) | ACP agents are driven by a first-party extension that names its own check | Draft |
 | [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Draft |
 | [0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) | An ended agent's folder keeps its record and no scratch or credential | Draft |
+| [0076](0076-holding-an-agent-is-agent-hold.md) | Holding an agent is `agent hold`, and a takeover drives its terminal | Accepted |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.
