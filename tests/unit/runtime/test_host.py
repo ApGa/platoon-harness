@@ -1999,10 +1999,15 @@ class Keeping(ScriptedDriver):
         return super().describe().model_copy(update={"credentials": self.CREDENTIALS})
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
-        own = spec.folder / "own"
         self.starts.append(spec.resume)
-        if spec.resume is not None and not (own / "auth.json").exists():
+        if spec.resume is not None and not (spec.folder / "own" / "auth.json").exists():
             raise DriverError("its login is gone, so it cannot come back")
+        self.keep(spec)
+        await super().start(spec, report)
+
+    @staticmethod
+    def keep(spec: AgentSpec) -> None:
+        own = spec.folder / "own"
         (tmpdir(spec.folder) / "cache").mkdir(parents=True, exist_ok=True)
         (tmpdir(spec.folder) / "cache" / "compiled").write_text("scratch")
         (own / "logins").mkdir(parents=True, exist_ok=True)
@@ -2010,7 +2015,6 @@ class Keeping(ScriptedDriver):
         (own / "auth.json").write_text(KEPT_CREDENTIAL)
         (own / "logins" / "server.json").write_text(KEPT_CREDENTIAL)
         (own / "sessions" / f"{spec.agent}.jsonl").write_text("what it said")
-        await super().start(spec, report)
 
 
 def keeping(*turns: Any) -> type[Keeping]:
@@ -2045,6 +2049,70 @@ async def test_an_ended_agent_s_tmp_and_credentials_go_and_its_record_stays(tmp_
     assert held(folder) == []
     assert status == {"finish": "finished", "retire": "retired", "cancel": "cancelled"}[ending]
     assert (folder / "own" / "sessions" / "bob.jsonl").read_text() == "what it said"
+
+
+async def test_a_failed_agent_s_tmp_and_credentials_go_and_its_record_stays(tmp_path):
+    """Here its spawn fails once its harness has kept them."""
+
+    class Falling(keeping()):
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            self.keep(spec)
+            await report(Exited(reason="no licence"))
+
+    async with Session.start(solo_with(Falling), root=tmp_path) as session:
+        folder = agent_folder(session.folder, "bob")
+        await until(lambda: stops(session, "effect.finished"), session)
+        row = await ended(session, "bob")
+
+    assert (row["status"], row["reason"]) == ("failed", "its spawn failed: no licence")
+    assert held(folder) == []
+    assert (folder / "own" / "sessions" / "bob.jsonl").read_text() == "what it said"
+
+
+async def test_a_lost_agent_s_tmp_and_credentials_go_and_its_record_stays(tmp_path):
+    """Here its harness cannot come back on a resume, so its stop runs on that runtime, with no harness to end and a
+    driver it never asked before."""
+
+    class Forgetting(keeping([Say("first")])):
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            if spec.resume is not None:
+                raise DriverError("its session file is gone")
+            await super().start(spec, report)
+
+    async with Session.start(solo_with(Forgetting), name="s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        folder = agent_folder(session.folder, "bob")
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.ended"), session)
+    stopped_holds = held(folder)
+    async with Session.resume("s", root=tmp_path) as session:
+        await until(lambda: stops(session, "effect.finished"), session)
+        row = await ended(session, "bob")
+
+    assert stopped_holds == ["own/auth.json", "own/logins", "tmp"]
+    assert (row["status"], row["reason"]) == ("lost", "its session file is gone")
+    assert held(folder) == []
+    assert (folder / "own" / "sessions" / "bob.jsonl").read_text() == "what it said"
+
+
+async def test_an_ended_agent_s_tmp_and_credentials_go_even_when_a_step_before_fails(tmp_path):
+    """Here its driver fails to stop its harness, which fails the stop, and they go all the same."""
+
+    class Stubborn(keeping()):
+        async def stop(self, grace: float) -> None:
+            await super().stop(grace)
+            raise DriverError("it would not stop")
+
+    async with Session.start(solo_with(Stubborn), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        folder = agent_folder(session.folder, "bob")
+        before = held(folder)
+        await session.retire("@bob")
+        [failed] = await until(lambda: stops(session, "effect.failed"), session)
+
+    assert before == ["own/auth.json", "own/logins", "tmp"]
+    assert failed.data["error"] == "it would not stop"
+    assert held(folder) == []
 
 
 async def test_an_agent_put_to_rest_keeps_what_it_needs_to_resume_and_resumes(tmp_path):
