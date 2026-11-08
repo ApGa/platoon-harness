@@ -165,6 +165,7 @@ document.head.insertAdjacentHTML('beforeend', `<style>
 .x-patch .x-pl { display: grid; grid-template-columns: 52px 1fr; white-space: pre; }
 .x-patch .x-pl.x-chosen { background: var(--hover); box-shadow: inset 3px 0 var(--accent); }
 .x-patch .x-n { border: 0; background: none; color: var(--faint); font: inherit; text-align: right; padding: 0 8px 0 0; cursor: pointer; }
+.x-patch .x-goes-on > span::before { content: "↳ "; color: var(--faint); }
 .x-review .x-below { color: var(--warn); margin: 0; }
 .x-comment { display: grid; gap: 6px; border-top: 1px solid var(--line); }
 .x-comment textarea { font: inherit; resize: vertical; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line2); background: var(--panel); color: inherit; }
@@ -794,8 +795,9 @@ X.change = (c, i) => {
   return html`<div class="x-change x-${c.kind}"><span>${c.parts.map(([text, tone]) => html`<span class="x-tone-${tone || 'plain'}">${text}</span>`)}</span>${acts.length ? html`<span class="x-acts">${acts}</span>` : ''}</div>`;
 };
 
-// Lines of a patch: each its number, a button that chooses it, and its words, drawn by its tone.
-X.patchLines = lines => html`${lines.map(l => html`<div class="x-pl x-tone-${l.tone || 'plain'}" data-n="${l.number}"><button type="button" class="x-n" data-x-line="${l.number}" aria-pressed="false" title="Choose line ${l.number}, or with Shift every line from the one chosen first">${l.number}</button><span>${l.text}</span></div>`)}`;
+// Lines of a patch: each its number, a button that chooses it, and its words, drawn by its tone, and led by an arrow
+// where it goes on git's line before it.
+X.patchLines = lines => html`${lines.map(l => html`<div class="x-pl x-tone-${l.tone || 'plain'}${l.continues ? ' x-goes-on' : ''}" data-n="${l.number}"><button type="button" class="x-n" data-x-line="${l.number}" aria-pressed="false" title="Choose line ${l.number}, or with Shift every line from the one chosen first">${l.number}</button><span>${l.text}</span></div>`)}`;
 
 // Test a commit, after one question, as its act's label says whose code it runs as you, and say what came of it.
 X.test = async el => {

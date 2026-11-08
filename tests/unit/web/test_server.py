@@ -922,7 +922,8 @@ async def test_what_changed_and_a_diff_are_panes_of_x_read_in_the_review_s_words
         f"{made.stream}@{made.version}",
     )
     added = [
-        {"number": number, "text": f"+{text}", "tone": "good"} for number, text in ((7, "one"), (8, long), (9, "two"))
+        {"number": number, "text": f"+{text}", "tone": "good", "continues": False}
+        for number, text in ((7, "one"), (8, long), (9, "two"))
     ]
     assert (diff["lines"][-3:], len(diff["lines"]), read["page"]) == (added, 9, PAGE)
     assert wrong.status == 400

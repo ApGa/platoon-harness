@@ -408,6 +408,28 @@ async def test_an_effect_that_ends_keeping_no_diff_is_refused_where_waiting_woul
     assert (refused.value.refusal.code, refused.value.refusal.detail) == ("not_found", f"effect {effect} kept no diff")
 
 
+async def test_what_follows_a_line_separator_in_an_added_line_is_drawn_as_added_never_as_context(root, repo):
+    """Git ends a line at a newline alone, and the kernel numbers lines at a form feed or U+2028 too, so what follows
+    one in an added line is drawn as that added line goes on, the separator shown as its escape, and a file's first
+    line hidden in it heads nothing."""
+    text = "ok();\u2028 evil();\nb = 1\x0cdiff --git a/x b/x\nc = 2\n"
+
+    async with worked_on(team(lambda cwd: commit(cwd, "app.js", text)), root, repo) as owner:
+        sha = (await of_type(owner, "repo.committed"))[0].data["sha"]
+        diff = await read_of(owner, sha)
+
+    assert diff.lines is not None
+    assert [(line.number, line.text, line.tone, line.continues) for line in diff.lines[6:]] == [
+        (7, "+ok();\\u2028", "good", False),
+        (8, " evil();", "good", True),
+        (9, "+b = 1\\x0c", "good", False),
+        (10, "diff --git a/x b/x", "good", True),
+        (11, "+c = 2", "good", False),
+    ]
+    rows = [row.line.plain for row in patch_rows(diff, PAGE, 120)]
+    assert rows[7:9] == ["    8 ↳  evil();", "    9 +b = 1\\x0c"]
+
+
 async def test_a_binary_file_is_named_and_never_drawn(root, repo):
     """As git names it, while what it holds is never drawn; and a patch that is no text is not drawn at all, saying
     why."""

@@ -26,6 +26,8 @@ NUMBER = 6
 """How wide the column is that numbers a patch's lines."""
 MORE = "more"
 """The key of the row that draws a patch's next page."""
+GOES_ON = "↳ "
+"""What leads a line that goes on git's line before it."""
 
 
 def rows_of(changes: Mapping[str, Mapping[str, Any]], mark: int, snapshots: Collection[str] = ()) -> list[Row]:
@@ -41,18 +43,20 @@ def _row(change: Change) -> Row:
 
 
 def patch_rows(diff: Diff, shown: int, width: int, chosen: tuple[int, int] | None = None) -> list[Row]:
-    """A diff's first `shown` lines, each made safe and wrapped at `width` under its number, which its key is, and
-    marked where it is among the lines `chosen`; then the row that draws on, while the patch has lines past these, or
-    at its end, the words below it."""
+    """A diff's first `shown` lines, each made safe and wrapped at `width` under its number, which its key is, marked
+    where it is among the lines `chosen`, and led by `GOES_ON` where it continues the line before; then the row that
+    draws on, while the patch has lines past these, or at its end, the words below it."""
     first, last = chosen or (0, -1)
     lines = diff.lines or ()
     rows = []
     for line in lines[:shown]:
-        wrapped = SafeText(line.text, STYLES[line.tone]).wrap(max(width - NUMBER, 20)) or [Content("")]
+        lead = GOES_ON if line.continues else ""
+        wrapped = SafeText(line.text, STYLES[line.tone]).wrap(max(width - NUMBER - len(lead), 20)) or [Content("")]
         mark = ("┃", "cyan") if first <= line.number <= last else " "
         for at, part in enumerate(wrapped):
             number = (f"{line.number if at == 0 else '':>{NUMBER - 1}}", "dim")
-            rows.append(Row(Content.assemble(number, mark, part), str(line.number)))
+            led = (lead if at == 0 else " " * len(lead), "dim")
+            rows.append(Row(Content.assemble(number, mark, led, part), str(line.number)))
     if shown < len(lines):
         rows.append(Row(Content.styled(f"{len(lines) - shown} more lines: Enter reads on", "bold"), MORE))
     elif diff.below is not None:

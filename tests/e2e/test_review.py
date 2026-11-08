@@ -136,13 +136,16 @@ async def test_a_commit_is_tested_from_the_page_after_one_question(browser: Brow
 
 HOSTILE = '<img src=x onerror="document.title=1"><script>document.title=2</script></div><b>bold</b>'
 """A line of a file an agent wrote, which would run and draw were it taken for markup."""
+HIDDEN = "ok();\u2028 evil();"
+"""An added line that the kernel numbers as two at its U+2028, where git keeps it one."""
 
 
 async def test_a_hostile_patch_stays_text_under_the_page_s_policy(browser: Browser, root: Path, monkeypatch):
     """Every word of a patch goes through the page's escaping, so markup in it is shown as written, draws nothing and
-    runs nothing, and the page's policy has nothing to refuse."""
+    runs nothing, and the page's policy has nothing to refuse. What follows a U+2028 in an added line is drawn as that
+    added line goes on, never as context."""
     repo = repository(root / "repo", monkeypatch)
-    async with started(lambda cwd: commit(cwd, "page.html", f"{HOSTILE}\n"), root, repo) as session:
+    async with started(lambda cwd: commit(cwd, "page.html", f"{HOSTILE}\n{HIDDEN}\n"), root, repo) as session:
         sha = await worked(session)
         async with serving("s", root / "home") as web:
             page, errors = await opened(browser, web.link("control"))
@@ -150,11 +153,14 @@ async def test_a_hostile_patch_stays_text_under_the_page_s_policy(browser: Brows
             await review(page)
             await page.locator("#pane .x-change").nth(1).get_by_role("button", name="Patch").click()
             await expect(line(page, 7)).to_have_text(f"7+{HOSTILE}", timeout=SECONDS)
+            await expect(line(page, 8)).to_have_text("8+ok();\\u2028")
+            await expect(line(page, 9)).to_have_text("9 evil();")
+            goes_on = await line(page, 9).get_attribute("class")
             drawn = await page.locator("#pane .x-patch img, #pane .x-patch script, #pane .x-patch b").count()
             after = await page.title()
             await page.context.close()
 
-    assert (drawn, after) == (0, title)
+    assert (drawn, after, goes_on) == (0, title, "x-pl x-tone-good x-goes-on")
     assert sha
     assert errors == []
 

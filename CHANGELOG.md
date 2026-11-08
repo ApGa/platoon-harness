@@ -45,7 +45,8 @@ named here is closed.
   [RFC 0065](docs/rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md), a draft.
 - **Diffs in the terminal's `/review`.** Enter on a commit opens its patch, and on a workspace or one of its paths what it holds
   uncommitted, each asked for with `repo diff`, read whole and drawn a page at a time, each line numbered as a citation names
-  it and drawn as text, whatever it holds, however long. Above it are its record's words and where it was read, and for an
+  it and drawn as text, whatever it holds, however long, and what follows a form feed or U+2028 in a line drawn as that line
+  goes on, never as a line of its own. Above it are its record's words and where it was read, and for an
   uncommitted diff when; below a cut patch, that it was cut at 64 KiB and the rest is in git. A file git takes for binary is
   named and never drawn, and a patch that is not UTF-8 is not drawn, saying why. A commit's patch opened again shows what was
   kept. `t` tests the chosen commit, once you say yes, where Enter did, and the list's words are the command line package's,

@@ -169,7 +169,10 @@ role in the review example. Both clients say what changed in the words of one mo
   a time, drawing on when the person asks. Each line is numbered as a citation names it, as the kernel numbers a body's lines,
   and toned by what it is: a file's
   first line strong, what heads a file or a hunk faint, an added line good, a removed one bad, and git's `Binary files` line,
-  which names a file and shows none of it, warn.
+  which names a file and shows none of it, warn. Git ends a line at a newline alone, and the kernel numbers lines at any line
+  boundary, a form feed or U+2028 among them, so what follows another boundary is drawn as git's line it goes on, in its tone,
+  led by an arrow, the boundary shown as its escape, and is never read as a line of its own: an agent cannot have the end of an
+  added line drawn as context.
 - **Above and below.** Above the patch, the record's gist, then where it was read, by `read_in` and the mode of that
   workspace: your repository or your checkout, an agent's worktree, a snapshot's own repository, or inside an isolation; and for
   an uncommitted diff when, as `What it held at 14:02:11, read in @ada's worktree.`, since it changes as its agent works. Below

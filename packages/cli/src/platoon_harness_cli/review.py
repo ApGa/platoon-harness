@@ -127,11 +127,14 @@ def changes_of(
 class Line:
     """One line of a patch: its `number`, which a citation of its lines names, its `text`, and its `tone`: a file's
     first line strong, what heads a file or a hunk faint, an added line good and a removed one bad, and a file git
-    takes for binary, which it names and never shows, warn."""
+    takes for binary, which it names and never shows, warn; and whether it `continues` a line of git's past a boundary
+    the kernel numbers lines at and git does not, a form feed or U+2028 among them, in that line's tone, the boundary
+    shown as its escape at the end of the line before."""
 
     number: int
     text: str
     tone: Tone
+    continues: bool = False
 
 
 @dataclass(frozen=True)
@@ -240,19 +243,26 @@ def _text(patch: bytes) -> str | None:
 
 
 def lines_of(text: str) -> tuple[Line, ...]:
-    """The lines of a patch, numbered as the kernel numbers them, each with its tone."""
-    found = []
-    hunk = False
-    for number, said in enumerate(text.splitlines(), 1):
-        if said.startswith("diff --git "):
-            hunk, tone = False, "strong"
-        elif said.startswith("@@"):
-            hunk, tone = True, "faint"
+    """The lines of a patch, numbered as the kernel numbers them, each with its tone. Git ends a line at a newline
+    alone, and the kernel at any line boundary, so what follows another boundary goes on git's line before it, in its
+    tone, and nothing in it is read as a line of git's."""
+    found: list[Line] = []
+    hunk, goes_on = False, False
+    for number, piece in enumerate(text.splitlines(keepends=True), 1):
+        said = piece.splitlines()[0]
+        end = piece[len(said) :]
+        tone: Tone
+        if goes_on:
+            tone = found[-1].tone
+        elif said.startswith(("diff --git ", "@@")):
+            hunk = said.startswith("@@")
+            tone = "faint" if hunk else "strong"
         elif not hunk:
             tone = "warn" if said.startswith("Binary files ") else "faint"
         else:
-            tone = SIGNS.get(said[:1], "")
-        found.append(Line(number, said, tone))
+            tone = SIGNS.get(said[:1]) or ""
+        continues, goes_on = goes_on, end not in ("\n", "\r\n", "")
+        found.append(Line(number, said + end.encode("unicode_escape").decode() if goes_on else said, tone, continues))
     return tuple(found)
 
 
