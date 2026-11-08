@@ -89,6 +89,9 @@ named here is closed.
   under none, saying it joins no known call, as OpenHands' and an `exec` harness's are: their calls come through the shim
   and `ph`, each under an id of its own, which none of their items holds. Before, every spawn was drawn where the journal
   had it.
+- **FakeModel answers each agent from what it is shown.** `FakeModel.answer(saying, reply)` has a function reply to each model
+  call whose request says a text, such as the `You are @lead.` an agent's preamble opens with, in place of the script, so
+  each agent of a team on one endpoint is played by a script of its own, which can rest on what a tool answered.
 - **A driver names where its harness keeps credentials.** `DriverInfo.credentials` is where, beneath the folder its spec
   names, a harness keeps a credential, as relative paths that cannot leave that folder, which an agent's end removes: pi its
   `auth.json` and `mcp-auth.json` in a sealed launch's agent directory and in an isolated home's, Codex its `auth.json` and

@@ -491,6 +491,7 @@ platoon_harness.testing.Fail
 platoon_harness.testing.goal
 platoon_harness.testing.FakeModel
 platoon_harness.testing.FakeModel(*replies)
+platoon_harness.testing.FakeModel.answer(saying,reply)
 platoon_harness.testing.FakeModel.calls
 platoon_harness.testing.FakeModel.gateway(bearer)
 platoon_harness.testing.FakeModel.script(replies)

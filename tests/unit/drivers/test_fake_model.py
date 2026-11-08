@@ -296,6 +296,29 @@ async def test_a_script_can_grow_while_it_runs():
         assert (await ask(model, CHAT))["choices"][0]["message"]["content"] == "later"
 
 
+def heard(name: str, words: str) -> list[dict[str, str]]:
+    return [{"role": "system", "content": f"You are @{name}."}, {"role": "user", "content": words}]
+
+
+async def test_an_answer_replies_to_each_call_that_says_its_text_and_the_script_to_the_rest():
+    """Two agents on one model, each answered by a function of its own from the request, in whatever order their calls
+    come, and a call that says neither text takes the script's reply."""
+
+    def echoing(name: str):
+        return lambda request: f"{name} heard {request.json['messages'][-1]['content']}"
+
+    async with FakeModel("scripted") as model:
+        model.answer("You are @ada.", echoing("ada"))
+        model.answer("You are @bob.", echoing("bob"))
+        said = [await ask(model, CHAT, messages=heard(name, words)) for name, words in (("bob", "1"), ("ada", "2"))]
+        said.append(await ask(model, CHAT, messages=heard("bob", "3")))
+        other = await ask(model, CHAT, messages=heard("carol", "4"))
+
+    replies = [reply["choices"][0]["message"]["content"] for reply in [*said, other]]
+    assert replies == ["bob heard 1", "ada heard 2", "bob heard 3", "scripted"]
+    assert len(model.calls) == 4
+
+
 async def test_fake_model_serves_models_and_tools_on_a_bearer_and_records_headers():
     """As a gateway: its models at its origin, and the environment's tools at the URL it names, two of them named as
     harnesses name tools of their own, which answer only a bearer it gave, and each request kept with the bearer and the

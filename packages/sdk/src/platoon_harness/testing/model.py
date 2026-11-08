@@ -8,7 +8,7 @@ gateway too: its models and the environment's tools, each under a bearer it gave
 import asyncio
 import json
 from collections import deque
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cached_property
 from typing import Any, Literal, Self
@@ -429,12 +429,14 @@ class FakeModel:
 
     `async with FakeModel("hello", ToolCall("ping")) as model:` serves on loopback at `model.url`. `model.requests` logs
     everything that arrived, with its bearer and headers, and `model.calls` what was a model call. `await model.call(0)`
-    waits for one. `model.gateway(bearer)` is access to it as a training system's gateway gives it.
+    waits for one. `model.gateway(bearer)` is access to it as a training system's gateway gives it. `model.answer` has
+    a function reply to the calls whose request says a text, such as one agent's name, in place of the script.
     """
 
     def __init__(self, *replies: Reply) -> None:
         self.requests: list[Request] = []
         self._script: deque[Reply] = deque(replies)
+        self._answers: list[tuple[str, Callable[[Request], Reply]]] = []
         self._next_id = 0
         self._bearers: set[str] = set()
         self._arrived = asyncio.Event()
@@ -480,6 +482,11 @@ class FakeModel:
     def script(self, replies: Iterable[Reply]) -> None:
         """Add to what the model will say."""
         self._script.extend(replies)
+
+    def answer(self, saying: str, reply: Callable[[Request], Reply]) -> None:
+        """Answer each model call whose request says `saying` with what `reply` gives for that request, and not from the
+        script. A call goes to the first such function whose text it says, in the order they were given."""
+        self._answers.append((saying, reply))
 
     def release(self) -> None:
         """Let every stalled response go on, now and from now on."""
@@ -545,7 +552,7 @@ class FakeModel:
     async def _complete(
         self, message: Message, dialect: Dialect, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> bool:
-        blocks = _blocks(self._script.popleft() if self._script else _DEFAULT_REPLY)
+        blocks = _blocks(self._reply(Request(message, dialect)))
         form = _DIALECTS[dialect]
         if blocks == (Overflow(),):
             self._log(Request(message, dialect))
@@ -567,6 +574,14 @@ class FakeModel:
             writer.write(_sse(event, data))
             await writer.drain()
         return False
+
+    def _reply(self, request: Request) -> Reply:
+        """What the model says to a call: what the first answer whose text the request says gives, or the script's next
+        reply."""
+        for saying, reply in self._answers:
+            if request.says(saying):
+                return reply(request)
+        return self._script.popleft() if self._script else _DEFAULT_REPLY
 
     async def _held(self, reader: asyncio.StreamReader) -> bool:
         """Wait for a release, and say whether the client stayed to hear it. The look for its leaving is over before the
