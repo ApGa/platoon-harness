@@ -1125,9 +1125,10 @@ names the native child and the tool call that started it, and how well a call is
 plane is its own. What changed in a
 workspace is the runtime's own look, so no driver reports it (§13). Unknown frames become `native` plus a gap, never a log line. A
 report's `body` is text until the host stores it and journals the hash, as ingress does for a tool's body argument, and `forgotten`
-and `summary` go the same way, since either can pass what an event holds. Redacted content does not come back, so a body a person
-redacted is journaled by the hash it had, which reads as redacted, nothing standing in for it, and its agent lives on: an item is
-recorded so, and an ask is refused and denied, as below. An approval's `body` is its whole ask, which the host
+and `summary` go the same way, since either can pass what an event holds. It is stored in UTF-8, where a lone surrogate, which a
+harness's JSON can carry and UTF-8 cannot, is written as its escape, `\udcc3`. Redacted content does not come back, so a body a
+person redacted is journaled by the hash it had, which reads as redacted, nothing standing in for it, and its agent lives on: an
+item is recorded so, and an ask is refused and denied, as below. An approval's `body` is its whole ask, which the host
 masks and then cuts to 64 KiB, adding the bytes it left out to `cut`, so a driver sends it whole. `forgotten` holds native ids, and
 with `None` the runtime records `compaction_opaque`. `tokens` counts input and output, cached input included. A `Delivery` carries its `text`, which the host renders in the words of the
 agent's surface, with each entry's ref and sender, whether it has a body, which `blob.get` reads by that ref, and the input id. So a

@@ -1173,6 +1173,9 @@ named here is closed.
 
 ### Fixes
 
+- **A lone surrogate in an item's body is kept as its escape.** A harness's JSON can carry half of a character, which UTF-8
+  cannot, and the host stored one in an item's body or a compaction's summary as `?`, where it keeps one in an ask as its
+  escape, `\udcc3`, as RFC 0066 says it does in an item's. Each is now kept as an ask's is.
 - **An item said again after a person redacted it keeps its agent.** A harness that said again what a person had redacted,
   in a message, a thought or a tool's output, had its agent end lost, as the journal keeps no redacted body again and the host
   stopped there. The item is now recorded by the hash its body had, which reads as redacted, as an ask is refused and denied,

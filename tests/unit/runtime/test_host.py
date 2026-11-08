@@ -1585,6 +1585,19 @@ async def test_a_secret_in_an_approval_s_ask_is_masked_plain_and_encoded(tmp_pat
     assert not any(form[:8] in kept for form in forms) and asked.data["cut"] == 0
 
 
+async def test_a_lone_surrogate_in_an_item_s_body_is_kept_as_its_escape_as_in_an_ask(tmp_path):
+    """A harness's JSON can carry one and UTF-8 cannot, so a body keeps it as its escape, `\\udcc3`, and not as `?`."""
+    halved = "caf\udcc3\udca9 tail"
+    said = Item(kind="message", gist="said", body=halved), ApprovalRequested(id="a1", gist="may I?", body=halved)
+
+    async with Session.start(solo_with(saying(*said)), root=tmp_path) as session:
+        [asked] = await until(lambda: of_type(session, "approval.requested"), session)
+        [item] = await of_type(session, "item.recorded")
+        kept = await session.get_body(item.data["body"])
+
+    assert (kept, item.data["body"]) == (b"caf\\udcc3\\udca9 tail", asked.data["body"])
+
+
 async def test_live_text_is_masked_too(tmp_path):
     team = solo_with(
         saying(Delta(text=f"the key is {SECRET}"), Item(kind="tool", phase="started", gist="ran")), model="m"

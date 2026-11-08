@@ -989,12 +989,13 @@ class Host:
             await self.insist("agent.report", {"agent": link.agent, "report": frame})
 
     async def _stored(self, body: str | bytes | None) -> str | None:
-        """A body from a report as the ref of a stored body, since a journal event holds 16 KiB. Redacted content does
-        not come back, so a body a person redacted is the ref it had, which reads as redacted: an ask the journal
-        refuses, and the approval is answered `deny`, and anything else is recorded with its body redacted."""
+        """A body from a report as the ref of a stored body, since a journal event holds 16 KiB, text in UTF-8, where a
+        lone surrogate is written as its escape, as an ask's is. Redacted content does not come back, so a body a person
+        redacted is the ref it had, which reads as redacted: an ask the journal refuses, and the approval is answered
+        `deny`, and anything else is recorded with its body redacted."""
         if body is None:
             return None
-        data = body if isinstance(body, bytes) else body.encode(errors="replace")
+        data = body if isinstance(body, bytes) else body.encode(errors="backslashreplace")
         try:
             return f"sha256:{await self._kernel.put_body(data)}"
         except Refused as refused:
