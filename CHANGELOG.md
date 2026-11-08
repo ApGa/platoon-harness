@@ -84,8 +84,10 @@ named here is closed.
   agent last updated it, answered by the option for this once, never `always`, and `cancelled` where there is none and at an
   interrupt. An update nothing maps keeps its raw frame with a gap, a compaction is `compacted` with what it forgot unknown,
   and as ACP names no model call and says no spend, no agent on it is trainable and each turn is charged its estimate.
-  `opencode` refuses a start that names no model, as OpenCode then sends prompts to a hosted model nobody chose, and it has not
-  run: STATUS says why. See
+  On a scripted ACP agent, `ScriptedDriver` behind ACP on FakeModel, `check_driver` passes every check it does not skip, and the
+  driver earns `operational` and `observable`. `opencode` refuses a start that names no model, as OpenCode then sends prompts
+  to a hosted model nobody chose, and it has not run, nor has its check, which skips where `opencode` is not on `PATH`: STATUS
+  says why. See
   [RFC 0072](docs/rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft.
 - **An approval carries its whole ask.** `ApprovalRequested` has a `body`, the whole of what a harness asks to do, the command,
   the patch or the tool's input, and `cut`, the bytes of it the body leaves out. The host masks it as it masks every report, then

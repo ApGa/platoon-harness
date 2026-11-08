@@ -1,5 +1,6 @@
 """The conformance suite, run on every driver that exists."""
 
+import os
 import sys
 from pathlib import Path
 
@@ -8,8 +9,10 @@ import pytest
 from platoon_harness.drivers import Capabilities, Delivery, Offered
 from platoon_harness.drivers.exec import ExecDriver
 from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
+from platoon_harness.drivers.process import Record
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.testing import SHELL, ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model
+from platoon_harness_acp import CAPABILITIES, AcpDriver
 
 pytestmark = pytest.mark.timeout(120)
 
@@ -47,6 +50,19 @@ SCRIPTED_SKIPS = {
     "native_children_off_by_default",
     "native_child_seen",
 }
+ACP_SKIPS = {
+    *SCRIPTED_SKIPS,
+    "steers_at_declared_boundary",
+    "measures_reported",
+    "call_ids_reported",
+    "dialects_spoken",
+    "effort_honored_or_refused",
+    "unset_model_refused",
+    "sealed_first_request_holds_only_ours",
+    "environment_tools_in_first_request",
+}
+"""What the ACP driver leaves to skip: what ACP does not say, a boundary inside a turn, spend, the id of a model call
+and its dialect, which the effort checks stand on too, and a sealed launch, with what a scripted harness skips."""
 
 
 def shell(command: str) -> ToolCall:
@@ -89,6 +105,31 @@ async def test_a_wire_driver_conforms_across_a_process(tmp_path):
     profile = Profile(driver="wire-scripted", implementation=implementation(WireDriver(command)), version="1")
     earned = levels(WireDriver(command).describe().capabilities, profile, result)
     assert earned.operational.state == "met", earned.operational.reasons
+
+
+@pytest.mark.timeout(240)  # Every check starts a program of its own, the shell's two among them.
+async def test_the_acp_driver_passes_check_driver_on_a_scripted_acp_agent(tmp_path):
+    """`ScriptedDriver` behind ACP's protocol 1, on FakeModel, as a program of its own, which shows what the driver does
+    with ACP and nothing of a real agent. It earns operational and observable, and never trainable."""
+    command = [sys.executable, str(HERE / "acp_agent.py")]
+
+    async def garble(driver: AcpDriver) -> None:
+        record = Record.read(tmp_path / "malformed_frame_is_a_gap" / "agent")
+        assert record is not None
+        pipe = os.open(f"/proc/{record.pid}/fd/1", os.O_WRONLY)
+        try:
+            os.write(pipe, b"this is no frame\n")
+        finally:
+            os.close(pipe)
+
+    result = await check_driver(lambda: AcpDriver(command), folder=tmp_path, garble=garble, shell=shell, timeout=20)
+
+    assert_nothing_failed(result)
+    assert (result.driver, result.version) == ("acp", "1")
+    assert {check.name for check in result.checks if check.state == "skipped"} == ACP_SKIPS
+    profile = Profile(driver="acp", implementation=result.implementation, version="1", login="gateway", tools="visible")
+    earned = levels(CAPABILITIES, profile, result)
+    assert (earned.operational.state, earned.observable.state, earned.trainable.state) == ("met", "met", "unmet")
 
 
 async def test_the_exec_driver_conforms_as_far_as_a_one_shot_can(tmp_path):

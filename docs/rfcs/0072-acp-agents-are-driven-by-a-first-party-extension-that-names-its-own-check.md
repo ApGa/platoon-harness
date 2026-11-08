@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`rpc.py`](../../packages/sdk/src/platoon_harness/rpc.py), [`drivers/__init__.py`](../../packages/sdk/src/platoon_harness/drivers/__init__.py), [`drivers/levels.py`](../../packages/sdk/src/platoon_harness/drivers/levels.py), [`testing/harnesses.py`](../../packages/sdk/src/platoon_harness/testing/harnesses.py), the command line's [`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py), [architecture section 9](../architecture.md#9-drivers) and [section 17](../architecture.md#17-extensions-and-configuration), [RFC 0008](0008-driver-contract-and-wire.md), [RFC 0030](0030-openhands-is-an-extra-of-the-sdk.md), [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) and [RFC 0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) |
 | Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's questions on where first-party extensions live and what ACP is spoken over, which are open |
-| Implementation | None yet |
+| Implementation | `build: Add the platoon-harness-acp distribution under extensions`, `feat: Drive ACP agents on protocol 1 over the SDK's own JSON-RPC peer`, `feat: Let an installed driver name the check doctor runs for it` and `test: Run check_driver on a scripted ACP agent and on OpenCode against FakeModel` |
 
 ## Summary
 
@@ -68,7 +68,7 @@ session, the version `agentInfo` says, and the model that option holds.
 | ACP | Report |
 |---|---|
 | `session/prompt` sent | `turn.started` |
-| The first update after it, or else its answer | `input.delivered`, at the turn boundary |
+| The first update after it that is not of the session's state, a permission request, or else its answer | `input.delivered`, at the turn boundary |
 | `agent_message_chunk`, `agent_thought_chunk` | `delta`, then one `item` a message or thought when another kind of update or the turn's end follows |
 | `tool_call`, `tool_call_update` | `item` tool `started`, then `completed` with the status it ended at and the approval that let it through |
 | `plan` | `item` thought |
@@ -131,6 +131,9 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
   2026-11-02 transcript and the 2.2.6 files, UNVERIFIED: the provider's shape, the names its model sees our tool and its shell by,
   and the values its model option takes, which may be `provider/model`, so that a start naming `fake-model` is refused. An ACP
   server reached the model behind Code Mode in that probe, so our tool may not be in the first request.
+- **What a tool is called.** OpenCode showed a server's tool as `<server>_<tool>` in that probe, which neither value of
+  `tool_names` says, so our words name its tools `mcp__<ns>__<tool>`, as they name any ACP agent's, and whether a model reads
+  past the difference is UNVERIFIED.
 - **A whole ask can be large.** A diff's text is part of the ask, so a body can pass 64 KiB; the host keeps its first 64 KiB and
   counts the rest in `cut`, and refuses one the journal will not hold, as RFC 0066 says.
 - **Landing.** ACP never acknowledges a prompt before its answer, so an input is said to land at the first update that follows it,
