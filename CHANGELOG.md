@@ -37,8 +37,9 @@ named here is closed.
   words saying the journal does not hold it yet, read through a new `saying` pane of `x_read`: what it said since the
   journal last took what it said, its newest 20,000 characters, led by an ellipsis where some before them was lost or
   cut, gone once the item it becomes is recorded and with the runtime that said it. `web` reads it only while a page asks,
-  and lets it go 25 s after the last ask. It never enters a chat. Before, the page showed an agent's words only once its
-  turn committed them. This is step 2 of RFC 0073, a draft.
+  each ask held until it moves, which the page lets go of as the pane closes, and lets it go 25 s after no ask is held
+  for it. It never enters a chat. Before, the page showed an agent's words only once its turn committed them. This is
+  step 2 of RFC 0073, a draft.
 - **Tool activity in the page.** Tool activity, on an agent's page, was drawn disabled. It now opens the agent's tool
   calls in a pane, `tools=` and the agent, read through a new `tools` pane of `x_read`, which a view link reaches, in the
   words of `platoon_harness_cli.calls`: whole turns a page at a time, newest first, as many as 100 calls take, the newest

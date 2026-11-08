@@ -386,7 +386,11 @@ class Web(Server[Request]):
         finally:
             self._holding -= 1
 
-    async def _heard(self, name: str, version: int | None) -> dict[str, Any]:
+    async def _heard(self, name: str, version: int | None, *, anew: bool = True) -> dict[str, Any]:
+        """What `name` is saying past `version`. A reader that ends while a runtime holds the session is asked anew
+        once, as the agent may have ended or another runtime taken the session up. One that ends again is held until
+        the journal moves, for at most `HOLD`, and says it cannot be read now, so one that keeps ending is asked anew no
+        faster than that."""
         saying = self._saying.get(name)
         if saying is None:
             if (ended := await self._ended(name)) is not None:
@@ -395,7 +399,7 @@ class Web(Server[Request]):
                 await first(self._moved(), self.clock.sleep(HOLD))
                 if not self.live():
                     return {"version": version, "text": "", "about": _GONE, "over": False}
-                return await self._heard(name, version)
+                return await self._heard(name, version, anew=anew)
             saying = self._saying[name] = Saying(next(self._versions))
             hearing = asyncio.ensure_future(self._hear(name, saying))
             self._hearing.add(hearing)
@@ -410,13 +414,16 @@ class Web(Server[Request]):
             async with saying.changed:
                 saying.asking -= 1
                 saying.changed.notify_all()
-        if saying.gone and self.live():  # The agent ended, or a runtime took the session up again: ask anew.
-            return await self._heard(name, version)
+        if saying.gone and self.live() and anew:  # The agent ended, or a runtime took the session up again.
+            return await self._heard(name, version, anew=False)
+        if saying.gone and self.live():
+            await first(self._moved(), self.clock.sleep(HOLD))
         if saying.gone:
             with contextlib.suppress(replies.Error):  # A runtime going may refuse a read on its way out.
                 if (ended := await self._ended(name)) is not None:
                     return ended | {"version": version}
-            return {"version": version, "text": "", "about": _GONE, "over": False}
+            about = _GONE if not self.live() else f"What @{name} is saying cannot be read now: its reader ended."
+            return {"version": version, "text": "", "about": about, "over": False}
         text = f"… {saying.text}" if saying.lost and saying.text else saying.text
         about = f"Not in the journal yet: what @{name} is saying now, until the item it becomes replaces it."
         return {"version": saying.version, "text": text, "about": about, "over": False}

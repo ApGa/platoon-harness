@@ -103,14 +103,17 @@ class Saying:
 
 The pane shows above the calls what the agent is saying now, labelled as not yet in the journal: its next item is what it said,
 and a thought never enters a chat. `web` reads an agent's live text from a page's first ask for it, through `Session.deltas`, as
-the terminal reads the agent in view, and holds what the agent said since the journal last took what it said, its newest
-`SHOWN` characters, 20,000, as much as a message shows, led by an ellipsis where some before them was lost or cut. A page asks
-with the version it shows, and the ask is held until the version moves, or for at most 25 s, the feed's hold. `web` lets the
-reader and its text go once 25 s pass with no ask held for it, so a closed pane costs nothing past that, and no page holds a
-reader for an agent it does not show. Where the agent has ended, the answer says it says nothing more, and `over` stops the
-page's asking. Where no runtime holds the session, it says so and that what was being said went with the runtime that said it,
-and the ask is held until a runtime takes the session up again, or for 25 s. A runtime that goes ends the reader, so its text
-goes with it, and the next runtime's text stands alone.
+the terminal reads the agent in view, and holds what the agent said since the journal last took what it said, its newest `SHOWN`
+characters, 20,000, as much as a message shows, led by an ellipsis where some before them was lost or cut. A page asks with the
+version it shows, and the ask is held until the version moves, or for at most 25 s, the feed's hold. The page lets go of its ask
+as the pane closes, which would otherwise hold one of the few connections a browser opens to `web`, and a hold of `web`'s, until
+it moved. `web` lets the reader and its text go once 25 s pass with no ask held for it, so a closed pane costs nothing past
+that, and no page holds a reader for an agent it does not show. A reader that ends while the agent and a runtime go on, as one
+does on a link that is not the runtime's yet, is asked anew once; one that ends again holds the ask until the journal moves, for
+at most 25 s, and says the text cannot be read now, so it is asked anew no faster than that. Where the agent has ended, the
+answer says it says nothing more, and `over` stops the page's asking. Where no runtime holds the session, it says so and that
+what was being said went with the runtime that said it, and the ask is held until a runtime takes the session up again, or for
+25 s. A runtime that goes ends the reader, so its text goes with it, and the next runtime's text stands alone.
 
 ### 4. Neither enters a chat
 
@@ -145,7 +148,8 @@ an agent's words still reach its chat with the person once its turn commits them
 - Each page of calls reads back through the journal to a turn's start, so a long turn in a busy session costs a scan of every
   event since it began, at most 4,096 a read. Nobody has measured it at scale yet.
 - A call the journal holds no end of reads `started`, never `running`: whether it still runs is unknown.
-- `web` holds at most one reader, and 20,000 characters, for each agent whose pane is open, until 25 s after the last ask.
+- `web` holds at most one reader, and 20,000 characters, for each agent whose pane is open, until 25 s after no ask is held
+  for it.
 - Each held ask counts against the 64 requests `web` holds at once, with the feed's and a diff's.
 
 ## Rollout plan
@@ -171,8 +175,11 @@ an agent's words still reach its chat with the person once its turn commits them
   `test_a_spawn_is_listed_under_the_call_whose_id_its_anchor_holds_or_where_it_stands_joining_none` and
   `test_a_turn_of_more_calls_than_a_page_holds_is_listed_in_its_newest_saying_what_prints_the_rest`, over sessions on a scripted
   harness.
-- `tests/unit/web/test_server.py`: `test_activity_on_a_view_link_writes_nothing` and
-  `test_live_text_is_held_only_while_its_pane_is_open_and_bounded`.
-- `tests/e2e/test_activity.py`, in Chromium and Firefox here, and in WebKit in CI.
+- `tests/unit/web/test_server.py`: `test_activity_on_a_view_link_writes_nothing`,
+  `test_activity_on_history_lists_the_calls_the_journal_holds_and_says_nothing_is_being_said`,
+  `test_live_text_is_held_only_while_its_pane_is_open_and_bounded` and
+  `test_live_text_whose_reader_keeps_ending_is_asked_anew_once_and_then_held`.
+- `tests/e2e/test_activity.py`, in Chromium and Firefox here, and in WebKit in CI, with
+  `test_closing_tool_activity_lets_go_of_its_ask_for_live_text`, which switches between two agents eight times.
 - The join and the tail it builds on: `tests/unit/cli/test_calls.py`'s join tests and `tests/unit/kernel/test_readers.py`, as
   [STATUS](../STATUS.md) cites them. No real harness's session has been drawn in the pane yet.

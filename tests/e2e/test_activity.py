@@ -202,3 +202,26 @@ async def test_live_text_goes_with_the_runtime_that_said_it(browser: Browser, ro
                 await page.context.close()
 
     assert errors == []
+
+
+async def test_closing_tool_activity_lets_go_of_its_ask_for_live_text(
+    browser: Browser, root: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """An ask for what an agent is saying is held until it moves, so a pane closed lets go of its ask: switched between
+    two agents more times than a browser opens connections to one host, each pane draws at once, though no ask would
+    end by itself while the test runs."""
+    monkeypatch.setattr(server, "HOLD", 600.0)
+    async with Session.start(team([Do(spawning)]), name="s", root=root, cwd=root) as session:
+        await turned(session, 1)
+        async with serving("s", root) as web:
+            page, errors = await opened(browser, web.link("view"))
+            for agent in ["lead", "w1"] * 4:
+                await page.goto(f"{page.url.partition('#')[0]}#person={agent}&tools={agent}")
+                await expect(page.locator("#pane h2")).to_have_text(f"Tool activity of {agent}", timeout=SECONDS)
+                head = page.locator(f"{PANE} .x-provenance > *").first
+                await expect(head).to_contain_text(f"@{agent}'s tool calls read at head", timeout=SECONDS)
+                about = f"Not in the journal yet: what @{agent} is saying now, until the item it becomes replaces it."
+                await expect(page.locator(f"{SAYING} .x-about")).to_have_text(about, timeout=SECONDS)
+            await page.context.close()
+
+    assert errors == []

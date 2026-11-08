@@ -1365,21 +1365,29 @@ X.Tools = class {
     this.foot.innerHTML = (cursor == null ? html`` : html`<button class="btn" data-x-more>Earlier calls: read on</button>`).s;
   }
   // Ask what the agent is saying past what the pane shows, and again as each answer comes, until the pane closes, the
-  // answer says nothing more comes, or web would not answer, which the pane says.
+  // answer says nothing more comes, or web would not answer, which the pane says. An ask is held until what the agent
+  // says moves, so closing the pane lets go of the ask under way, which would hold one of the few connections a
+  // browser opens to web, and a hold of web's, until it moved.
   async hear() {
-    this.hearing = true;
+    const hearing = this.hearing = new AbortController();
     while (!this.dead) {
-      let r;
-      try { r = await api('x_read', {pane: 'saying', agent: this.name, version: this.version}); } catch (e) {
-        if (!this.dead) this.said(e.message, '');
+      let r, p;
+      try {
+        r = await fetch('/v1/x_read', {method: 'POST', signal: hearing.signal,
+          body: JSON.stringify({pane: 'saying', agent: this.name, version: this.version}),
+          headers: {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}});
+        p = await r.json();
+      } catch (_) {
+        if (!this.dead) this.said(r ? `web answered ${r.status}` : 'web could not be reached.', '');
         break;
       }
       if (this.dead) break;
-      this.version = r.version;
-      this.said(r.about, r.text);
-      if (r.over) break;
+      if (!r.ok) { this.said(p.error || `web answered ${r.status}`, ''); break; }
+      this.version = p.version;
+      this.said(p.about, p.text);
+      if (p.over) break;
     }
-    this.hearing = false;
+    this.hearing = null;
   }
   said(about, text) {
     $('.x-about', this.saying).textContent = about;
@@ -1388,7 +1396,10 @@ X.Tools = class {
   // Drawn again for the same address, as when a runtime takes the session up again, it hears the agent again where
   // that had stopped.
   paint() { if (!this.hearing) this.hear(); }
-  destroy() { this.dead = true; }
+  destroy() {
+    this.dead = true;
+    if (this.hearing) this.hearing.abort();
+  }
 };
 
 // A queue's or a board's own view, of its tasks or its entries, opened in the pane from its chat.

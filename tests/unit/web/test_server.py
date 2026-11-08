@@ -8,6 +8,7 @@ import json
 import socket
 import sqlite3
 import typing
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,7 @@ from platoon_harness.config import Manifest
 from platoon_harness.drivers import DriverError, DriverInfo
 from platoon_harness.extensions import Installed
 from platoon_harness.http import SECONDS
-from platoon_harness.kernel import ManualClock
+from platoon_harness.kernel import Delta, ManualClock
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.testing import Ask, Hang, ScriptedDriver
@@ -591,6 +592,36 @@ async def test_live_text_is_held_only_while_its_pane_is_open_and_bounded(web, se
     assert taken["version"] > more["version"] > cut["version"] > first["version"]
     assert held.gone and held.text == "" and let_go == {} and web._saying["lead"] is not held
     assert again["about"] == "Not in the journal yet: what @lead is saying now, until the item it becomes replaces it."
+
+
+async def test_live_text_whose_reader_keeps_ending_is_asked_anew_once_and_then_held(web, session, clock, monkeypatch):
+    """A reader of what an agent is saying that ends while the agent and its runtime go on, as one does on a link that
+    is not the runtime's yet, is asked anew once, and then the ask is held until the journal moves, for at most `HOLD`,
+    saying the text cannot be read now: it is never asked anew without end. Each reader ends when the test says."""
+    readers, ends = [], [asyncio.Event() for _ in range(3)]
+
+    async def ending(agent: str) -> AsyncIterator[Delta]:
+        readers.append(agent)
+        await ends[len(readers) - 1].wait()
+        for delta in ():
+            yield delta
+
+    monkeypatch.setattr(session, "deltas", ending)
+    browser = await Browser(web).opened("control")
+    began = clock.now()
+    asked = asyncio.ensure_future(browser.view("x_read", {"pane": "saying", "agent": "lead"}))
+    for reader in range(2):
+        await clock.slept_until(began + reader + server_module.HOLD)
+        clock.advance(1)
+        ends[reader].set()
+    await clock.slept_until(began + 2 + server_module.HOLD)
+    held = list(readers)
+    clock.advance(server_module.HOLD)
+    answer = await asked
+
+    assert held == readers == ["lead", "lead"]
+    about = "What @lead is saying cannot be read now: its reader ended."
+    assert answer == {"version": None, "text": "", "about": about, "over": False}
 
 
 async def test_tasks_and_entries_are_panes_of_x_read_and_the_feed_says_whenever_one_moves(web, session, monkeypatch):

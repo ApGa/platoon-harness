@@ -154,7 +154,8 @@ history.*
   before them was lost on the way or cut. It goes once the item it becomes is recorded, which reaches its chat with you
   where it is a message, and a thought never does, and with the runtime that said it, which the pane then says, so what
   a runtime that comes back says stands alone. Where the agent has ended, the pane says it says nothing more. `web` reads
-  it only while a page's pane asks for it, and lets it go 25 s after the last ask, so a closed pane costs nothing.
+  it only while a page's pane asks for it: each ask is held until what the agent says moves, for at most 25 s, and the
+  page lets go of its ask as the pane closes, so `web` lets the reader go 25 s after no ask is held for it.
 - **Agents and people.** A person's picture is round and an agent's square, and the top bar counts agents and people
   apart. Each agent's status is the roster's, the same words the terminal uses: its group, then what it waits on or what
   it is doing. The people list shows it beside each agent's name, where SwarmChat shows a first field, so who is working
