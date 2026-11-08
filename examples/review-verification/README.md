@@ -1,7 +1,7 @@
 # A review and verification team
 
-**Goal:** run a team in which an author commits a change, a reviewer reads it, and a verifier that cannot write checks it
-with your test of it as evidence, and read back what the verdict rests on, with no keys first.
+**Goal:** run a team in which an author commits a change, a reviewer reads it, and a verifier in Codex's read-only
+sandbox checks it with your test of it as evidence, and read back what the verdict rests on, with no keys first.
 
 A Codex author in a worktree of its own, a Claude Code reviewer, and a Codex verifier in Codex's read-only sandbox: the
 pipeline [the topologies guide](../../docs/how-to/topologies.md#pipeline) writes out, with each role's instructions saying
@@ -95,13 +95,15 @@ $ platoon-harness message send review --to @verifier --reply-to inbox/you@1 --gi
 ```
 
 `session show` names the verifier's ask under needs you, as `needs you: mention inbox/you@1, Please test 4dde84429173
-with ...`: its ref, `inbox/you@1` here, which your answer replies to, and the commit, SHA here. `repo test` has the runtime run the team's test at that
-commit, as you, in a clean checkout of it, and record what it came to: the one step of the flow that no agent can take,
-which [Test a commit](../../docs/how-to/workspaces.md#test-a-commit) describes. `view watch` gives the changes view. Once
-the test has run, the commit's row says what it came to as `tests`, `passed` here, and the ref of its record as `tested`,
-TESTED here, such as `repo/<name>@4`, `<name>` being your repository's folder. Your message answers the ask, says what
-the test came to and cites its record, so the verdict, which cites your answer, rests on your test. The run then
-settles, and ends with how the session ended and each agent's last words:
+with ...`: its ref, `inbox/you@1` here, which your answer replies to, and the commit, SHA here. `repo test` has the
+runtime run the team's test at that commit, as you, in a clean checkout of it, and record what it came to: the one step
+of the flow that no agent can take, which [Test a commit](../../docs/how-to/workspaces.md#test-a-commit) describes. It
+answers at once, with the `effect` it started, and the test runs after. `view watch` gives the changes view, in which
+the commit's row says what the test came to as `tests`, null until it has run and `passed` here, and the ref of its
+record as `tested`, TESTED here, such as `repo/<name>@4`, `<name>` being your repository's folder: while `tests` is
+null, run `view watch` again. Your message answers the ask, says what the test came to and cites its record, so the
+verdict, which cites your answer, rests on your test. The run then settles, and ends with how the session ended and
+each agent's last words:
 
 ```text
 settled, exit 0

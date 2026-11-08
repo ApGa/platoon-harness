@@ -112,7 +112,7 @@ named here is closed.
   its own, has you test the commit and answer the verifier from a second shell, reads back whose work the verdict
   rests on, and says what a run with no keys cannot show: that the verifier cannot write, which only a real harness
   shows. A test runs the README's commands as it shows them, in a repository of its own. It has not run on real models.
-  That it ships is the default, pending the owner's ruling on which Git examples ship.
+  That it ships, and that its reviewer is a role of the team, are the defaults, pending the owner's rulings.
 - **A scripted step that goes on from what a call answered.** `Do(act)`, a step of `ScriptedDriver`, runs code of the
   harness's own as `act(spec, call)`, where `call(tool, arguments)` calls a tool as a `Call` step does and returns its
   result, so the code can go on from each answer, and each of its calls goes under an id of its own, as a harness's own
