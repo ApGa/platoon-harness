@@ -1,6 +1,6 @@
 """The brief's Scale case on the real stack: 100 ScriptedDriver agents, each a process of its own on the real tool
 plane, drive 100,000 events through the real kernel and runtime, and what that costs is measured and held to budgets
-twice the most docs/reference/scale.md publishes. The run is slow and its budgets fit the hardware that page describes,
+set from what docs/reference/scale.md publishes. The run is slow and its budgets fit the hardware that page describes,
 so it runs by hand before each release and no CI job runs it. Each test prints what it measured. Every test reads one
 run, so the tests share one worker under xdist, whose `--dist loadgroup` keeps an `xdist_group` on one."""
 
@@ -36,17 +36,23 @@ KiB, MiB = 2**10, 2**20
 WALKED = 8
 """The most pages of one query timed, each from the cursor of the one before."""
 
-# Each budget is twice the most that docs/reference/scale.md says was measured, and a time is never under 50 ms, as
-# twice a few milliseconds would fail on a busy host's noise alone.
+# Each budget is twice the most that docs/reference/scale.md says was measured, or half the least for throughput, and a
+# time is never under 50 ms, as twice a few milliseconds would fail on a busy host's noise alone.
 PEAK = 194 * MiB
 """The most memory the runtime may have held at 100,000 events."""
 GROWTH = 44 * MiB
 """The most the runtime's peak memory may grow over the second half of the events."""
+ROUND = 6.4
+"""The longest the median round may take, from the person's post to the last member's end of turn."""
 THROUGHPUT = 615
-"""The fewest events a second the writer may have committed since the runtime started: half the fewest measured."""
-ACK_P99 = 0.140
+"""The fewest events a second the runtime may have committed since it started, at the pace the members set, which is
+not the most its writer could commit."""
+ACK = (0.050, 0.140)
+"""The longest the writer's median and 99th percentile ack may be, each the upper edge of the quarter-octave bucket
+that holds it."""
 SAID = 0.145
-"""The slowest round trip of a person's message sent while the members work."""
+"""The longest a person's message, sent while the members work, may take from the send until the runtime answers that
+it is recorded."""
 PAGES = {
     "board.query": 0.050,
     "channel.list": 0.050,
@@ -71,8 +77,8 @@ run's workspace, so no look runs and it holds nothing."""
 PROJECTION = 37.0
 METRICS_READ = 0.100
 COUNTING = 0.028
-"""The most that counting an event again from the journal may cost, as a share of the CPU the runtime spent on each:
-a bound on what the fold costs the writer, as it decodes each event too."""
+"""The most that counting an event again from the journal may cost, as a share of the CPU the runtime spent on each,
+which is taken as a bound on what the fold costs the writer: counting decodes each event, and the fold does not."""
 RESUMED = (7.5, 7.5)
 """The seconds from a resume after a SIGKILL until the runtime answers, and until every member is back."""
 
@@ -273,19 +279,24 @@ def test_100_scripted_agents_reach_100000_events_with_the_runtime_s_memory_bound
 
 
 def test_writer_throughput_and_ack_latency_stay_within_their_budgets(measured: Measured):
-    """The writer's own gauges at the last round, and a person's message sent while the members work, end to end."""
-    gauges = measured.rounds[-1].metrics.gauges
-    assert gauges is not None and gauges.ack_p99 is not None
-    said = [round.said for round in measured.rounds]
+    """How long a round takes, the writer's own gauges at the last round, and a person's message sent while the members
+    work, from the send until the runtime answers that it is recorded. Throughput is what the members' pace drove."""
+    rounds = measured.rounds
+    gauges = rounds[-1].metrics.gauges
+    assert gauges is not None and gauges.ack_p50 is not None and gauges.ack_p99 is not None
+    said = [round.said for round in rounds]
+    seconds = sorted(round.seconds for round in rounds)
     print(
+        f"a round {statistics.median(seconds):.2f} s, the fastest {seconds[0]:.2f} s, the slowest {seconds[-1]:.2f} s; "
         f"{gauges.events} events in {gauges.commits} commits over {gauges.seconds:.0f} s: "
         f"{gauges.events / gauges.seconds:.0f} events a second; ack p50 {gauges.ack_p50 * 1000:.1f} ms, "
         f"p99 {gauges.ack_p99 * 1000:.1f} ms, max {gauges.ack_max * 1000:.0f} ms; deepest queue {gauges.deepest}, "
         f"busy {gauges.busy}; a person's message p50 {statistics.median(said) * 1000:.0f} ms, "
         f"max {max(said) * 1000:.0f} ms"
     )
+    assert statistics.median(seconds) <= ROUND
     assert gauges.events / gauges.seconds >= THROUGHPUT
-    assert gauges.ack_p99 <= ACK_P99
+    assert gauges.ack_p50 <= ACK[0] and gauges.ack_p99 <= ACK[1]
     assert max(said) <= SAID
 
 
@@ -321,8 +332,9 @@ def test_who_reached_whom_answers_within_its_budget_at_100000_events(measured: M
 
 
 def test_metrics_cost_the_writer_no_more_than_their_budget(measured: Measured):
-    """Counting every event again from the journal, which decodes each too, bounds what the fold costs the writer, set
-    beside the CPU the runtime spent writing them. A read of `session.metrics`, as each round's end asks it."""
+    """Counting every event again from the journal, set beside the CPU the runtime spent on each, which is taken as a
+    bound on what the fold costs the writer, as counting again decodes each event and the fold does not. A read of
+    `session.metrics`, as each round's end asks it."""
     gauges = measured.rounds[-1].metrics.gauges
     assert gauges is not None
     seconds, events = measured.counting
