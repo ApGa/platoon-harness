@@ -64,15 +64,15 @@ async def nth(guest: Session, after: int, match: str, kind: str, count: int) -> 
 
 async def drive(guest: Session) -> list[Round]:
     """Rounds until the journal holds `EVENTS`. Each wakes every member with the person's post to `#rounds`, and ends
-    when each has ended its turn. Once half have begun, the person tells the first member something, which its next read
-    finds, as its inbox wakes nothing."""
+    when each has ended its turn. Once the first member has begun its turn, the person tells it something, which steers
+    into that turn, as a person's message to an agent does: told once its turn had ended, it would take another."""
     rounds: list[Round] = []
     head = after = await guest.head()
     while head < EVENTS:
         began = perf_counter()
         number = len(rounds) + 1
         await guest.send("#rounds", f"round {number}")
-        await nth(guest, after, "turn/*", "turn.started", MEMBERS // 2)
+        await nth(guest, after, "turn/member-1", "turn.started", 1)
         sending = perf_counter()
         await guest.send("@member-1", f"round {number} is under way")
         said = perf_counter() - sending

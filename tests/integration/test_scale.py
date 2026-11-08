@@ -272,7 +272,7 @@ def test_100_scripted_agents_reach_100000_events_with_the_runtime_s_memory_withi
         f"peak memory at each round's end {', '.join(f'{held / MiB:.0f}' for held in peaks)} MiB"
     )
     assert last.head >= EVENTS
-    assert last.events["turn.ended"] == MEMBERS * len(rounds)
+    assert last.events["turn.started"] == last.events["turn.ended"] == MEMBERS * len(rounds)
     assert [last.agents[group] for group in ("needs_you", "done", "failed")] == [0, 0, 0]
     assert last.refused == {}
     assert peaks[-1] <= PEAK
