@@ -92,7 +92,8 @@ extension's op yet, as it makes its commands from the SDK's own ops before any s
 ## 5. Check it
 
 `check_extension`, from `platoon_harness.testing`, holds an extension to what a core primitive keeps to, every failure at
-once: see [Extensions](../../docs/extending/drivers.md#extensions).
+once: see [Extensions](../../docs/extending/drivers.md#extensions). This one passes, and the result names what no check
+runs, its preset: nothing in it says the topology `pair_review` returns is valid.
 
 ## How the tests hold it
 

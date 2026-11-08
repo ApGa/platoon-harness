@@ -13,6 +13,10 @@ named here is closed.
 
 ### New features
 
+- **`check_extension` names what no check runs.** Its result is `ExtensionChecks`, whose `unchecked` names each part the
+  extension declares that no check runs, its daemons, its presets and its isolation, each saying what that leaves
+  unknown, and which it prints as `unchecked` lines after the checks. A pass of the SDK's `bwrap` says that nothing in it
+  says Bubblewrap confines, and the sample extension package's names its preset.
 - **A sample extension package.** [examples/extension-package](examples/extension-package/README.md) is `ballot`, the
   extension of architecture section 17, as a package of its own: `ballot.cast`, a vote on an agent's work, recorded on that
   agent's own stream and refused a second time from the same voter, `Votes`, the view that holds each vote, and

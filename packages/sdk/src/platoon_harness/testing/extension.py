@@ -12,12 +12,24 @@ from platoon_harness.drivers.levels import Check, Checks
 from platoon_harness.kernel import Extension, Kernel, ManualClock, Op, Refused
 from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.tools.surface import OP_NAMED
+from platoon_harness.topology import preset_name
 
 _JOURNAL = "journal.sqlite"
 
 Scenario = Callable[[Kernel], Awaitable[Any]]
 
-__all__ = ["Scenario", "check_extension", "private_reaches"]
+__all__ = ["ExtensionChecks", "Scenario", "check_extension", "private_reaches"]
+
+
+class ExtensionChecks(Checks):
+    """What `check_extension` found, and `unchecked`: each part the extension declares that no check runs, its
+    daemons, its presets and its isolation, saying what that leaves unknown, so a pass never reads as more than the
+    checks ran."""
+
+    unchecked: tuple[str, ...]
+
+    def __str__(self) -> str:
+        return "\n".join((super().__str__(), *(f"unchecked {part}" for part in self.unchecked)))
 
 
 def _dump(folder: Path) -> dict[str, list[tuple[Any, ...]]]:
@@ -88,22 +100,34 @@ def _description_problems(tool: Op, loaded: Iterable[str]) -> Iterator[str]:
             yield f"{tool.name} names {name}, which is not an op"
 
 
+def _unchecked(extension: Extension) -> Iterator[str]:
+    """Each part of `extension` that no check runs, and what that leaves unknown."""
+    for daemon in extension.daemons:
+        yield f"daemon {daemon.name}: no check runs it, so nothing here says what it does or which effects it performs"
+    for preset in extension.presets:
+        yield f"preset {preset_name(preset)}: no check runs it, so nothing here says the topology it returns is valid"
+    if extension.isolation is not None:
+        yield f"isolation {type(extension.isolation).__name__}: no check runs it, so nothing here says it confines"
+
+
 def _verdict(name: str, problems: Iterable[str]) -> Check:
     found = list(problems)
     return Check(name=name, state="failed", reason="; ".join(found)) if found else Check(name=name, state="passed")
 
 
-async def check_extension(extension: Extension, *, folder: Path, scenario: Scenario | None = None) -> Checks:
-    """Load an extension beside the primitives and report every problem at once. `scenario` runs some of it on a live
-    kernel, so that its views can be compared with a rebuild. Without one that check is skipped, which is no pass."""
+async def check_extension(extension: Extension, *, folder: Path, scenario: Scenario | None = None) -> ExtensionChecks:
+    """Load an extension beside the primitives and report every problem at once, and each part no check runs.
+    `scenario` runs some of it on a live kernel, so that its views can be compared with a rebuild. Without one that
+    check is skipped, which is no pass."""
     tools = [operation for operation in extension.ops if operation.tool]
+    unchecked = tuple(_unchecked(extension))
     try:
         kernel = Kernel.open(folder, clock=ManualClock(1000.0), extensions=(*PRIMITIVES, extension))
     except Refused as refused:
         reason = str(refused.refusal.detail)
         names = Check(name="names", state="failed" if refused.refusal.code == "conflict" else "passed", reason=reason)
         law = Check(name="naming_law", state="failed" if refused.refusal.code == "invalid" else "passed", reason=reason)
-        return Checks(checks=(names, law))
+        return ExtensionChecks(checks=(names, law), unchecked=unchecked)
     checks = [Check(name="names", state="passed"), Check(name="naming_law", state="passed")]
     checks.append(_verdict("schemas", (problem for tool in tools for problem in _tool_problems(tool, kernel.ops))))
     descriptions = (problem for tool in tools for problem in _description_problems(tool, kernel.ops))
@@ -114,7 +138,7 @@ async def check_extension(extension: Extension, *, folder: Path, scenario: Scena
         checks.append(await _rebuild(kernel, folder, scenario))
     finally:
         kernel.close()
-    return Checks(checks=tuple(checks))
+    return ExtensionChecks(checks=tuple(checks), unchecked=unchecked)
 
 
 async def _rebuild(kernel: Kernel, folder: Path, scenario: Scenario | None) -> Check:

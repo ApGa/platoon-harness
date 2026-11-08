@@ -117,7 +117,8 @@ async def checked() -> dict[str, Any]:
                     refused.append(f"{name}: {outcome.refusal.detail}")
 
     result = await check_extension(load(EXTENSIONS, SAMPLE), folder=Path.cwd() / "check", scenario=vote)
-    return {"checks": {check.name: check.state for check in result.checks}, "refused": refused}
+    checks = {check.name: check.state for check in result.checks}
+    return {"checks": checks, "unchecked": list(result.unchecked), "refused": refused}
 
 
 CASES = {"unnamed": unnamed, "rival": rival, "voted": voted, "checked": checked}

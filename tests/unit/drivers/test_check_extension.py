@@ -6,8 +6,10 @@ import textwrap
 import pytest
 from pydantic import Field
 
-from platoon_harness.kernel import Args, Event, Extension, Kernel, Refused, Txn, View, fold, op
+from platoon_harness.bwrap import extension as bwrap
+from platoon_harness.kernel import Args, Daemon, Event, Extension, Kernel, Refused, Txn, View, fold, op
 from platoon_harness.testing import check_extension
+from platoon_harness.topology import Topology
 
 
 class Cast(Args):
@@ -69,6 +71,43 @@ async def test_a_good_extension_passes_every_check(tmp_path):
     assert states(result) == dict.fromkeys(
         ("names", "naming_law", "schemas", "descriptions", "public_api_only", "rebuild_equals_live"), "passed"
     )
+
+
+async def test_the_result_names_each_declared_part_no_check_covers(tmp_path):
+    """No check runs a daemon, a preset or an isolation, so beside checks that all pass each is named, saying what
+    that leaves unknown, in the result and in what it prints. An extension that declares none has nothing unchecked."""
+
+    async def tick(kernel: Kernel) -> None:
+        """Touch the world, which no check sees."""
+
+    def pair(author: str, reviewer: str) -> Topology:
+        return Topology(edges={author: [f"role:{reviewer}"]})
+
+    class Fence:
+        """An isolation that confines nothing."""
+
+    parts = {"daemons": [Daemon("tick", tick)], "presets": [pair], "isolation": Fence()}
+    declared = Extension("ballot", ops=[cast], views=[Votes], **parts)
+
+    result = await check_extension(declared, folder=tmp_path / "declared", scenario=vote)
+    plain = await check_extension(Extension("ballot", ops=[cast], views=[Votes]), folder=tmp_path / "plain")
+
+    assert result.failed == ()
+    assert result.unchecked == (
+        "daemon tick: no check runs it, so nothing here says what it does or which effects it performs",
+        "preset pair: no check runs it, so nothing here says the topology it returns is valid",
+        "isolation Fence: no check runs it, so nothing here says it confines",
+    )
+    assert str(result).splitlines()[-3:] == [f"unchecked {part}" for part in result.unchecked]
+    assert plain.unchecked == ()
+
+
+async def test_bwrap_s_result_says_its_confinement_is_unchecked(tmp_path):
+    """The SDK's `bwrap` passes every check that runs, and its result says that none says it confines."""
+    result = await check_extension(bwrap, folder=tmp_path / "s")
+
+    assert result.failed == ()
+    assert result.unchecked == ("isolation Bubblewrap: no check runs it, so nothing here says it confines",)
 
 
 async def test_no_scenario_is_a_skip_with_a_reason(tmp_path):

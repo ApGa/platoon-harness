@@ -146,13 +146,14 @@ def test_extension_list_names_the_sample_from_metadata(installed: Installed, tmp
 
 def test_the_sample_passes_check_extension(installed: Installed, tmp_path: Path, imports: Path):
     """Loaded from the environment by its pinned name, with a vote on each of two agents' work as its scenario, every
-    check passes, its views rebuilt to what they held."""
+    check passes, its views rebuilt to what they held, and the result names its preset, which no check runs."""
     found = case(installed, "checked", tmp_path)
 
     assert found == {
         "checks": dict.fromkeys(
             ("names", "naming_law", "schemas", "descriptions", "public_api_only", "rebuild_equals_live"), "passed"
         ),
+        "unchecked": ["preset pair-review: no check runs it, so nothing here says the topology it returns is valid"],
         "refused": [],
     }
     assert imports.read_text() == ""

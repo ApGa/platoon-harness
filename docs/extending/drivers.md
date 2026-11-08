@@ -652,3 +652,10 @@ from platoon_harness.testing import check_extension
 result = await check_extension(extension, folder=tmp_path / "session", scenario=cast_three_votes)
 assert result.failed == (), str(result)
 ```
+
+Its result, `ExtensionChecks`, also names in `unchecked` each part the extension declares that no check runs, its daemons,
+its presets and its isolation, saying what that leaves unknown, and prints each on an `unchecked` line after the checks.
+So a pass never reads as more than ran: it says nothing of what a daemon does or which effects it performs, whether the
+topology a preset returns is valid, or whether an isolation confines. The SDK's `bwrap` passes, and its result says that
+nothing in it says Bubblewrap confines. [The sample extension package](../../examples/extension-package/README.md)
+passes, with its preset unchecked.

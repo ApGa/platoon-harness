@@ -1,7 +1,7 @@
 """What proves a driver or an extension: a deterministic harness, a loopback model, and named checks."""
 
 from .conformance import chat_access, check_driver, goal
-from .extension import check_extension
+from .extension import ExtensionChecks, check_extension
 from .harnesses import check_harness
 from .model import ENVIRONMENT_TOOL, ENVIRONMENT_TOOLS, FakeModel, Overflow, Request, Stall, Text, Thought, ToolCall
 from .scripted import (
@@ -36,6 +36,7 @@ __all__ = [
     "Do",
     "EndTurn",
     "Exit",
+    "ExtensionChecks",
     "Fail",
     "FakeModel",
     "FakeTools",
