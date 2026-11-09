@@ -87,6 +87,7 @@ class Replay:
     name: str
     total: int        # the original's head as the replay opened
     at: int           # the playhead: the newest event the copy holds
+    spacing: int      # how many events apart its checkpoints are
     session: Session  # a guest of the copy, which every write refuses
     folder: Path      # <root>/replays/<name>-<random>/, gone once it closes
 
@@ -102,20 +103,33 @@ replay replays its record up to that moment, and stays read-only. It keeps what 
 as it stood then, through SQLite's backup, and the manifest, so a client reads the copy's folder as a session's. Its
 copies live in `replays/` under the root, a folder of their own per replay, never in the session's folder, which a replay
 writes nothing in; `close` takes them back, and a root on a network filesystem is refused, as a copy is a journal written
-here.
+here. A client may keep what it folds of the replay in that folder too, which goes with it. Its process holds a lock in
+the folder until it closes it, or dies, so the next replay to open, of any session, takes back each folder there whose
+lock nobody holds: one whose process was killed, or went down with its machine, before it closed it
+(`test_a_replay_whose_process_was_killed_leaves_a_folder_the_next_replay_takes_back`).
 
 `seek(seq)` moves the copy either way:
 
-- **On.** Where no checkpoint lies between the playhead and `seq`, the copy goes on from where it stands, and `session`
-  stays the same guest, which follows the new events as it follows a live session.
+- **On.** The copy goes on from where it stands, and `session` stays the same guest, which follows the new events as it
+  follows a live session, unless the nearest checkpoint at or below `seq` lies more than `CHECKPOINT_EVENTS` past the
+  playhead. So playing or stepping on through a checkpoint never starts a copy anew, which a client would draw anew
+  (`test_a_replay_played_on_through_a_checkpoint_goes_on_in_the_copy_it_has`).
 - **Back, or far on.** Otherwise a new copy starts from the nearest checkpoint at or below `seq`, or from nothing, copies on
   to `seq`, and `session` is a guest of it. The copy before stays open until the next is made, so a client that still
   reads it as it moves to the new one reads what was there.
 
-**Checkpoints** are closed copies, a file copy of each, which `Replay` makes on a copy of its own as it opens, evenly
-spaced through the record: at most `CHECKPOINTS`, 8, at least `CHECKPOINT_EVENTS`, 1,024 events apart. A seek then folds
-at most a checkpoint's spacing of events after a file copy. On a session of 10,008 events a seek took at most 91 ms where a
-copy from nothing to the end took 0.46 s (`test_a_seek_on_a_10000_event_session_goes_from_the_nearest_checkpoint_within_its_budget`).
+A seek once begun is finished, though whoever awaits it is cancelled, so a copy is never left half made, and `close`
+lets it finish before it takes the folder back.
+
+**Checkpoints** are closed copies, a file copy of each, which `Replay` makes one after another on a copy of its own once
+it opens, evenly spaced through the record, `spacing` apart: at most `CHECKPOINTS`, 8, at least `CHECKPOINT_EVENTS`,
+1,024 events apart, so a record of 1,024 events or fewer has none. A seek then folds at most a checkpoint's spacing of
+events after a file copy. On a session of 10,008 events a seek took at most 92 ms, once the checkpoints were made, where
+a copy from nothing to the end took 0.47 s; a seek before they are made copies from the start, which took 1.5 s to the
+end as they were being made (`test_a_seek_on_a_10000_event_session_goes_from_the_nearest_checkpoint_within_its_budget`).
+Each is made whole before `close` stops the rest. One that cannot be made, as on a full disk, is logged, and ends the
+making, and a seek goes on from those made, or from the start
+(`test_a_checkpoint_that_cannot_be_made_is_said_and_a_seek_goes_on_without_it`).
 
 **What the session reads as.** The guest reads as the runtime does, every event and every view, as a person's principal
 holds no grant before the record's first `grant.added`, so a replay at its start would answer nothing. Every write is

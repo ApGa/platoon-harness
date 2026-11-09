@@ -37,7 +37,8 @@ or, on the sessions page `platoon-harness web` serves, press Replay on the sessi
 A replay begins before the session's first event, paused. A live session's replay plays its record as it stood when the
 replay opened, and goes no further: open another to see what came since. Opening one copies the record under the root,
 in `replays/`, never in the session's own folder, which a replay writes nothing in; leaving the replay, or stopping
-`web`, takes the copies back.
+`web`, takes the copies back. A replay whose process was killed before it closed, by a signal, the machine going down
+or a terminal closed under it, leaves its folder there, which the next replay to open, of any session, takes back.
 
 ## The banner
 

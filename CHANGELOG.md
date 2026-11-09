@@ -29,11 +29,15 @@ named here is closed.
   written, and whether that was after the point the replay stands at. Leaving takes its copies back. Before, a session
   showed only as it is now. This is RFC 0080, a draft.
 - **Replays in the SDK.** `Replay.open(name)` gives a read-only copy of a session through a playhead, under the root in
-  `replays/` and never in the session's folder, whose `session` reads as the session read then and refuses every write;
-  `seek` moves it either way, from the nearest of eight checkpoints of its views, so a seek on 10,000 events took under a
-  tenth of a second here, and `close` takes its copies back. A live session's replay replays its record up to its
-  opening. The kernel gains `Kernel.copy`, which makes a journal a copy of another's through a seq, each event as it was
-  committed there, and a copy takes no command and runs no daemon. This is RFC 0080, a draft.
+  `replays/` and never in the session's folder, whose `session` reads as the session read then, what was due, spent or
+  stalled at that time among it, and refuses every write. `seek` moves it either way: on in the copy it has, through a
+  checkpoint too, or back or far on from the nearest of at most eight checkpoints of its views, made one after another
+  once it opens, so a seek on 10,000 events took under a tenth of a second here once they were made, and a record of
+  1,024 events or fewer has none; a seek before they are made copies from the start. `close` takes its copies back, and
+  the next replay to open takes back those of one killed before it closed. A live session's replay replays its record up
+  to its opening. The kernel gains `Kernel.copy`, which makes a journal a copy of another's through a seq, each event as
+  it was committed there; a copy takes no command, runs no daemon, and answers what depends on the time as of its newest
+  event. This is RFC 0080, a draft.
 - **The project's team, edited in the terminal.** `e` on the sessions screen opens the project's `platoon-harness.toml`
   in a team editor drawn from the same module as the browser's, in the same words: a row for each key a person sets, by
   section, each problem under its field, and beside the fields, or below them under 100 columns, `team show`'s sentences

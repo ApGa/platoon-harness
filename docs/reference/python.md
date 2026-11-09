@@ -8524,7 +8524,9 @@ event and view, with every write refused. `seek` moves it either way: on from wh
 checkpoint of its views at or below where it goes, which makes `session` a new one. It replays the record as it
 stood when it opened, through `total`, so a live session's replay ends where the record did then. What estimators
 said beside the journal is kept as it stood then too, each statement with the head and the time it was written.
-Its copies live under the root, in `replays/`, never in the session's folder, and go when it closes.
+Its copies live under the root, in `replays/`, never in the session's folder, in a `folder` of its own, which a
+client may keep what it folds of the replay in too, and which goes when it closes. Its process holds a lock on it,
+so the next replay to open takes back one whose process went without closing it.
 
 **`open`**
 
@@ -8561,8 +8563,10 @@ and leaves the one before.
 async def seek(self, seq: int) -> None: ...
 ```
 
-Move the copy to the original's journal through `seq`, from 0 to `total`: on from where it is, unless a
-checkpoint lies nearer below `seq`, from which a new copy starts, which `session` is then a guest of.
+Move the copy to the original's journal through `seq`, from 0 to `total`: on from where it is, unless that is
+back, or the nearest checkpoint at or below `seq` lies more than `CHECKPOINT_EVENTS` past it, from which a new
+copy starts, which `session` is then a guest of. A seek once begun is finished, though whoever awaits it goes,
+so its copy stands whole.
 
 **`page`**
 
@@ -8579,7 +8583,8 @@ player times itself and finds where it goes.
 async def close(self) -> None: ...
 ```
 
-Stop making checkpoints, leave the copies and take back every folder of this replay's.
+Stop making checkpoints once the one being made is whole, let a seek under way finish, leave the copies and
+take back every folder of this replay's.
 
 ### `platoon_harness.session.Session`
 

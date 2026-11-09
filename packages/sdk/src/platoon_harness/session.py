@@ -13,6 +13,7 @@ on from what the journal holds.
 
 import asyncio
 import contextlib
+import fcntl
 import hashlib
 import json
 import logging
@@ -26,7 +27,16 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Generator, Mapping, Sequence
+from collections.abc import (
+    AsyncGenerator,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Coroutine,
+    Generator,
+    Mapping,
+    Sequence,
+)
 from pathlib import Path
 from typing import Any, Literal, Self
 from uuid import uuid4
@@ -989,13 +999,19 @@ class Replay:
     checkpoint of its views at or below where it goes, which makes `session` a new one. It replays the record as it
     stood when it opened, through `total`, so a live session's replay ends where the record did then. What estimators
     said beside the journal is kept as it stood then too, each statement with the head and the time it was written.
-    Its copies live under the root, in `replays/`, never in the session's folder, and go when it closes."""
+    Its copies live under the root, in `replays/`, never in the session's folder, in a `folder` of its own, which a
+    client may keep what it folds of the replay in too, and which goes when it closes. Its process holds a lock on it,
+    so the next replay to open takes back one whose process went without closing it."""
 
     def __init__(self, name: str, root: str | Path | None) -> None:
         self.name = name
         self.folder = Path()
         self.total = 0
+        self.spacing = CHECKPOINT_EVENTS
+        """How many events apart its checkpoints are: `CHECKPOINT_EVENTS` at least, and so far apart that at most
+        `CHECKPOINTS` lie within `total`."""
         self._root = root
+        self._lock: int | None = None
         self._session: Session | None = None
         self._source: Kernel | None = None
         self._copy: Kernel | None = None
@@ -1031,9 +1047,12 @@ class Replay:
             raise Refused("unavailable", f"session {self.name} never opened, so it has no record to replay")
         source = self._source = Kernel.open(original, read_only=True, extensions=PRIMITIVES)
         self.total = source.head
+        self.spacing = max(CHECKPOINT_EVENTS, math.ceil(self.total / CHECKPOINTS))
         (root / REPLAYS).mkdir(mode=0o700, exist_ok=True)
+        await asyncio.to_thread(_take_back, root / REPLAYS)
         self.folder = Path(tempfile.mkdtemp(dir=root / REPLAYS, prefix=f"{self.name}-"))
         try:
+            self._lock = _held(self.folder)
             await asyncio.to_thread(_keep_annotations, original, self.folder)
             (self.folder / MANIFEST).write_bytes((original / MANIFEST).read_bytes())
             await self._make(0, 0)
@@ -1057,16 +1076,21 @@ class Replay:
         return self._session
 
     async def seek(self, seq: int) -> None:
-        """Move the copy to the original's journal through `seq`, from 0 to `total`: on from where it is, unless a
-        checkpoint lies nearer below `seq`, from which a new copy starts, which `session` is then a guest of."""
+        """Move the copy to the original's journal through `seq`, from 0 to `total`: on from where it is, unless that is
+        back, or the nearest checkpoint at or below `seq` lies more than `CHECKPOINT_EVENTS` past it, from which a new
+        copy starts, which `session` is then a guest of. A seek once begun is finished, though whoever awaits it goes,
+        so its copy stands whole."""
         if isinstance(seq, bool) or not isinstance(seq, int) or not 0 <= seq <= self.total:
             raise Refused("invalid", f"a replay of {self.name} moves to an event from 0 to {self.total}")
+        await _whole(self._seek(seq))
+
+    async def _seek(self, seq: int) -> None:
         async with self._seeking:
             copy, source = self._copy, self._source
             if copy is None or source is None:
                 raise Refused("unavailable", "this replay is not open: `await` it or use `async with`")
             start = max((at for at in self._checkpoints if at <= seq), default=0)
-            if start <= self.at <= seq:
+            if start - CHECKPOINT_EVENTS <= self.at <= seq:
                 await copy.copy(source, through=seq)
             else:
                 await self._make(start, seq)
@@ -1106,25 +1130,28 @@ class Replay:
             shutil.rmtree(folder, ignore_errors=True)
 
     async def _build(self) -> None:
-        """Make the checkpoints, a closed copy at each, evenly spaced through the record, on a copy of their own."""
-        source = self._source
-        assert source is not None
-        every = max(CHECKPOINT_EVENTS, math.ceil(self.total / CHECKPOINTS))
+        """Make the checkpoints, a closed copy every `spacing` events through the record, on a copy of their own. Each
+        is made whole, though `close` stops the rest, and one that cannot be made is said, and ends the making."""
         folder = self.folder / "building" / self.name
         try:
-            for at in range(every, self.total, every):
-                copy = Kernel.open(folder, extensions=PRIMITIVES)
-                try:
-                    await copy.copy(source, through=at)
-                finally:
-                    copy.close()
-                kept = self.folder / "checkpoints" / str(at)
-                await asyncio.to_thread(shutil.copytree, folder, kept, ignore=shutil.ignore_patterns("lock", "*-shm"))
-                self._checkpoints[at] = kept
-        except Refused as refused:
-            log.warning("replay of %s keeps no more checkpoints: %s", self.name, refused)
+            for at in range(self.spacing, self.total, self.spacing):
+                await _whole(self._checkpoint(folder, at))
+        except (Refused, OSError) as error:
+            log.warning("replay of %s keeps no more checkpoints: %s", self.name, error)
         finally:
             await asyncio.to_thread(shutil.rmtree, folder.parent, True)
+
+    async def _checkpoint(self, folder: Path, at: int) -> None:
+        source = self._source
+        assert source is not None
+        copy = Kernel.open(folder, extensions=PRIMITIVES)
+        try:
+            await copy.copy(source, through=at)
+        finally:
+            copy.close()
+        kept = self.folder / "checkpoints" / str(at)
+        await asyncio.to_thread(shutil.copytree, folder, kept, ignore=shutil.ignore_patterns("lock", "*-shm"))
+        self._checkpoints[at] = kept
 
     async def page(self, *, after: int = 0, limit: int = 512) -> Page:
         """A page of the original's events past `after` and through `total`, wherever the copy stands, by which a
@@ -1137,17 +1164,51 @@ class Replay:
         return Page(events=events, cursor=min(page.cursor, self.total), head=self.total)
 
     async def close(self) -> None:
-        """Stop making checkpoints, leave the copies and take back every folder of this replay's."""
+        """Stop making checkpoints once the one being made is whole, let a seek under way finish, leave the copies and
+        take back every folder of this replay's."""
         if self._building is not None:
             self._building.cancel()
             await asyncio.gather(self._building, return_exceptions=True)
-        self._retire()
-        for kernel in (self._copy, self._source):
-            if kernel is not None:
-                kernel.close()
-        self._session = self._copy = self._source = None
-        if self.folder != Path():
-            await asyncio.to_thread(shutil.rmtree, self.folder, True)
+        async with self._seeking:
+            self._retire()
+            for kernel in (self._copy, self._source):
+                if kernel is not None:
+                    kernel.close()
+            self._session = self._copy = self._source = None
+            if self.folder != Path():
+                await asyncio.to_thread(shutil.rmtree, self.folder, True)
+            if self._lock is not None:
+                os.close(self._lock)
+                self._lock = None
+
+
+async def _whole[T](work: Coroutine[Any, Any, T]) -> T:
+    """Await `work` to its end, though whoever awaits this is cancelled: it runs on, so nothing it writes is left half
+    done, and they go once it has."""
+    task = asyncio.ensure_future(work)
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        await asyncio.wait([task])
+        if not task.cancelled():
+            task.exception()  # Said to whoever awaited it, who went: it is not to be logged as never retrieved.
+        raise
+
+
+def _held(folder: Path) -> int:
+    """Hold a replay's folder, by the lock in it that `is_held` looks for, which its process holds until it closes it,
+    or dies."""
+    lock = os.open(folder / "lock", os.O_RDWR | os.O_CREAT, 0o600)
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    return lock
+
+
+def _take_back(replays: Path) -> None:
+    """Take back each replay's folder whose process went without closing it: one with a lock nobody holds. A folder
+    with no lock yet is one whose process is making it, or was killed as it did, before it held anything."""
+    for folder in replays.iterdir():
+        if (folder / "lock").exists() and not is_held(folder):
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 async def _replayed(folder: Path, copy: Kernel, name: str) -> "Session":

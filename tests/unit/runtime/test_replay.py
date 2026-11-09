@@ -4,6 +4,7 @@ either way, from a checkpoint of its views where one lies nearer."""
 import asyncio
 import contextlib
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
@@ -135,9 +136,9 @@ async def test_a_replay_s_copies_live_under_the_root_never_in_the_session_s_fold
 
 
 async def test_a_seek_goes_on_from_the_copy_or_starts_a_new_one_from_the_nearest_checkpoint(tmp_path, monkeypatch):
-    """With a checkpoint every 8 events, a seek forward goes on in the copy it has, and one back, or one forward past a
-    checkpoint nearer than the playhead, starts a copy anew from the nearest at or below where it goes, which a new
-    session is a guest of; each reads as a copy made from nothing to there would."""
+    """With a checkpoint every 8 events, a seek forward goes on in the copy it has, and one back, or one forward to a
+    checkpoint more than 8 events past the playhead, starts a copy anew from the nearest at or below where it goes,
+    which a new session is a guest of; each reads as a copy made from nothing to there would."""
     monkeypatch.setattr(session_module, "CHECKPOINT_EVENTS", 8)
     head = await recorded(tmp_path, "first", "second", "third")
     async with Replay.open("s", root=tmp_path) as replay:
@@ -166,6 +167,68 @@ async def test_a_seek_goes_on_from_the_copy_or_starts_a_new_one_from_the_nearest
                 assert await replay.session.agents() == await fresh.session.agents()
                 assert await replay.session.status() == await fresh.session.status()
                 assert [event.seq async for event in replay.session.events()] == list(range(1, at + 1))
+
+
+async def test_a_replay_played_on_through_a_checkpoint_goes_on_in_the_copy_it_has(tmp_path, monkeypatch):
+    """Stepping on an event at a time past two checkpoints never starts a copy anew, which a client would draw anew."""
+    monkeypatch.setattr(session_module, "CHECKPOINT_EVENTS", 8)
+    await recorded(tmp_path, "first", "second", "third")
+    async with Replay.open("s", root=tmp_path) as replay:
+        assert replay._building is not None
+        await replay._building
+        first, second = sorted(replay._checkpoints)[:2]
+        await replay.seek(first - 2)
+        session = replay.session
+
+        for at in range(first - 1, second + 3):
+            await replay.seek(at)
+            assert replay.session is session and await session.head() == at
+
+
+async def test_a_checkpoint_that_cannot_be_made_is_said_and_a_seek_goes_on_without_it(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(session_module, "CHECKPOINT_EVENTS", 8)
+    await recorded(tmp_path, "first", "second")
+
+    def full(*_: object, **__: object) -> None:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(session_module.shutil, "copytree", full)
+    async with Replay.open("s", root=tmp_path) as replay:
+        assert replay._building is not None
+        await replay._building
+        await replay.seek(replay.total)
+
+        assert replay._checkpoints == {} and await replay.session.head() == replay.total
+    assert "replay of s keeps no more checkpoints: [Errno 28] No space left on device" in caplog.text
+
+
+async def test_a_replay_whose_process_was_killed_leaves_a_folder_the_next_replay_takes_back(tmp_path):
+    """A replay's folder is held by its process alone, so one killed before it closed it is taken back as another opens,
+    and one still held stays."""
+    await recorded(tmp_path, "first")
+    opening = (
+        "import asyncio, sys\n"
+        "from platoon_harness import Replay\n"
+        "async def main():\n"
+        f"    replay = await Replay.open('s', root={str(tmp_path)!r})\n"
+        "    print(replay.folder, flush=True)\n"
+        "    await asyncio.to_thread(sys.stdin.read)\n"
+        "asyncio.run(main())\n"
+    )
+    killed = await asyncio.create_subprocess_exec(
+        sys.executable, "-c", opening, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE
+    )
+    assert killed.stdout is not None
+    left = Path((await killed.stdout.readline()).decode().strip())
+    killed.kill()
+    await killed.wait()
+    assert left.parent == tmp_path / "replays" and (left / "1" / "s" / "journal.sqlite").exists()
+
+    async with Replay.open("s", root=tmp_path) as held:
+        assert not left.exists()
+        async with Replay.open("s", root=tmp_path) as other:
+            assert held.folder.exists() and other.folder != held.folder
+    assert list((tmp_path / "replays").iterdir()) == []
 
 
 async def test_a_replay_of_a_live_session_replays_its_record_up_to_its_opening_and_stays_read_only(tmp_path):

@@ -144,7 +144,8 @@ Each law is a sentence, and each has a test of the same name.
 
 - **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. It holds `sessions/`, `conformance/`, what
   `doctor --check` found of each harness (§9.3), and `replays/`, a folder for each replay open, of its copies of a
-  session's record, which it takes back as it closes (§12). If that is on a network filesystem,
+  session's record, which it takes back as it closes, and whose process holds a lock in it, so the next replay to open
+  takes back one whose process went without closing it (§12). If that is on a network filesystem,
   the default falls back to `/var/tmp/platoon-harness-$UID`, with a one-line notice and a `doctor` entry. An
   explicitly chosen root on a network filesystem is refused with exit 78. Only live writers are refused: a closed
   session is a portable artifact (§5.8). A root to write in must be this user's, and writable by nobody else, since a manifest in it
