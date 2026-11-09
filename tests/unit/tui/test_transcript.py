@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Callable
 from typing import Any
 
+import pytest
 from textual.app import App, ComposeResult
 
 from platoon_harness.kernel import Event, Page, Refused
@@ -988,6 +989,96 @@ async def test_a_turn_whose_start_the_window_lets_go_says_more_came_before():
         transcript._forget(transcript._folds["t1"])
 
         assert "more before, not read yet" in shown(transcript)[2]
+
+
+async def test_a_turn_the_window_holds_no_end_of_says_more_comes_after_and_no_call_of_it_ended_unknown(monkeypatch):
+    """Read from the journal's first line, the window holds a turn's start and a call's, but not their ends: the fold
+    says more comes after, not read yet, and the call that its end is not read yet, never that it ended unknown, until
+    the window reads down to them."""
+    monkeypatch.setattr(transcript_module, "PAGE", 4)
+    history = [
+        A_TURN[0],
+        did(2, "check the parser", {"kind": "thought"}),
+        call(3, "started", 'bash {"command": "pytest"}', "b1"),
+        *[did(seq, f"said {seq}", {"kind": "message"}) for seq in range(4, 40)],
+        call(40, "completed", "bash failed", "b1", outcome="failed"),
+        event(41, "turn/lead", "turn.ended", "turn ended: finished", {"reason": "finished"}, turn="t1"),
+    ]
+    app = Alone()
+    async with app.run_test(size=(80, 10)) as pilot:
+        transcript = app.query_one(Transcript)
+        transcript.held(True)
+        await transcript.show(Focus.of_agent("lead"), Journal(history), 41)  # type: ignore[arg-type]
+        await transcript.action_oldest()
+        transcript.toggle(transcript._folds["t1"])
+        oldest = shown(transcript)[2:5]
+        while transcript._after is not None:
+            transcript.scroll_end(animate=False, immediate=True, force=True)
+            await pilot.pause()
+
+        assert oldest == [
+            "  ▾ 1 tool call · 1 thought · more after, not read yet",
+            "    ∴ check the parser",
+            "    ▸ bash  pytest  end not read yet",
+        ]
+        assert shown(transcript)[2:5] == [
+            "  ▾ 1 tool call · ✗ 1 failed · 1 thought",
+            "    ∴ check the parser",
+            "    ▸ bash  pytest  ✗ failed",
+        ]
+
+
+async def test_a_call_read_back_from_its_end_is_one_line_with_its_start(monkeypatch):
+    """A page read back holds a call's end, and the page before it its start: the two are one call, which the end's
+    line takes, and nothing says a call ended unknown."""
+    monkeypatch.setattr(transcript_module, "PAGE", 4)
+    app = Alone()
+    async with app.run_test(size=(80, 30)) as pilot:
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN), 11)  # type: ignore[arg-type]
+        while transcript._before:
+            await pilot.pause()
+        folded = shown(transcript)
+        transcript.toggle(transcript._folds["t1"])
+
+        assert folded == FOLDED
+        assert shown(transcript)[3:8] == [
+            "    ▸ ∴ check the parser",
+            "    ▸ read  parser.py",
+            "    ▸ bash  pytest  ✗ failed",
+            "    ▸ agent_spawn  w",
+            "      ↳ w spawned as worker",
+        ]
+
+
+@pytest.mark.parametrize("comes", ["its end", "its turn's end", "history"])
+async def test_a_call_drawn_running_is_drawn_again_as_its_end_comes_its_turn_ends_or_the_session_is_history(comes):
+    """Open on a call that runs, a fold is drawn again once that changes, so neither the call's line nor what it opens
+    on says it runs once it does not."""
+    app = Alone()
+    async with app.run_test(size=(80, 30)):
+        transcript = app.query_one(Transcript)
+        transcript.held(True)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN[:7]), 7)  # type: ignore[arg-type]
+        transcript.toggle(transcript._folds["t1"])
+        transcript.toggle(transcript.blocks[-1])
+        await app.workers.wait_for_complete()
+        running = shown(transcript)[6:15]
+        if comes == "its end":
+            transcript.take([A_TURN[8]])
+        elif comes == "its turn's end":
+            transcript.take([event(12, "turn/lead", "turn.lost", "turn lost", {}, turn="t1")])
+        else:
+            transcript.held(False)
+        await app.workers.wait_for_complete()
+        now = shown(transcript)[6:15]
+
+    assert running[0] == "    ▾ agent_spawn  w  running" and running[7] == "      (nothing yet: it is running)"
+    if comes == "its end":
+        assert now[0] == "    ▾ agent_spawn  w" and now[7] == "      mcp__ph__agent_spawn completed"
+    else:
+        assert now[0] == "    ▾ agent_spawn  w  ? ended unknown"
+        assert now[7] == "      (unknown: the window holds no end of this call)"
 
 
 def test_a_tool_is_named_only_where_its_input_follows_its_name_as_json():

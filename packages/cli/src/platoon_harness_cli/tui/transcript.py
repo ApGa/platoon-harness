@@ -404,10 +404,11 @@ def _step(event: Event, children: set[str], agent: str | None) -> str | None:
 @dataclass(eq=False)
 class Block:
     """One line: `first`, the seq of the event that began it, which is where it stands; the event it shows, which a
-    tool call's end takes over from its start, `start`, and a cut, standing at the next span's first call, is the last
-    call of the span it ends; how it reads; and what opening it shows: its body, read when first opened, or its gist
-    whole, or for an approval's request, its `ask`, read when first opened, or for a call its input and what it gave
-    back. A step of an agent's turn stands in that turn's `fold`."""
+    tool call's end takes over from its start, `start`, or where the end was read first takes its start as, and a cut,
+    standing at the next span's first call, is the last call of the span it ends; how it reads; and what opening it
+    shows: its body, read when first opened, or its gist whole, or for an approval's request, its `ask`, read when
+    first opened, or for a call its input and what it gave back. A step of an agent's turn stands in that turn's
+    `fold`."""
 
     first: int
     event: Event
@@ -714,8 +715,8 @@ class Transcript(ScrollView, can_focus=True):
             self._place(max(self.scroll_y - above, 0))
 
     def _let_newest_go(self) -> None:
-        """Keep the window while reading back: past it the newest lines go, read again when the person comes down, and
-        a spawn drawn under a call goes with it."""
+        """Keep the window while reading back: past it the newest lines go, read again when the person comes down, a
+        spawn drawn under a call goes with it, and a fold whose turn may go on past them says so."""
         excess = len(self._blocks) - WINDOW
         if excess <= 0:
             return
@@ -728,6 +729,7 @@ class Transcript(ScrollView, can_focus=True):
         del self._blocks[cut:]
         self._after, self.following = self._blocks[-1].first, False
         self._let_go(gone, oldest=False)
+        self._restate(self._folds.values())
 
     def _let_go(self, gone: set[Block], *, oldest: bool) -> int:
         """Forget the lines the window let go, the oldest or the newest, and the rows they were drawn in, with the line
@@ -802,11 +804,12 @@ class Transcript(ScrollView, can_focus=True):
 
     def _block(self, event: Event) -> Block | None:
         """A new line for an event, or None: for one with no line, and for a tool call's end, which its start's line
-        becomes when the two name one call. A start read again is the line it began already. A spawn joins the call
-        that made it, whichever of the two came first, and is drawn under it. A model call of the agent in view is kept,
-        and the first of a span is where the span before it ends, cut once that span's last call is held too. A step of
-        the agent in view's turn goes in that turn's fold, and a turn's start and end are kept, as a fold says whether
-        it holds all of its turn and whether the turn is under way."""
+        becomes when the two name one call, as is a start read back after its end, whose line it becomes, standing where
+        the end does. A start read again is the line it began already. A spawn joins the call that made it, whichever
+        of the two came first, and is drawn under it. A model call of the agent in view is kept, and the first of a span
+        is where the span before it ends, cut once that span's last call is held too. A step of the agent in view's turn
+        goes in that turn's fold, and a turn's start and end are kept, as a fold says whether it holds all of its turn
+        and whether the turn is under way."""
         agent = self.focus_on.agent if self.focus_on is not None else None
         if event.stream == f"turn/{agent}" and event.turn is not None:
             if event.type == "turn.started":
@@ -814,23 +817,28 @@ class Transcript(ScrollView, can_focus=True):
             elif event.type in _ENDED:
                 self._ended[event.turn] = event.seq
             if (fold := self._folds.get(event.turn)) is not None:
-                self._refold(fold)
+                self._restate([fold])
         if event.type == "model.called":
             return self._cut_before(event)
         line = self._line(event)
         if line is None:
             return None
         native = event.data.get("native_id") if event.type == "item.recorded" else None
-        if native and (started := self._tools.get(native)) is not None:
-            if event.seq > started.first:
-                self._forget(started)
-                started.start, started.event = started.event, event
-                started.said = line_of(event, started.start) or line
-                if started.fold is not None:
-                    self._refold(started.fold)
+        if native and (held := self._tools.get(native)) is not None:
+            if event.seq > held.first:
+                held.start, held.event = held.start or held.event, event
+            elif _phase(event) == "started" and held.start is None and _phase(held.event) == "completed":
+                held.start = event
+            else:
+                return None
+            self._forget(held)
+            held.said = line_of(held.event, held.start) or line
+            self._reread(held)
+            if held.fold is not None:
+                self._refold(held.fold)
             return None
         block = Block(event.seq, event, line)
-        if native and event.data.get("phase") == "started":
+        if native and _phase(event) in ("started", "completed"):
             self._tools[native] = block
         if blank(event):
             self._learn(block, event.data["body"])
@@ -862,10 +870,32 @@ class Transcript(ScrollView, can_focus=True):
         fold.said = Said(who, NO_MARK, Content(""))
         self._forget(fold)
 
+    def _restate(self, folds: Iterable[Fold]) -> None:
+        """Draw again what says how each fold's turn stands, as the turn began or ended, a runtime came or went, or the
+        window's newest edge moved: its counts, and each of its calls with no end, with what that opens on."""
+        for fold in folds:
+            self._forget(fold)
+            for step in fold.steps:
+                if _called(step) and _phase(step.event) == "started":
+                    self._forget(step)
+                    self._reread(step)
+
+    def _reread(self, block: Block) -> None:
+        """Read again what a line opens on, as what it says changed: at once where it is open, or when it next opens."""
+        if block.open:
+            self.run_worker(self._read_body(block), exclusive=False)
+        else:
+            block.text = None
+
     def _under_way(self, fold: Fold) -> bool:
         """Whether a fold's turn is under way: a runtime holds the session, and the window holds its newest lines and
         not the turn's end."""
         return self.live and self._after is None and fold.turn not in self._ended
+
+    def _more_after(self, fold: Fold) -> bool:
+        """Whether a fold's turn may go on past the window's newest line: the window let the newest lines go, and holds
+        no end of the turn."""
+        return self._after is not None and fold.turn not in self._ended
 
     def _latest(self, fold: Fold) -> Block | None:
         """The step a fold's turn took last, which shows while the turn is under way: its newest call, patch or thought,
@@ -887,9 +917,10 @@ class Transcript(ScrollView, can_focus=True):
 
     def _counts(self, fold: Fold) -> Content:
         """What a fold holds, counted exactly: its calls, with how many failed, are running or ended unknown, its
-        thoughts, patches and spawns, and where the window does not hold its turn's start, that more came before."""
+        thoughts, patches and spawns, and where the window does not hold its turn's start, that more came before, and
+        where it holds neither the turn's end nor the newest lines, that more comes after."""
         calls = failed = running = unknown = thoughts = patches = spawns = 0
-        under_way = self._under_way(fold)
+        under_way, after = self._under_way(fold), self._more_after(fold)
         for step in fold.steps:
             data = step.event.data if isinstance(step.event.data, dict) else {}
             if not _counted(step):
@@ -904,7 +935,7 @@ class Transcript(ScrollView, can_focus=True):
             patches += data.get("kind") == "patch"
             if data.get("phase") == "started":
                 running += under_way
-                unknown += not under_way
+                unknown += not under_way and not after
             elif data.get("outcome") not in _DONE:
                 failed += 1
         parts: list[Content] = []
@@ -924,6 +955,8 @@ class Transcript(ScrollView, can_focus=True):
             parts.append(Content(_some(spawns, "spawn")))
         if fold.turn not in self._began and self._before:
             parts.append(Content.styled("more before, not read yet", "$warning"))
+        if after:
+            parts.append(Content.styled("more after, not read yet", "$warning"))
         return Content.styled(" · ", "dim").join(parts).stylize_before("dim")
 
     def _learn(self, block: Block, ref: str) -> None:
@@ -1206,6 +1239,7 @@ class Transcript(ScrollView, can_focus=True):
         self._blocks += newer
         self._after = page.cursor if page.cursor < self.through else None
         if self._after is None:  # Each fold's turn under way is now known as the window holds its newest lines.
+            self._restate(self._folds.values())
             self._relayout()
         else:
             self._draw(newer)
@@ -1249,14 +1283,16 @@ class Transcript(ScrollView, can_focus=True):
         return not isinstance(block, Fold) and not _did(block) and not block.said.rule
 
     def _shown_words(self, block: Block) -> Content:
-        """A line's words as drawn: a fold's counts, and a call with no end, said running while its turn is under way
-        and ended unknown once it is not."""
+        """A line's words as drawn: a fold's counts, and a call with no end, said running while its turn is under way,
+        its end not read yet where its turn may go on past the window, and ended unknown once neither is so."""
         if isinstance(block, Fold):
             return self._counts(block)
         data = block.event.data if isinstance(block.event.data, dict) else {}
         if _called(block) and data.get("phase") == "started" and block.fold is not None:
             if self._under_way(block.fold):
                 return Content.assemble(block.said.words, ("  running", "$accent"))
+            if self._more_after(block.fold):
+                return Content.assemble(block.said.words, ("  end not read yet", "$warning"))
             return Content.assemble(block.said.words, ("  ? ended unknown", "$warning"))
         return block.said.words
 
@@ -1365,16 +1401,20 @@ class Transcript(ScrollView, can_focus=True):
 
     async def _read_body(self, block: Block) -> None:
         """Read what a line opens on: its body, or a call's input and what it gave back, each said cut where it is, and
-        a body that cannot be read said so under its gist."""
+        a body that cannot be read said so under its gist. A call that takes its start or its end while it reads is read
+        again."""
+        event, began = block.event, block.start
         if _called(block):
-            start = block.start or (block.event if _phase(block.event) == "started" else None)
-            end = block.event if _phase(block.event) == "completed" else None
+            start = began or (event if _phase(event) == "started" else None)
+            end = event if _phase(event) == "completed" else None
             given = None if start is None else await self._read(start)
             back = None if end is None else await self._read(end)
+            if block.event is not event or block.start is not began:  # A read of its own follows.
+                return
             block.text = SafeText(self._call_text(block, start, end, given, back)).plain
         else:
-            read = await self._read(block.event)
-            block.text = SafeText(block.event.gist if read is None else read).plain
+            read = await self._read(event)
+            block.text = SafeText(event.gist if read is None else read).plain
         self._forget(block)
         if block in self._blocks:
             self._respan(block, block)
@@ -1406,6 +1446,8 @@ class Transcript(ScrollView, can_focus=True):
             back = end.gist if back is None else back
         elif block.fold is not None and self._under_way(block.fold):
             back = "(nothing yet: it is running)"
+        elif block.fold is not None and self._more_after(block.fold):
+            back = "(not read yet: any end of it lies past the window's newest line)"
         else:
             back = "(unknown: the window holds no end of this call)"
         return f"input\n{given}\n\noutput\n{back}"
@@ -1443,8 +1485,7 @@ class Transcript(ScrollView, can_focus=True):
         latest step."""
         if live != self.live:
             self.live = live
-            for fold in self._folds.values():
-                self._forget(fold)
+            self._restate(self._folds.values())
             self._relayout()
 
     def _place(self, y: float | None) -> None:
