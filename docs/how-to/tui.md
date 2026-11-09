@@ -184,13 +184,15 @@ An agent's transcript shows what it said, and folds the rest away, in levels you
    on its text, a message on its body as Markdown and code, an approval on what it asks, each with where it came from.
 
 Ended turns rest folded. While a runtime holds the session, a turn under way also shows its latest step under its line,
-`running` where it has no end yet, so you see what an agent is doing now; once the turn ends, it rests folded too. Nothing
-the record holds is out of reach: each line opens, and a fold never hides that something failed, waits on you or is
-unknown. An approval an agent asks for, a gap, a turn that ended other than finished, and a child that ended stand among
-what was said, and a fold says how many of its calls failed or ended unknown. A tool is named only where its harness
-reported it by a name and its input as JSON, as a model's call is reported; a command a harness ran, as Codex reports one,
-is its words whole, its first word no name. That ended turns rest folded, that a turn under way shows its latest step, and
-these keys, are the defaults pending the owner's ruling.
+`running` where it has no end yet, so you see what an agent is doing now; once the turn ends, it rests folded too.
+Nothing a fold holds is out of reach: each line opens, and a fold never hides that something failed, waits on you or is
+unknown. An approval an agent asks for, a gap, a turn that ended other than finished or stopped, and a child that ended
+stand among what was said, and a fold says how many of its calls failed or ended unknown. A turn's ordinary end,
+finished or stopped, draws no line, with steps or none, as the next turn's rule and the agent's state say it. A tool is
+named only where its harness reported it by a name and its input as JSON, as a model's call is reported; a command a
+harness ran, as Codex reports one, is its words whole, its first word no name. That ended turns rest folded, that a turn
+under way shows its latest step, that a turn's ordinary end draws no line, and these keys, are the defaults pending the
+owner's ruling.
 
 With the transcript in focus, Enter opens or closes the chosen line, Right opens it one level and, on a fold already open,
 goes into it, and Left or Esc closes it one level, or from a step goes out to its fold's line; Esc with nothing open there

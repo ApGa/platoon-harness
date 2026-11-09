@@ -804,9 +804,10 @@ FOLDED = [
 
 
 async def test_a_turn_shows_what_its_agent_said_and_folds_all_else_it_did_into_one_line_that_counts_it():
-    """What the lead said stands; its calls, its thought, its spawn and its turn's end are one line that counts them
-    exactly, the call that failed among them, which opens one level on each, a call by its name and its input in short,
-    a thought dim, and the spawn under its call, and a call opens on its whole input and what it gave back."""
+    """What the lead said stands; its calls, its thought and its spawn are one line that counts them exactly, the call
+    that failed among them, which opens one level on each, a call by its name and its input in short, a thought dim,
+    and the spawn under its call, and a call opens on its whole input and what it gave back. Its end, finished, is no
+    line."""
     app = Alone()
     async with app.run_test(size=(80, 30)):
         transcript = app.query_one(Transcript)
@@ -831,8 +832,6 @@ async def test_a_turn_shows_what_its_agent_said_and_folds_all_else_it_did_into_o
             "    ▸ agent_spawn  w",
             "      ↳ w spawned as worker",
             "  Fixed: the parser, and its tests pass.",
-            "",
-            "    ■ turn finished",
         ]
         assert whole[4:12] == [
             "    ▾ read  parser.py",
@@ -845,6 +844,26 @@ async def test_a_turn_shows_what_its_agent_said_and_folds_all_else_it_did_into_o
             "      def parse(text):",
         ]
         assert shown(transcript) == FOLDED and transcript.chosen is fold
+
+
+async def test_a_turn_that_finished_or_was_stopped_draws_no_line_for_its_end_and_one_that_failed_does():
+    """With steps or none, a turn's ordinary end says nothing the next turn's rule and the agent's state do not, and
+    a fold has nothing of it to hide; an end that is no ordinary one stands among what was said."""
+    turns = [
+        A_TURN[0],
+        did(2, "Done.", {"kind": "message"}),
+        event(3, "turn/lead", "turn.ended", "turn ended: finished", {"reason": "finished"}, turn="t1"),
+        event(4, "turn/lead", "turn.started", "turn t2 started", {"turn": "t2"}, turn="t2"),
+        event(5, "turn/lead", "turn.ended", "turn ended: stopped", {"reason": "stopped"}, turn="t2"),
+        event(6, "turn/lead", "turn.started", "turn t3 started", {"turn": "t3"}, turn="t3"),
+        event(7, "turn/lead", "turn.ended", "turn ended: failed", {"reason": "failed"}, turn="t3"),
+    ]
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(turns), 7)  # type: ignore[arg-type]
+
+        assert shown(transcript) == ["── turn", "@lead", "  Done.", "", "── turn", "", "── turn", "■ turn failed"]
 
 
 async def test_a_turn_under_way_shows_its_latest_step_and_rests_folded_once_it_ends():

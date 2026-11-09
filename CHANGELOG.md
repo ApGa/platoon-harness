@@ -59,16 +59,17 @@ named here is closed.
   session that is history never moves, and `motion = false` in `tui.toml` or Textual's animation level below full turns
   it off. It takes under 1% of a core at rest, measured.
 - **A calmer transcript, in levels.** A turn shows what its agent said, each message and its report whole, wrapped, and
-  all else it did is one quiet line that counts it, `▸ 5 tool calls · ✗ 1 failed · 3 thoughts · 1 spawn`, which opens
-  on each call by its tool's name and its input in short, each thought as one dim line and each spawn under its call, and
-  each of those on its whole: a call's input and what it gave back, a thought's text, a body. Enter or Right opens a line
-  one level, Left or Esc closes it, Ctrl+O or `/folds` opens or closes every fold, and a click on a `▸` or `▾` does as
-  Enter does. A turn under way shows its latest step, and a fold says what failed or ended unknown. An agent's lines stand
-  under one heading, a sender's under `@you → @lead`, with a blank row between speakers and turns, and Markdown reads as
-  it reads. What an agent says in a turn with a gist of whitespace alone is drawn as no line once its body is read and
-  blank too, as the page's chats leave it out. Before, each event was a line led by its speaker, a tool's by its raw name
-  and how it ended alone, a long line was cut at the edge, Markdown showed its marks, and a model's blank text before a
-  tool call was an empty line.
+  all else it did is one quiet line that counts it, `▸ 5 tool calls · ✗ 1 failed · 3 thoughts · 1 spawn`, which opens on
+  each call by its tool's name and its input in short, each thought as one dim line and each spawn under its call, and
+  each of those on its whole: a call's input and what it gave back, a thought's text, a body. Enter or Right opens a
+  line one level, Left or Esc closes it, Ctrl+O or `/folds` opens or closes every fold, and a click on a `▸` or `▾` does
+  as Enter does. A turn under way shows its latest step, a fold says what failed or ended unknown, and a turn that
+  finished draws no line for its end. An agent's lines stand under one heading, a sender's under `@you → @lead`, with a
+  blank row between speakers and turns, and Markdown reads as it reads. What an agent says in a turn with a gist of
+  whitespace alone is drawn as no line once its body is read and blank too, as the page's chats leave it out. Before,
+  each event was a line led by its speaker, a tool's by its raw name and how it ended alone, a long line was cut at the
+  edge, Markdown showed its marks, a model's blank text before a tool call was an empty line, and each finished turn
+  ended in a line saying so.
 - **Text selected with the mouse copied.** A drag selects text in the transcript, an open line's body, the inspector, the
   provenance panel and the lists, and Ctrl+C or `/copy` copies it as plain text, as OSC 52, with no border, glyph, rule
   or indent from the transcript or the navigator, and a wrapped line as one. Every mouse act has its keyboard twin: a

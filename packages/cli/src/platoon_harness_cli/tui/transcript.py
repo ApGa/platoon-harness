@@ -292,8 +292,10 @@ NO_MARK = Content("")
 
 
 def line_of(event: Event, started: Event | None = None) -> Said | None:
-    """An event as one line, or None for one a transcript leaves out. Any event has a line: its gist, at least, with
-    each ref it names a link. A tool call's end takes the input its start, `started`, shows."""
+    """An event as one line, or None for one a transcript leaves out: telemetry, what another line says already, and
+    a turn's ordinary end, finished or stopped, which the next turn's rule and the agent's state say. Any other event
+    has a line: its gist, at least, with each ref it names a link. A tool call's end takes the input its start,
+    `started`, shows."""
     data: dict[str, Any] = event.data if isinstance(event.data, dict) else {}
     agent = SafeText(f"@{event.agent}", "bold")
     match event.type:
@@ -312,8 +314,9 @@ def line_of(event: Event, started: Event | None = None) -> Said | None:
             return Said(None, Content(""), Content.styled("turn", "dim"), rule=True)
         case "turn.ended":
             reason = data.get("reason", "")
-            style = "dim" if reason == "finished" else "$warning"
-            return None if reason == "stopped" else Said(None, _mark("■", style), SafeText(f"turn {reason}", style))
+            if reason in ("finished", "stopped"):
+                return None
+            return Said(None, _mark("■", "$warning"), SafeText(f"turn {reason}", "$warning"))
         case "turn.lost":
             return Said(
                 None, _mark("■", "$error"), Content.styled("turn lost: the runtime went in the middle of it", "$error")
@@ -389,16 +392,14 @@ def blank(event: Event) -> bool:
 
 
 def _step(event: Event, children: set[str], agent: str | None) -> str | None:
-    """The turn whose fold an event is a step of, or None: a tool call, a patch or a thought of an agent's, a spawn of
-    a child of `agent`'s, or a turn's end that says it finished, each in the turn the record names."""
+    """The turn whose fold an event is a step of, or None: a tool call, a patch or a thought of an agent's, or a spawn
+    of a child of `agent`'s, each in the turn the record names."""
     data = event.data if isinstance(event.data, dict) else {}
     if event.turn is None:
         return None
     if event.type == "item.recorded" and data.get("kind") in _STEPS:
         return event.turn
     if event.type == "agent.spawned" and agent is not None and data.get("parent") == f"agent:{agent}":
-        return event.turn
-    if event.type == "turn.ended" and data.get("reason") == "finished":
         return event.turn
     return None
 
@@ -439,15 +440,15 @@ class Block:
 @dataclass(eq=False)
 class Fold(Block):
     """What an agent did in one turn besides what it said, as one line that counts it: its `steps`, the tool calls,
-    patches, thoughts and spawns of the turn the transcript holds, and the cuts and the end drawn among them, which are
-    drawn only while it is open."""
+    patches, thoughts and spawns of the turn the transcript holds, and the cuts drawn among them, which are drawn
+    only while it is open."""
 
     turn: str = ""
     steps: list[Block] = field(default_factory=list)
 
 
 def _counted(step: Block) -> bool:
-    """Whether a fold counts a step: a call, a patch, a thought or a spawn, and not a cut or a turn's end."""
+    """Whether a fold counts a step: a call, a patch, a thought or a spawn, and not a cut."""
     return step.event.type in ("item.recorded", "agent.spawned") and not step.said.rule
 
 
