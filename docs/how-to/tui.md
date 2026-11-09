@@ -104,14 +104,15 @@ read or written loses only badges, which is said once.
 ### How it looks
 
 The workspace is drawn in titled panels with thin rounded borders, the one that has focus heavy and in the accent, on a
-dark ink background with one accent colour, the logo's sky blue: the theme `platoon-ink`, which the owner chose. Warnings,
-`history` and what needs you are a muted amber in it, never a yellow, and each is told apart by its glyph and its words as
-well. `/theme`, or `t` on the sessions screen, chooses another of Textual's themes for this run, `ansi-dark` among them,
-which draws in your terminal's own colours, and it says the line that keeps it: `theme = "nord"` in `tui.toml`, in
-`$XDG_CONFIG_HOME/platoon-harness`, or `~/.config/platoon-harness` where that is not set, beside the user config a team
-loads. `tui.toml` takes two keys: `theme`, the name of a theme, and `motion`, which `false` turns off. A file that cannot
-be read, holds any other key, gives either as another kind of value, or names no theme there is, is not taken at all, and
-it says why.
+dark ink background with one accent colour, the logo's sky blue: the theme `platoon-ink`, which the owner chose.
+Warnings, `history` and what needs you are a muted amber in it, never a yellow, and each is told apart by its glyph and
+its words as well. `/theme`, or `t` on the sessions screen, chooses another of Textual's themes for this run,
+`ansi-dark` among them, which draws in your terminal's own colours, and it says the line that keeps it: `theme = "nord"`
+in `tui.toml`, in `$XDG_CONFIG_HOME/platoon-harness`, or `~/.config/platoon-harness` where that is not set, beside the
+user config a team loads. `tui.toml` takes two keys: `theme`, the name of a theme, and `motion`, which `false` turns
+off. A file that cannot be read, holds any other key, gives either as another kind of value, or names no theme there is,
+is not taken at all, and it says why, every problem at once, with the nearest key or theme to one misspelt, and what
+stands instead.
 
 Platoon's agents stand at the navigator's top, three marching up, and on the sessions screen beside the wordmark, three of
 one size, round-headed with big white eyes, the middle one a step ahead: sprites drawn by hand from the icon of

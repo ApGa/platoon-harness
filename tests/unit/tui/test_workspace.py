@@ -1588,12 +1588,24 @@ def test_tui_toml_is_kept_beside_the_user_config():
     ("said", "theme", "motion", "why"),
     [
         ('theme = "nord"\nmotion = false', "nord", False, None),
-        ('theme = "no-such"', "platoon-ink", True, "names the theme 'no-such', which is none of "),
-        ("theme = [", "platoon-ink", True, "was not read: "),
-        ("theme = 3", "platoon-ink", True, "gives theme as 3, which is not a theme's name"),
-        ("[theme]\nname = 'nord'", "platoon-ink", True, "gives theme as {'name': 'nord'}, which is not a theme's name"),
-        ('motion = "no"', "platoon-ink", True, "gives motion as 'no', which is not true or false"),
-        ('theme = "nord"\ncolour = "blue"', "platoon-ink", True, "holds 'colour', which it does not take: it takes"),
+        ('theme = "nrod"', "platoon-ink", True, "It names the theme 'nrod', which is none of "),
+        ("theme = [", "platoon-ink", True, "It was not read: "),
+        ("theme = 3", "platoon-ink", True, "It gives theme as 3, which is not a theme's name."),
+        (
+            "[theme]\nname = 'nord'",
+            "platoon-ink",
+            True,
+            "It gives theme as {'name': 'nord'}, which is not a theme's name.",
+        ),
+        ('motion = "no"', "platoon-ink", True, "It gives motion as 'no', which is not true or false."),
+        (
+            'thme = "nord"\ncolour = "blue"\nmotion = "no"',
+            "platoon-ink",
+            True,
+            "It holds `thme`, which it does not take: it takes `theme` and `motion`. Did you mean `theme`? It holds "
+            "`colour`, which it does not take: it takes `theme` and `motion`. It gives motion as 'no', which is not "
+            "true or false.",
+        ),
     ],
 )
 async def test_tui_toml_names_a_theme_and_turns_motion_off_and_is_refused_saying_why_where_it_holds_anything_else(
@@ -1601,20 +1613,35 @@ async def test_tui_toml_names_a_theme_and_turns_motion_off_and_is_refused_saying
 ):
     """`theme` names one of Textual's themes and `motion = false` stops the agents moving. A file that cannot be read,
     or holds a key it does not take, a value of another kind than its key's, or a theme there is none of, is not taken
-    at all, saying why, and the defaults stand."""
+    at all, saying so and every problem it has at once, with the nearest name to one misspelt, and the defaults
+    stand."""
     path = root / "tui.toml"
     path.write_text(said)
     monkeypatch.setattr(app_module, "settings", lambda environ=os.environ: path)
     app = TerminalUI("nothing")
     async with app.run_test(size=(80, 24)):
-        notices = [notice.message for notice in app._notifications]
+        refusals = [notice.message for notice in app._notifications if str(path) in notice.message]
 
+    head = f"{path} is not taken, so the theme is platoon-ink and the agents move. "
     assert (app.theme, app.motion) == (theme, motion)
-    refused = f"{path} {why}" if why else None
-    assert [said for said in notices if str(path) in said and "is not taken" in said] == (
-        [] if refused is None else [said for said in notices if said.startswith(refused)]
-    )
-    assert refused is None or any(said.startswith(refused) and said.endswith("the agents move") for said in notices)
+    assert len(refusals) == (why is not None) and all(said.startswith(head + str(why)) for said in refusals)
+    assert why is None or not why.startswith("It names") or refusals[0].endswith(" Did you mean `nord`?")
+
+
+async def test_a_refused_tui_toml_says_the_agents_stand_still_where_textual_s_animation_level_stops_them(
+    root, monkeypatch
+):
+    path = root / "tui.toml"
+    path.write_text("motion = 1")
+    monkeypatch.setattr(app_module, "settings", lambda environ=os.environ: path)
+    app = TerminalUI("nothing")
+    app.animation_level = "basic"
+    async with app.run_test(size=(80, 24)):
+        refusals = [notice.message for notice in app._notifications if str(path) in notice.message]
+
+    stands = "the agents stand still, as Textual's animation level is below full"
+    why = "It gives motion as 1, which is not true or false."
+    assert refusals == [f"{path} is not taken, so the theme is platoon-ink and {stands}. {why}"]
 
 
 async def test_theme_chooses_a_theme_for_the_run_saying_what_keeps_it(root, monkeypatch):

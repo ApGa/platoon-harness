@@ -11,6 +11,9 @@ from textual.screen import Screen
 from textual.theme import Theme
 from textual.widgets import Input, TextArea
 
+from platoon_harness.schema import nearest
+
+from . import motion
 from .dialogs import Help
 from .keymap import bindings
 from .safe import note
@@ -109,33 +112,41 @@ class TerminalUI(App[str | None], inherit_bindings=False):
         self._take_settings()
 
     def _take_settings(self) -> None:
-        """Take what `tui.toml` says, or keep the defaults, saying why: a file that cannot be read, holds a key it does
-        not take or a value of another kind than its key's, or names no theme there is, is not taken."""
+        """Take what `tui.toml` says, or keep the defaults, saying why, every problem at once: a file that cannot be
+        read, holds a key it does not take or a value of another kind than its key's, or names no theme there is, is
+        not taken."""
         path = settings()
         try:
             said = tomllib.loads(path.read_text())
         except FileNotFoundError:
             return
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
-            self._refuse(path, f"was not read: {error}")
+            self._refuse(path, [f"It was not read: {error}."])
             return
-        for key, value in said.items():
-            if key not in SETTINGS:
-                self._refuse(path, f"holds {key!r}, which it does not take: it takes {' and '.join(SETTINGS)}")
-                return
-            if not isinstance(value, SETTINGS[key]):
-                kind = "a theme's name" if key == "theme" else "true or false"
-                self._refuse(path, f"gives {key} as {value!r}, which is not {kind}")
-                return
-        if "theme" in said and said["theme"] not in self.available_themes:
-            known = ", ".join(sorted(self.available_themes))
-            self._refuse(path, f"names the theme {said['theme']!r}, which is none of {known}")
+        if problems := [problem for key, value in said.items() if (problem := self._problem(key, value))]:
+            self._refuse(path, problems)
             return
         self.theme = said.get("theme", self.theme)
         self.motion = said.get("motion", True)
 
-    def _refuse(self, path: Path, why: str) -> None:
-        said = f"{path} {why}, so it is not taken: the theme is {self.theme} and the agents move"
+    def _problem(self, key: str, value: object) -> str | None:
+        """What is wrong with one key of `tui.toml` or its value, naming the nearest key or theme where one is
+        misspelt, or None."""
+        if key not in SETTINGS:
+            takes = " and ".join(f"`{known}`" for known in SETTINGS)
+            return f"It holds `{key}`, which it does not take: it takes {takes}.{nearest(key, SETTINGS)}"
+        if not isinstance(value, SETTINGS[key]):
+            kind = "a theme's name" if key == "theme" else "true or false"
+            return f"It gives {key} as {value!r}, which is not {kind}."
+        if key == "theme" and value not in (themes := self.available_themes):
+            known = ", ".join(sorted(themes))
+            return f"It names the theme {value!r}, which is none of {known}.{nearest(str(value), themes)}"
+        return None
+
+    def _refuse(self, path: Path, problems: list[str]) -> None:
+        """Say that `tui.toml` is not taken, what stands in its place, and each of its problems."""
+        moves = "move" if motion.allowed(self) else "stand still, as Textual's animation level is below full"
+        said = f"{path} is not taken, so the theme is {self.theme} and the agents {moves}. {' '.join(problems)}"
         note(self.screen, said, severity="warning")
 
     def action_theme(self) -> None:

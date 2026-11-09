@@ -47,8 +47,9 @@ named here is closed.
   was a glyph beside its name alone, and nothing said an agent came to need you but the header's count.
 - **Themes in the terminal.** `/theme`, or `t` on the sessions screen, chooses one of Textual's themes for the run,
   `ansi-dark` among them for the terminal's own colours, and `theme = "nord"` in `~/.config/platoon-harness/tui.toml`
-  keeps one. `tui.toml` takes `theme` and `motion`, and one that holds anything else, or either as another kind of value,
-  is not taken, saying why. This reverses, at the owner's request, the default that themes wait.
+  keeps one. `tui.toml` takes `theme` and `motion`, and one that holds anything else, or either as another kind of
+  value, is not taken, saying every problem at once, with the nearest key or theme to one misspelt. This reverses, at
+  the owner's request, the default that themes wait.
 - **Platoon's agents in the terminal.** Sprites of the Platoon project's logo, its round-headed, big-eyed agents in their
   blue-to-green gradient, drawn by hand from its icon (MIT, Apurva Gandhi) in half blocks: three small ones marching up at
   the navigator's top, and on the sessions screen three of one size beside the wordmark, the middle one a step ahead,
