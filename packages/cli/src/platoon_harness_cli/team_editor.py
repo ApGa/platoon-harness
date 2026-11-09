@@ -84,11 +84,11 @@ type Keys = tuple[str, ...]
 @dataclass(frozen=True)
 class Harness:
     """A harness this machine has a driver for, `said` what `doctor` finds of it after its name, and `sandboxes` the
-    sandboxes its driver declares."""
+    sandboxes its driver declares, None where it could not say."""
 
     name: str
     said: str
-    sandboxes: tuple[str, ...]
+    sandboxes: tuple[str, ...] | None
 
 
 @dataclass(frozen=True)
@@ -207,11 +207,11 @@ def harnesses() -> tuple[Harness, ...]:
     )
 
 
-def _sandboxes(driver: Driver) -> tuple[str, ...]:
+def _sandboxes(driver: Driver) -> tuple[str, ...] | None:
     try:
         return tuple(sorted(driver.describe().capabilities.sandboxes))
     except DriverError:
-        return ()
+        return None
 
 
 def edits_of(given: Any) -> tuple[Edit, ...]:
@@ -698,10 +698,15 @@ def _tables(node: Any) -> Iterator[Any]:
 # Fields, made from the schema.
 
 
-def _sentences(model: Any, key: str) -> list[str]:
-    """The sentences of a docstring that name `key`, but the first, which its table says."""
+def _sentences(model: type[BaseModel], key: str) -> list[str]:
+    """The sentences of a model's docstring about `key`, the first of the model's keys each names, but the first
+    sentence, which its table says."""
     text = " ".join(inspect.cleandoc(model.__doc__ or "").split())
-    return [sentence for sentence in re.split(r"(?<=\.)\s+(?=[A-Z`])", text)[1:] if f"`{key}`" in sentence]
+    return [
+        sentence
+        for sentence in re.split(r"(?<=\.)\s+(?=[A-Z`])", text)[1:]
+        if [name for name in re.findall(r"`([^`]+)`", sentence) if name in model.model_fields][:1] == [key]
+    ]
 
 
 def _first(model: Any) -> str:
@@ -762,9 +767,11 @@ def _field(
         choices = [Choice(text, f"{text}, as the file has it"), *choices]
     needed = default is inspect.Parameter.empty
     more = " ".join(filter(None, ({"list": SEVERAL, "command": WORDS}.get(kind), TRUSTED if trust else None)))
-    typed = re.sub(r"\[(\w+)\]\(#\w+\)", r"\1", type_said(hint))  # The reference links a table to its section.
-    words = [*said, f"Type: {typed}.", "Needed." if needed else f"Default: {default_said(default)}.", more]
-    empty = "needed" if needed else f"left out: {default_said(default).strip('`')}"
+    typed = re.sub(r"\[(\w+)\]\(#\w+\)", "table", type_said(hint))  # The reference links a table to its section.
+    # A default of None is the key left out, which its words say the meaning of: never `none`, which reads as nothing.
+    stands = "left out" if default is None else default_said(default)
+    words = [*said, f"Type: {typed}.", "Needed." if needed else f"Default: {stands}.", more]
+    empty = "needed" if needed else "left out" if default is None else f"left out: {stands.strip('`')}"
     return Field(
         path, kind, " ".join(filter(None, words)), text, empty, tuple(choices), trust, fixed if not text else None
     )
@@ -811,6 +818,10 @@ HARNESS = (
 )
 MODEL = "No list of models is offered: no driver says which models its harness takes."
 PROFILE = "The auth profile whose variables its harness receives."
+NO_DRIVER = (
+    "Unknown here: its harness is none this machine has a driver for, which would say which sandboxes it declares. "
+    "Choose such a harness, or set one in the file."
+)
 
 
 def _harnessed(harnesses: Sequence[Harness]) -> dict[str, Any]:
@@ -830,11 +841,8 @@ def _role(name: str, role: Mapping[str, Any], data: Mapping[str, Any], harnesses
             more = _harnessed(harnesses)
         elif key == "model":
             more = {"said": [MODEL]}
-        elif key == "sandbox" and harness is not None:
-            declared = [Choice(sandbox, sandbox) for sandbox in harness.sandboxes]
-            why = None if declared else f"`{harness.name}` declares no sandbox, so none can be set."
-            said = [f"A sandbox `{harness.name}` declares."] if declared else []
-            more = {"said": said, "kind": "choice", "choices": declared, "fixed": why}
+        elif key == "sandbox":
+            more = _sandboxing(harness)
         elif key == "auth":
             why = None if profiles else "The file has no auth profile: add one under Auth profiles first."
             choices = [Choice(profile, profile) for profile in profiles]
@@ -844,6 +852,20 @@ def _role(name: str, role: Mapping[str, Any], data: Mapping[str, Any], harnesses
     return Group(name, path, _first(Role), tuple(fields), kept, removable=True)
 
 
+def _sandboxing(harness: Harness | None) -> dict[str, Any]:
+    """What a sandbox field says and takes: one of those its harness's driver declares, or none, saying why, where it
+    declares none, could not say, or there is no such driver."""
+    if harness is None:
+        return {"kind": "choice", "choices": [], "fixed": NO_DRIVER}
+    if harness.sandboxes is None:
+        why = f"Unknown here: `{harness.name}`'s driver could not say which sandboxes it declares. Set one in the file."
+        return {"kind": "choice", "choices": [], "fixed": why}
+    if not harness.sandboxes:
+        return {"kind": "choice", "choices": [], "fixed": f"`{harness.name}` declares no sandbox, so none can be set."}
+    choices = [Choice(sandbox, sandbox) for sandbox in harness.sandboxes]
+    return {"said": [f"A sandbox `{harness.name}` declares."], "kind": "choice", "choices": choices}
+
+
 def _adding_role(harnesses: Sequence[Harness]) -> Adding:
     first = _model_field(Role, "harness", ("harness",), {}, **_harnessed(harnesses))
     return Adding("Add a role", ("roles",), first=first)
@@ -851,11 +873,13 @@ def _adding_role(harnesses: Sequence[Harness]) -> Adding:
 
 SELECTING = either(f"`{selector}`" for selector in (*SELECTORS, "role:<name>", "group:<name>"))
 EDGES = "Whom agents of each role may reach, beside what a preset grants."
+PROGRAM = "program: left to the program that owns the session, which a script starts, so a start from here is refused"
 
 
 def _topology(data: Mapping[str, Any], roles: Sequence[str]) -> Section:
     topology = _table(data, "topology")
-    until = [Choice(value, value) for value in ("settled", "program", *(f"role:{role}" for role in roles))]
+    values = ("settled", "program", *(f"role:{role}" for role in roles))
+    until = [Choice(value, PROGRAM if value == "program" else value) for value in values]
     own = _model_field(Topology, "until", ("topology", "until"), topology, kind="choice", choices=until)
     groups = [Group("Topology", ("topology",), _first(Topology), (own,))]
     groups += [_preset(name, params) for name, params in topology.items() if _used_once(name, params)]

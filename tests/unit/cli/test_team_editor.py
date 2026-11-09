@@ -6,6 +6,7 @@ was read, never through a link, asking first of a value only trust may take."""
 import hashlib
 import os
 import tomllib
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -113,10 +114,31 @@ def test_a_role_s_fields_are_the_keys_a_person_sets_from_a_client_made_from_the_
         and approvals.empty == 'left out: "ask"'
     )
     assert shown["roles.lead.effort"].help.startswith("`effort` goes to the harness as it stands")
-    assert shown["roles.lead.count"].help.endswith("Type: integer, at least 0. Default: none.")
+    assert shown["roles.lead.count"].help.endswith("Type: integer, at least 0. Default: left out.")
     assert shown["roles.lead.may_spawn"].text == "worker"
     assert shown["roles.lead.may_spawn"].help.endswith("Separate several with commas.")
     assert shown["roles.worker.model"].text == "gpt-6"
+
+
+def test_a_field_s_words_are_the_sentences_about_its_key_and_a_key_left_out_is_never_said_to_be_none(here):
+    """A sentence of a model's docstring is about the first of the model's keys it names, so a role's `instructions`
+    takes nothing of what `preamble`'s says, nor a budget's limits of what `estimate`'s says. A key left out by default
+    says so, and what leaving it out means is in its words, never `none`, which reads as nothing. A table its type
+    allows is said to be a table."""
+    written(here)
+
+    shown = fields(drafted(here))
+    count = shown["roles.lead.count"]
+
+    assert shown["roles.lead.instructions"].help == "Type: string. Default: left out."
+    assert shown["budget.tokens"].help == "Type: integer, above 0. Default: left out."
+    assert shown["budget.estimate.usd"].help.startswith("`estimate` is what one turn is reserved in `tokens` or `usd`")
+    assert count.help == (
+        "`count` is how many start with the session: left out, one, or none if another role spawns this one. "
+        "Type: integer, at least 0. Default: left out."
+    )
+    assert count.empty == shown["roles.lead.stays"].empty == shown["budget.usd"].empty == "left out"
+    assert shown["roles.lead.harness"].help.endswith("Type: string or table. Needed.")
 
 
 def test_a_harness_is_chosen_from_the_drivers_this_machine_has_with_what_doctor_finds(here, tmp_path, monkeypatch):
@@ -158,14 +180,24 @@ def test_a_model_is_free_text_and_no_list_of_models_is_made_up(here):
     assert model.help.startswith("No list of models is offered: no driver says which models its harness takes.")
 
 
-def test_a_sandbox_is_one_its_harness_declares_and_fixed_saying_why_where_it_declares_none(here):
-    written(here)
+def test_a_sandbox_is_one_its_harness_declares_and_fixed_saying_why_where_none_is_known(here):
+    """None is known where its harness declares none, where its driver could not say, which is unknown and not none,
+    and where the role's harness is none this machine has a driver for."""
+    written(here, STARTER + '\n[roles.critic]\nharness = "nobody"\ncount = 0\n')
 
     shown = fields(drafted(here))
+    unsaid = fields(draft(here, (), (CLAUDE, replace(CODEX, sandboxes=None))))
 
     assert [choice.value for choice in shown["roles.worker.sandbox"].choices] == list(CODEX.sandboxes)
     assert shown["roles.worker.sandbox"].fixed is None
     assert shown["roles.lead.sandbox"].fixed == "`claude` declares no sandbox, so none can be set."
+    assert unsaid["roles.worker.sandbox"].fixed == (
+        "Unknown here: `codex`'s driver could not say which sandboxes it declares. Set one in the file."
+    )
+    assert shown["roles.critic.sandbox"].kind == "choice" and shown["roles.critic.sandbox"].fixed == (
+        "Unknown here: its harness is none this machine has a driver for, which would say which sandboxes it declares. "
+        "Choose such a harness, or set one in the file."
+    )
     assert drafted(here, setting("roles.lead.sandbox", "read-only")).blocked == (
         "Fix each change marked first: the editor could not make it."
     )
@@ -326,6 +358,17 @@ def test_a_change_taken_back_leaves_the_file_as_it_was(here):
     assert back.text == '[roles.lead]\nharness = "claude"\n' and back.diff == "" and back.unmade == ()
     assert back.blocked == "Nothing to save: the draft is the file as it stands."
     assert ended.text == '[roles.lead]\nharness = "claude"\nmodel = "sonnet"\n'
+
+
+def test_until_program_is_offered_saying_a_start_from_a_client_is_refused(here):
+    """A session left to its program is a script's to start, so the choice says so before a person saves it."""
+    written(here)
+
+    until = fields(drafted(here))["topology.until"]
+
+    assert [choice.value for choice in until.choices] == ["settled", "program", "role:lead", "role:worker"]
+    assert until.choices[1].said.startswith("program: left to the program that owns the session, which a script")
+    assert until.choices[1].said.endswith("so a start from here is refused")
 
 
 def test_every_problem_is_shown_at_its_field_or_else_its_table_or_else_at_the_top(here):

@@ -36,7 +36,10 @@ preset, a label or an auth profile under its section; Remove takes one away whol
   login, or why it is not here. A harness the file gives as a command or a `module:attr` shows as the file has it.
 - **Model** and **effort** are free text. No list of models is offered, as no driver says which models its harness takes,
   and whether a harness honors an effort is known when an agent starts: one that cannot honor it fails the spawn.
-- **Sandbox** is one its harness's driver declares, and none can be set where it declares none.
+- **Sandbox** is one its harness's driver declares. None can be set here, saying why, where it declares none, where its
+  driver could not say, or where the role's harness is none this machine has a driver for.
+- **Until** `program` leaves the session to the program that owns it, which a script starts: Start refuses such a team,
+  as the choice says.
 
 A change is checked once you leave its field, or press Enter: the editor loads the team as `run` would, your user config
 beneath it, and checks it as `platoon-harness team check` does. Each problem shows under the field it names, or the group

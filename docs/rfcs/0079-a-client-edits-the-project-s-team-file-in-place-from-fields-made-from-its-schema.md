@@ -55,11 +55,11 @@ Each field is one key of the project's team file, at the place the file has it, 
 | Roles, each `[roles.<name>]`, added by name and removed whole | `harness` | One of the drivers this machine has that names a harness, as `machine.harnesses()` finds them, each with what `doctor` says of it: its version, its login's kind and what its checks found, or why it is not here. A harness the file names that is no such driver, a command or a `module:attr`, is shown as the file has it and kept unless another is chosen |
 | | `model`, `effort` | Free text. No driver lists the models its harness takes, so none is offered; no driver declares whether it takes an effort, so the field is on every role, and a harness that cannot honor one fails the spawn, as the schema says |
 | | `approvals`, `workspace` | The literal's values |
-| | `sandbox` | One of the sandboxes its harness's driver declares, and none can be set, saying why, where it declares none |
+| | `sandbox` | One of the sandboxes its harness's driver declares. None can be set here, saying why, where it declares none, where its driver could not say, which is unknown and not none, or where the role's harness is none this machine has a driver for |
 | | `instructions` | Text of several lines |
 | | `auth` | One of the file's auth profiles |
 | | `count`, `stays`, `may_spawn` | A whole number, yes or no, and role names separated by commas |
-| Topology | `until` | `settled`, `program` or `role:<name>` of each role |
+| Topology | `until` | `settled`, `program` or `role:<name>` of each role, `program` saying that a start from a client is refused, as a session left to its program is a script's to start |
 | | A preset of the SDK's, `[topology.<preset>]`, used once, added from those not used and removed whole | Each of its arguments, from its signature |
 | | `[topology.channels.<name>]`, added with its kind and removed whole | Each key of its kind's model; the kind is chosen as it is added |
 | | `[topology.edges]` | Selectors for each role and `all` |
@@ -80,8 +80,9 @@ adding it again.
 `team_editor.py`, in the command line's package, makes each field from the `Team` schema: its kind from the type, as an op's
 form takes its kind from its argument's ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), `text`, `lines`,
 `command`, `list`, `integer`, `number`, `yes-no` or `choice`; a literal's values as its choices; and its words from the
-sentences of its model's docstring that name it, then its type and default in the words of
-[the reference](../reference/team-file.md), which the same functions write. A preset's fields come from its signature, as
+sentences of its model's docstring about it, those in which it is the first of the model's keys named, then its type and
+default in the words of [the reference](../reference/team-file.md), which the same functions write, but a default of none
+is said as left out, as what leaving a key out means is in its words. A preset's fields come from its signature, as
 the reference's do. A client draws the fields; it computes none of them.
 
 ```python
