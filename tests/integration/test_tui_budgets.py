@@ -1,10 +1,12 @@
 """The terminal UI's budgets, from section 7.9 of tui-expectations.md: event-loop lag at 100 agents with one live
 stream, an append at a large history, and resident memory. Short runs on a loaded shared host, so the numbers are
 printed and the bounds are the research's own. Opening and closing a line at a full window is held to the append's,
-and the motion of a live session at rest to a small share of a core, which is ours. And an attach to the journal of
-the Scale case, held to a budget twice what docs/reference/scale.md publishes."""
+every fold at once to the event loop's lag, and the motion of a live session at rest to a small share of a core, which
+is ours. And an attach to the journal of the Scale case, held to a budget twice what docs/reference/scale.md
+publishes."""
 
 import asyncio
+import gc
 import statistics
 import time
 from pathlib import Path
@@ -30,8 +32,6 @@ LAG = 0.050
 APPEND = 0.060
 IDLE = 0.02
 """The most of a core a live session at rest may take to move its agents: two percent, ours."""
-UNFOLD = 0.25
-"""The longest opening or closing every fold of a full window may take, as one act a person asks for: ours."""
 ATTACH = 0.86
 """The longest an attach may take to draw a session of 100,000 events, the roster and the first agent's transcript:
 twice the most docs/reference/scale.md says was measured."""
@@ -181,9 +181,11 @@ def turns(count: int) -> list[Event]:
 
 @pytest.mark.slow
 async def test_opening_and_closing_a_line_at_a_full_window_stays_in_budget():
-    """At a window of 10,000 lines of an agent's turns, each turn folded, opening and closing a fold, a step in it, and
-    every fold of the focus at once, each laid out and drawn: a fold or a line within the append's budget, as each lays
-    out its own lines alone, and every fold at once, which lays out the window, within a quarter of a second."""
+    """At a window of 10,000 lines of an agent's turns, each turn folded, opening and closing a fold, a thought in it,
+    and every fold of the focus at once, each laid out and drawn: a fold or a line within the append's budget, as each
+    lays out its own lines alone, and every fold at once, which lays out the window, within the event loop's lag budget,
+    as one act. Each kind is measured from a heap the collector has just swept, so none pays for the garbage of the one
+    before."""
     app = One()
     async with app.run_test(size=(120, 40)) as pilot:
         transcript = app.query_one(Transcript)
@@ -200,7 +202,8 @@ async def test_opening_and_closing_a_line_at_a_full_window_stays_in_budget():
                 transcript.render_line(y)
 
         toggles = []
-        for fold in [*folds[:: max(len(folds) // 50, 1)], folds[-1]]:
+        gc.collect()  # So the garbage of taking the window lands on none of what is measured.
+        for fold in [*folds[:: max(len(folds) // 250, 1)], folds[-1]]:
             for _ in range(2):
                 began = time.perf_counter()
                 transcript.toggle(fold)
@@ -208,12 +211,13 @@ async def test_opening_and_closing_a_line_at_a_full_window_stays_in_budget():
                 toggles.append(time.perf_counter() - began)
             began = time.perf_counter()
             transcript.toggle(fold)
-            transcript.toggle(fold.steps[1])
+            transcript.toggle(fold.steps[4])
             drawn()
             toggles.append(time.perf_counter() - began)
-            transcript.toggle(fold.steps[1])
+            transcript.toggle(fold.steps[4])
             transcript.toggle(fold)
         every = []
+        gc.collect()  # And the garbage of the toggles on none of every fold's.
         for _ in range(4):
             began = time.perf_counter()
             transcript.unfold()
@@ -228,7 +232,7 @@ async def test_opening_and_closing_a_line_at_a_full_window_stays_in_budget():
     )
     assert held == WINDOW
     assert p99(toggles) < APPEND
-    assert max(every) < UNFOLD
+    assert max(every) < LAG
 
 
 @pytest.mark.slow

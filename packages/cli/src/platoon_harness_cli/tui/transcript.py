@@ -1083,11 +1083,11 @@ class Transcript(ScrollView, can_focus=True):
         """The step a fold's line is drawn before: its first that is drawn where it stands."""
         return next((step for step in fold.steps if self._join.call_of(step) is None), None)
 
-    def _emitted(self, first: Block) -> set[Fold]:
-        """The folds whose line is drawn before `first`, as their first step drawn is."""
+    def _emitted(self, span: list[Block], first: Block) -> set[Fold]:
+        """The folds of the lines in `span` whose line is drawn before `first`, as their first step drawn is."""
         return {
             fold
-            for fold in self._folds.values()
+            for fold in {block.fold for block in span if block.fold is not None}
             if (step := self._first_drawn(fold)) is not None and step.first < first.first
         }
 
@@ -1101,13 +1101,13 @@ class Transcript(ScrollView, can_focus=True):
         held = set(span)
         region: set[Block] = {block for block in span if (call := self._join.call_of(block)) is None or call in held}
         region |= {spawn for block in span for spawn in self._join.spawns_of(block)}
-        emitted = self._emitted(first)
+        emitted = self._emitted(span, first)
         region |= {fold for fold in {block.fold for block in span if block.fold} if fold not in emitted}
-        after = set(self._blocks[end_at:]) | {block.fold for block in self._blocks[end_at:] if block.fold}
         indices = [index for index, (block, _) in enumerate(self._rows) if block in region]
         if indices:
             start, stop = indices[0], indices[-1] + 1
         else:
+            after = set(self._blocks[end_at:]) | {block.fold for block in self._blocks[end_at:] if block.fold}
             start = stop = next(
                 (index for index, (block, _) in enumerate(self._rows) if block in after), len(self._rows)
             )
