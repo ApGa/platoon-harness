@@ -15,11 +15,15 @@ import asyncio
 import contextlib
 import hashlib
 import json
+import logging
+import math
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Generator, Mapping, Sequence
@@ -31,7 +35,19 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from platoon_harness.annotations import ANNOTATIONS, Annotate, Annotation, Status
 from platoon_harness.config import Manifest
-from platoon_harness.kernel import Clock, Delta, Event, Kernel, Outcome, Page, Principal, Refused, first, is_held
+from platoon_harness.kernel import (
+    Clock,
+    Delta,
+    Event,
+    Kernel,
+    Outcome,
+    Page,
+    Principal,
+    Refusal,
+    Refused,
+    first,
+    is_held,
+)
 from platoon_harness.primitives import (
     BODY_REF,
     PRIMITIVES,
@@ -54,7 +70,16 @@ from platoon_harness.rpc import Closed
 from platoon_harness.runtime import GRACE, Authority, Runtime
 from platoon_harness.runtime.control import History, Link, Local, Remote
 from platoon_harness.runtime.opening import prepare
-from platoon_harness.runtime.paths import LOG, MANIFEST, MARKS, find_root, open_log, read_running, session_folder
+from platoon_harness.runtime.paths import (
+    LOG,
+    MANIFEST,
+    MARKS,
+    REPLAYS,
+    find_root,
+    open_log,
+    read_running,
+    session_folder,
+)
 from platoon_harness.schema import Duration, seconds
 from platoon_harness.team import Team
 
@@ -90,11 +115,17 @@ CREATE TABLE IF NOT EXISTS annotations(
 ) STRICT
 """
 _ANNOTATIONS_INDEX = "CREATE INDEX IF NOT EXISTS annotations_target ON annotations(target, id)"
+CHECKPOINTS = 8
+"""How many checkpoints of its views a replay keeps at most, evenly spaced through its record."""
+CHECKPOINT_EVENTS = 1024
+"""The fewest events between two of a replay's checkpoints, below which a copy folds as fast as it restores one."""
+
+log = logging.getLogger("platoon_harness")
 
 Reason = Literal["settled", "agent_failed", "budget_exhausted", "timed_out", "needs_human", "cancelled"]
 _EXPOSURE: TypeAdapter[Seen | NotSeen | Unknown] = TypeAdapter(Exposure)
 
-__all__ = ["Ending", "Reason", "Session"]
+__all__ = ["CHECKPOINTS", "CHECKPOINT_EVENTS", "Ending", "Reason", "Replay", "Session"]
 
 
 class Ending(BaseModel, frozen=True):
@@ -949,6 +980,199 @@ class Session:
         """What estimators said of one event, or of every one, oldest first, each with its producer and version and
         never summed. Nothing an agent can reach reads these."""
         return await asyncio.to_thread(_annotations_of, self.folder, target)
+
+
+class Replay:
+    """A read-only copy of a session, whose journal is the original's through `at`, each event as it was committed
+    there and folded as the session folded it, so `session` reads as the session read then: as the runtime reads, every
+    event and view, with every write refused. `seek` moves it either way: on from where it is, or from the nearest
+    checkpoint of its views at or below where it goes, which makes `session` a new one. It replays the record as it
+    stood when it opened, through `total`, so a live session's replay ends where the record did then. What estimators
+    said beside the journal is kept as it stood then too, each statement with the head and the time it was written.
+    Its copies live under the root, in `replays/`, never in the session's folder, and go when it closes."""
+
+    def __init__(self, name: str, root: str | Path | None) -> None:
+        self.name = name
+        self.folder = Path()
+        self.total = 0
+        self._root = root
+        self._session: Session | None = None
+        self._source: Kernel | None = None
+        self._copy: Kernel | None = None
+        self._left: tuple[Kernel, Path] | None = None
+        self._copies = 0
+        self._checkpoints: dict[int, Path] = {}
+        self._building: asyncio.Task[None] | None = None
+        self._seeking = asyncio.Lock()
+        self._opened = False
+
+    @classmethod
+    def open(cls, name: str, *, root: str | Path | None = None) -> Self:
+        """A replay of a session, at its start, to `await` or to use in `async with`. A root on a network filesystem is
+        refused, as a copy is a journal written here."""
+        return cls(name, root)
+
+    def __await__(self) -> Generator[Any, None, Self]:
+        return self._entered().__await__()
+
+    async def __aenter__(self) -> Self:
+        return await self._entered()
+
+    async def __aexit__(self, *_: object) -> None:
+        await self.close()
+
+    async def _entered(self) -> Self:
+        if self._opened:
+            return self
+        self._opened = True
+        root = find_root(self._root, writing=True)
+        original = session_folder(root, self.name)
+        if not (original / "journal.sqlite").exists():
+            raise Refused("unavailable", f"session {self.name} never opened, so it has no record to replay")
+        source = self._source = Kernel.open(original, read_only=True, extensions=PRIMITIVES)
+        self.total = source.head
+        (root / REPLAYS).mkdir(mode=0o700, exist_ok=True)
+        self.folder = Path(tempfile.mkdtemp(dir=root / REPLAYS, prefix=f"{self.name}-"))
+        try:
+            await asyncio.to_thread(_keep_annotations, original, self.folder)
+            (self.folder / MANIFEST).write_bytes((original / MANIFEST).read_bytes())
+            await self._make(0, 0)
+        except BaseException:
+            await self.close()
+            raise
+        self._building = asyncio.ensure_future(self._build())
+        return self
+
+    @property
+    def at(self) -> int:
+        """The playhead: the newest event the copy holds, or 0 before the first."""
+        return 0 if self._copy is None else self._copy.head
+
+    @property
+    def session(self) -> "Session":
+        """A guest of the copy as it stands, which every write refuses. A seek that starts a copy anew gives a new one,
+        and leaves the one before."""
+        if self._session is None:
+            raise Refused("unavailable", "this replay is not open: `await` it or use `async with`")
+        return self._session
+
+    async def seek(self, seq: int) -> None:
+        """Move the copy to the original's journal through `seq`, from 0 to `total`: on from where it is, unless a
+        checkpoint lies nearer below `seq`, from which a new copy starts, which `session` is then a guest of."""
+        if isinstance(seq, bool) or not isinstance(seq, int) or not 0 <= seq <= self.total:
+            raise Refused("invalid", f"a replay of {self.name} moves to an event from 0 to {self.total}")
+        async with self._seeking:
+            copy, source = self._copy, self._source
+            if copy is None or source is None:
+                raise Refused("unavailable", "this replay is not open: `await` it or use `async with`")
+            start = max((at for at in self._checkpoints if at <= seq), default=0)
+            if start <= self.at <= seq:
+                await copy.copy(source, through=seq)
+            else:
+                await self._make(start, seq)
+
+    async def _make(self, start: int, seq: int) -> None:
+        """Start a copy from the checkpoint at `start`, or from nothing at 0, and copy on to `seq`. The copy before
+        stays open until the next is made, so whoever still reads it as they move to this one reads what was there."""
+        source = self._source
+        assert source is not None
+        self._copies += 1
+        folder = self.folder / str(self._copies) / self.name
+        if start:
+            await asyncio.to_thread(shutil.copytree, self._checkpoints[start], folder)
+        else:
+            folder.mkdir(parents=True)
+        for name in (MANIFEST, ANNOTATIONS):
+            if (self.folder / name).exists():
+                os.link(self.folder / name, folder / name)
+        copy = Kernel.open(folder, extensions=PRIMITIVES)
+        try:
+            await copy.copy(source, through=seq)
+            session = await _replayed(folder, copy, self.name)
+        except BaseException:
+            copy.close()
+            shutil.rmtree(folder.parent, ignore_errors=True)
+            raise
+        self._retire()
+        if self._session is not None and self._copy is not None:
+            self._left = (self._copy, self._session.folder.parent)
+        self._session, self._copy = session, copy
+
+    def _retire(self) -> None:
+        """Close the copy before the one now being left, and take its folder back."""
+        if self._left is not None:
+            (copy, folder), self._left = self._left, None
+            copy.close()
+            shutil.rmtree(folder, ignore_errors=True)
+
+    async def _build(self) -> None:
+        """Make the checkpoints, a closed copy at each, evenly spaced through the record, on a copy of their own."""
+        source = self._source
+        assert source is not None
+        every = max(CHECKPOINT_EVENTS, math.ceil(self.total / CHECKPOINTS))
+        folder = self.folder / "building" / self.name
+        try:
+            for at in range(every, self.total, every):
+                copy = Kernel.open(folder, extensions=PRIMITIVES)
+                try:
+                    await copy.copy(source, through=at)
+                finally:
+                    copy.close()
+                kept = self.folder / "checkpoints" / str(at)
+                await asyncio.to_thread(shutil.copytree, folder, kept, ignore=shutil.ignore_patterns("lock", "*-shm"))
+                self._checkpoints[at] = kept
+        except Refused as refused:
+            log.warning("replay of %s keeps no more checkpoints: %s", self.name, refused)
+        finally:
+            await asyncio.to_thread(shutil.rmtree, folder.parent, True)
+
+    async def page(self, *, after: int = 0, limit: int = 512) -> Page:
+        """A page of the original's events past `after` and through `total`, wherever the copy stands, by which a
+        player times itself and finds where it goes."""
+        source = self._source
+        if source is None:
+            raise Refused("unavailable", "this replay is not open: `await` it or use `async with`")
+        page = await asyncio.to_thread(source.read, Kernel.runtime, after=min(after, self.total), limit=limit)
+        events = tuple(event for event in page.events if event.seq <= self.total)
+        return Page(events=events, cursor=min(page.cursor, self.total), head=self.total)
+
+    async def close(self) -> None:
+        """Stop making checkpoints, leave the copies and take back every folder of this replay's."""
+        if self._building is not None:
+            self._building.cancel()
+            await asyncio.gather(self._building, return_exceptions=True)
+        self._retire()
+        for kernel in (self._copy, self._source):
+            if kernel is not None:
+                kernel.close()
+        self._session = self._copy = self._source = None
+        if self.folder != Path():
+            await asyncio.to_thread(shutil.rmtree, self.folder, True)
+
+
+async def _replayed(folder: Path, copy: Kernel, name: str) -> "Session":
+    """A guest of a replay's copy: it reads as the runtime does, so every event and view through the playhead answers
+    from the copy's first event, and every write is refused, a mark and an annotation among them, as a view's."""
+    detail = f"this is a replay of session {name}, a read-only copy of its record, so nothing here acts on it"
+
+    async def enter(self: Session) -> None:
+        self.folder, self._view = folder, True
+        self._link = Local(copy, Kernel.runtime, denied=Refusal(code="unsupported", detail=detail))
+
+    return await Session(enter)
+
+
+def _keep_annotations(original: Path, folder: Path) -> None:
+    """Keep what estimators said of a session as it stands now, if they said anything, through SQLite's own backup,
+    which reads a file a writer holds whole."""
+    if not (original / ANNOTATIONS).exists():
+        return
+    uri = f"{(original / ANNOTATIONS).as_uri()}?mode=ro"
+    with (
+        contextlib.closing(sqlite3.connect(uri, uri=True, timeout=_CLIENT_SECONDS * 5)) as kept,
+        contextlib.closing(sqlite3.connect(folder / ANNOTATIONS)) as copy,
+    ):
+        kept.backup(copy)
 
 
 def _marks_of(folder: Path, person: str) -> dict[str, int]:

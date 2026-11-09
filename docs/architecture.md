@@ -142,8 +142,9 @@ Each law is a sentence, and each has a test of the same name.
                       its driver names as where its harness keeps a credential
 ```
 
-- **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. It holds `sessions/` and `conformance/`, what
-  `doctor --check` found of each harness (§9.3). If that is on a network filesystem,
+- **Root.** `$PLATOON_HARNESS_HOME`, else `$XDG_STATE_HOME/platoon-harness`. It holds `sessions/`, `conformance/`, what
+  `doctor --check` found of each harness (§9.3), and `replays/`, a folder for each replay open, of its copies of a
+  session's record, which it takes back as it closes (§12). If that is on a network filesystem,
   the default falls back to `/var/tmp/platoon-harness-$UID`, with a one-line notice and a `doctor` entry. An
   explicitly chosen root on a network filesystem is refused with exit 78. Only live writers are refused: a closed
   session is a portable artifact (§5.8). A root to write in must be this user's, and writable by nobody else, since a manifest in it
@@ -252,6 +253,7 @@ class Kernel:
     def read(self, principal, *, after=0, before=None, match=None, streams=None, limit=512) -> Page: ...  # never for agents
     async def follow(self, principal, *, after, match=None) -> AsyncIterator[Page]: ...
     def deltas(self, agent, *, after=None) -> AsyncIterator[Delta]: ...  # lossy live text; never journaled
+    async def copy(self, source, *, through) -> None: ...  # a replay's copy of another journal; it takes no command
     def close(self) -> None: ...
 ```
 
@@ -266,6 +268,12 @@ answers only a command its journal answered under the same key, as any retry is 
 no op reads, and a client draws by. Around these sit `authenticate(token)`, `put_body(bytes)`, `get_body(hash, limit=None)`,
 `erase_body(hash)`, `recover(*drift)`, `rebuild(view)`, `rebuild_all()`, `supervise()`, `head`, `changed(after)`,
 `push_delta(agent, text)`, `end_delta(agent, seq)`, `session_id`, `closed`, `failure`, `read_only` and `gauges()`, plus what a daemon reaches for: `runtime`, `clock` and `ops`.
+`copy(source, through=...)` makes a writer's journal a copy of `source`'s through a seq: it appends each event past its
+head as its source's row holds it, with the bodies it names, and folds it as a live fold would, so its views are the
+source's as they stood then, as law 1 promises. Its first copy writes `copy_of` in `meta`, and from then on a copy takes no
+command and runs no daemon, refusing `submit`, `put_body`, `recover` and `supervise` `unsupported`, goes on only from that
+source, refusing another's `conflict`, and only grows, so going back is a copy of its own
+([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md), a draft).
 `gauges()` is what the kernel has measured since it opened its journal for writing, the writer's depth, the commands in flight
 by principal, the writes refused `busy` and each write's ack latency, and what its process has used, as a `Gauges`; a read-only
 kernel measures nothing, so it has None (§16).

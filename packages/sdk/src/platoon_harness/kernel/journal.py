@@ -13,6 +13,7 @@ import sqlite3
 import sys
 import threading
 import time
+from collections.abc import Iterable
 from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import NamedTuple
@@ -111,9 +112,10 @@ _PLAIN_COLUMNS = (
     "seq", "stream", "version", "type", "v", "actor", "agent", "turn", "context_version", "episode", "topology_rev",
     "correlation", "wall_time", "gist",
 )  # fmt: skip
+_COLUMNS = len(_PLAIN_COLUMNS) + 6
 _INSERT = (
     f"INSERT INTO events ({', '.join(_PLAIN_COLUMNS)}, cause, based_on, native, model, data, outcome)"
-    f" VALUES ({', '.join('?' * (len(_PLAIN_COLUMNS) + 6))})"
+    f" VALUES ({', '.join('?' * _COLUMNS)})"
 )
 
 
@@ -340,6 +342,17 @@ def insert(db: sqlite3.Connection, event: Event, data: str) -> None:
             None if event.outcome is None else event.outcome.model_dump_json(),
         ),
     )
+
+
+def copy_of(db: sqlite3.Connection) -> str | None:
+    """The session id of the journal this one is a copy of, or None for a journal commands write."""
+    row = db.execute("SELECT value FROM meta WHERE key = 'copy_of'").fetchone()
+    return None if row is None else row[0]
+
+
+def append(db: sqlite3.Connection, rows: Iterable[sqlite3.Row]) -> None:
+    """Insert events as another journal's rows hold them, every column as it is."""
+    db.executemany(f"INSERT INTO events VALUES ({', '.join('?' * _COLUMNS)})", map(tuple, rows))
 
 
 def prior_outcome(db: sqlite3.Connection, actor: str, key: str) -> Outcome | None:

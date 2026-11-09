@@ -1,0 +1,174 @@
+"""A replay: a read-only copy of a session, whose journal is the original's through the playhead, which a seek moves
+either way, from a checkpoint of its views where one lies nearer."""
+
+import asyncio
+from pathlib import Path
+
+import pytest
+
+from platoon_harness import Refused, Replay, Session
+from platoon_harness import session as session_module
+from platoon_harness.testing import Say
+
+from .support import in_state, of_type, solo, until
+
+pytestmark = pytest.mark.timeout(60)
+
+CREDIT = {"kind": "credit", "producer": "even-split", "producer_version": "1", "scope": "local"}
+
+
+def files(folder: Path) -> dict[str, int]:
+    """Each file under a folder, by its path within it, with its size, but for what a reader of SQLite leaves."""
+    return {
+        str(path.relative_to(folder)): path.stat().st_size
+        for path in folder.rglob("*")
+        if path.is_file() and not path.name.endswith(("-shm", "-wal"))
+    }
+
+
+async def recorded(root: Path, *said: str) -> int:
+    """A closed session `s` under `root`, whose `bob` heard and answered each of `said`, and its head."""
+    async with Session.start(solo(*([Say(f"heard {words}")] for words in said)), name="s", root=root) as session:
+        await in_state(session, "bob", "idle")
+        for count, words in enumerate(said, 1):
+            await session.send("@bob", words)
+            await until(lambda: of_type(session, "turn.ended"), session, lambda ended, count=count: len(ended) == count)
+        return await session.head()
+
+
+async def test_a_replay_reads_as_the_session_read_at_its_playhead(tmp_path):
+    await recorded(tmp_path, "first", "second")
+    async with Replay.open("s", root=tmp_path) as replay:
+        spawned = next(event.seq for event in (await replay.page(limit=4096)).events if event.type == "agent.spawned")
+
+        assert replay.at == 0 and await replay.session.head() == 0
+        assert await replay.session.agents() == []
+        await replay.seek(spawned)
+        assert [row["agent"] for row in await replay.session.agents()] == ["bob"]
+        assert [event.seq async for event in replay.session.events()] == list(range(1, spawned + 1))
+        await replay.seek(replay.total)
+        said = [event.gist for event in await of_type(replay.session, "item.recorded")]
+        assert said == ["heard first", "heard second"]
+        assert (await replay.session.status())["state"] == "stopped"
+
+
+async def test_nothing_in_a_replay_acts_on_its_session_and_each_write_says_why(tmp_path):
+    head = await recorded(tmp_path, "first")
+    before = files(tmp_path / "sessions" / "s")
+    async with Replay.open("s", root=tmp_path) as replay:
+        await replay.seek(replay.total)
+        session = replay.session
+        refusal = (await session.submit("message.send", to="@bob", gist="again")).refusal
+
+        assert refusal is not None and refusal.code == "unsupported" and "replay of session s" in str(refusal.detail)
+        for write in (
+            session.put_body(b"a body"),
+            session.mark("inbox/bob", 1),
+            session.annotate("agent/bob@1", status="scored", value=1.0, head_seq=head, **CREDIT),
+        ):
+            with pytest.raises(Refused):
+                await write
+        assert await session.head() == replay.total
+
+    async with Session.attach("s", root=tmp_path) as history:
+        assert await history.head() == replay.total
+    assert files(tmp_path / "sessions" / "s") == before
+
+
+async def test_a_replay_s_copies_live_under_the_root_never_in_the_session_s_folder_and_go_when_it_closes(tmp_path):
+    await recorded(tmp_path, "first")
+    before = files(tmp_path / "sessions" / "s")
+    replay = await Replay.open("s", root=tmp_path)
+    try:
+        await replay.seek(replay.total)
+        assert replay.folder.parent == tmp_path / "replays"
+        assert replay.session.folder.is_relative_to(replay.folder)
+        assert files(tmp_path / "sessions" / "s") == before
+    finally:
+        await replay.close()
+
+    assert list((tmp_path / "replays").iterdir()) == []
+    assert files(tmp_path / "sessions" / "s") == before
+
+
+async def test_a_seek_goes_on_from_the_copy_or_starts_a_new_one_from_the_nearest_checkpoint(tmp_path, monkeypatch):
+    """With a checkpoint every 8 events, a seek forward goes on in the copy it has, and one back, or one forward past a
+    checkpoint nearer than the playhead, starts a copy anew from the nearest at or below where it goes, which a new
+    session is a guest of; each reads as a copy made from nothing to there would."""
+    monkeypatch.setattr(session_module, "CHECKPOINT_EVENTS", 8)
+    head = await recorded(tmp_path, "first", "second", "third")
+    async with Replay.open("s", root=tmp_path) as replay:
+        building = replay._building
+        assert building is not None
+        await building
+        checkpoints = sorted(replay._checkpoints)
+        assert checkpoints and all(at % checkpoints[0] == 0 for at in checkpoints) and checkpoints[-1] < head
+
+        first = replay.session
+        await replay.seek(checkpoints[0] - 1)
+        assert replay.session is first
+        await replay.seek(checkpoints[-1] + 1)
+        far = replay.session
+        assert far is not first
+        await replay.seek(checkpoints[-1] + 2)
+        assert replay.session is far
+        await replay.seek(3)
+        back = replay.session
+        assert back is not far and await back.head() == 3
+
+        for at in (checkpoints[0], checkpoints[-1] + 2, head):
+            await replay.seek(at)
+            async with Replay.open("s", root=tmp_path) as fresh:
+                await fresh.seek(at)
+                assert await replay.session.agents() == await fresh.session.agents()
+                assert await replay.session.status() == await fresh.session.status()
+                assert [event.seq async for event in replay.session.events()] == list(range(1, at + 1))
+
+
+async def test_a_replay_of_a_live_session_replays_its_record_up_to_its_opening_and_stays_read_only(tmp_path):
+    async with Session.start(solo([Say("on it")], [Say("again")]), name="s", root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        async with Replay.open("s", root=tmp_path) as replay:
+            total = replay.total
+            assert 0 < total <= await session.head()
+
+            await session.send("@bob", "go")
+            await until(lambda: of_type(session, "turn.ended"), session, lambda ended: len(ended) == 1)
+            await replay.seek(total)
+
+            assert replay.total == total and await replay.session.head() == total
+            with pytest.raises(Refused) as error:
+                await replay.seek(total + 1)
+            assert error.value.refusal.code == "invalid"
+            assert (await replay.session.submit("session.close")).refusal is not None
+        assert (await session.status())["state"] == "open"
+
+
+async def test_a_replay_keeps_what_estimators_said_as_it_stood_when_it_opened(tmp_path):
+    head = await recorded(tmp_path, "first")
+    async with Session.attach("s", root=tmp_path) as history:
+        said = await history.annotate("agent/bob@1", status="scored", value=0.5, head_seq=head, **CREDIT)
+    async with Replay.open("s", root=tmp_path) as replay:
+        async with Session.attach("s", root=tmp_path) as history:
+            later = {**CREDIT, "producer_version": "2"}
+            await history.annotate("agent/bob@1", status="scored", value=1.0, head_seq=head, **later)
+        await replay.seek(replay.total)
+
+        kept = await replay.session.annotations("agent/bob@1")
+        assert [(row.id, row.value, row.head_seq, row.wall_time) for row in kept] == [
+            (said.id, 0.5, head, said.wall_time)
+        ]
+
+
+async def test_a_replay_of_no_session_or_one_never_opened_is_refused(tmp_path):
+    with pytest.raises(Refused) as error:
+        await Replay.open("none", root=tmp_path)
+    assert error.value.refusal.code == "not_found"
+    assert not (tmp_path / "replays").exists() or list((tmp_path / "replays").iterdir()) == []
+
+
+async def test_seeks_at_once_are_taken_one_after_another(tmp_path):
+    await recorded(tmp_path, "first", "second")
+    async with Replay.open("s", root=tmp_path) as replay:
+        await asyncio.gather(replay.seek(replay.total), replay.seek(5), replay.seek(replay.total - 1))
+        assert replay.at == replay.total - 1 and await replay.session.head() == replay.total - 1

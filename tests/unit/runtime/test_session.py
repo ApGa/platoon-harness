@@ -165,6 +165,7 @@ def test_what_a_user_needs_is_at_the_top():
         "Ending",
         "JournalError",
         "Refused",
+        "Replay",
         "Role",
         "Session",
         "Team",

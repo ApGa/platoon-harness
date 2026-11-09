@@ -24,6 +24,8 @@ OWNER_TOKEN = "owner.token"
 VIEW_TOKEN = "view.token"
 LOG = "runtime.log"
 MARKS = "marks.sqlite"
+REPLAYS = "replays"
+"""Where under a root each replay keeps its copies of a session, in a folder of its own, gone once it closes."""
 CONFORMANCE = "conformance"
 TESTS = "tests"
 """Where in a session's folder each runtime test of a commit runs, in a folder named for its effect, gone once its
@@ -41,6 +43,7 @@ __all__ = [
     "MANIFEST",
     "MARKS",
     "OWNER_TOKEN",
+    "REPLAYS",
     "RUNNING",
     "TESTS",
     "VIEW_TOKEN",

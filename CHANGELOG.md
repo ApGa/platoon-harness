@@ -13,6 +13,12 @@ named here is closed.
 
 ### New features
 
+- **Replays in the SDK.** `Replay.open(name)` gives a read-only copy of a session through a playhead, under the root in
+  `replays/` and never in the session's folder, whose `session` reads as the session read then and refuses every write;
+  `seek` moves it either way, from the nearest of eight checkpoints of its views, so a seek on 10,000 events took under a
+  tenth of a second here, and `close` takes its copies back. A live session's replay replays its record up to its
+  opening. The kernel gains `Kernel.copy`, which makes a journal a copy of another's through a seq, each event as it was
+  committed there, and a copy takes no command and runs no daemon. This is RFC 0080, a draft.
 - **The project's team, edited in the terminal.** `e` on the sessions screen opens the project's `platoon-harness.toml`
   in a team editor drawn from the same module as the browser's, in the same words: a row for each key a person sets, by
   section, each problem under its field, and beside the fields, or below them under 100 columns, `team show`'s sentences

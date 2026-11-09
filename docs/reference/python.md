@@ -97,6 +97,10 @@ Imported from [`platoon_harness.kernel.Refused`](#platoon_harnesskernelrefused).
 
 Imported from [`platoon_harness.team.Role`](#platoon_harnessteamrole).
 
+### `platoon_harness.Replay`
+
+Imported from [`platoon_harness.session.Replay`](#platoon_harnesssessionreplay).
+
 ### `platoon_harness.Session`
 
 Imported from [`platoon_harness.session.Session`](#platoon_harnesssessionsession).
@@ -2429,6 +2433,17 @@ async def recover(self, *drift: str) -> Outcome: ...
 
 Begin a new incarnation: started effects become uncertain, a turn in flight is lost, policies apply.
 `drift` says what runs now that differs from what the session began under, which `runtime.started` keeps.
+
+**`copy`**
+
+```python
+async def copy(self, source: "Kernel", *, through: int) -> None: ...
+```
+
+Make this journal a copy of `source`'s through `through`: append its events past this head, each as it was
+committed there, with the bodies they name, and fold them, a page at a time. A copy takes no command and runs
+no daemon, so it stays a prefix of its source, and it goes on only from the journal it was first copied from.
+It only grows: a copy through an earlier seq is a copy of its own.
 
 **`rebuild`**
 
@@ -8041,6 +8056,14 @@ def read_running(folder: Path) -> Running | None: ...
 
 The runtime a folder names, which may be a dead one's until the next takes over.
 
+### `platoon_harness.runtime.paths.REPLAYS`
+
+```python
+REPLAYS = "replays"
+```
+
+Where under a root each replay keeps its copies of a session, in a folder of its own, gone once it closes.
+
 ### `platoon_harness.runtime.paths.Running`
 
 ```python
@@ -8470,6 +8493,92 @@ names the agents whose last look never finished, so what they last changed was n
 ```python
 Reason = Literal["settled", "agent_failed", "budget_exhausted", "timed_out", "needs_human", "cancelled"]
 ```
+
+### `platoon_harness.session.CHECKPOINT_EVENTS`
+
+```python
+CHECKPOINT_EVENTS = 1024
+```
+
+The fewest events between two of a replay's checkpoints, below which a copy folds as fast as it restores one.
+
+### `platoon_harness.session.CHECKPOINTS`
+
+```python
+CHECKPOINTS = 8
+```
+
+How many checkpoints of its views a replay keeps at most, evenly spaced through its record.
+
+### `platoon_harness.session.Replay`
+
+```python
+class Replay:
+    def __init__(self, name: str, root: str | Path | None) -> None: ...
+```
+
+A read-only copy of a session, whose journal is the original's through `at`, each event as it was committed
+there and folded as the session folded it, so `session` reads as the session read then: as the runtime reads, every
+event and view, with every write refused. `seek` moves it either way: on from where it is, or from the nearest
+checkpoint of its views at or below where it goes, which makes `session` a new one. It replays the record as it
+stood when it opened, through `total`, so a live session's replay ends where the record did then. What estimators
+said beside the journal is kept as it stood then too, each statement with the head and the time it was written.
+Its copies live under the root, in `replays/`, never in the session's folder, and go when it closes.
+
+**`open`**
+
+```python
+@classmethod
+def open(cls, name: str, *, root: str | Path | None = None) -> Self: ...
+```
+
+A replay of a session, at its start, to `await` or to use in `async with`. A root on a network filesystem is
+refused, as a copy is a journal written here.
+
+**`at`**
+
+```python
+@property
+def at(self) -> int: ...
+```
+
+The playhead: the newest event the copy holds, or 0 before the first.
+
+**`session`**
+
+```python
+@property
+def session(self) -> "Session": ...
+```
+
+A guest of the copy as it stands, which every write refuses. A seek that starts a copy anew gives a new one,
+and leaves the one before.
+
+**`seek`**
+
+```python
+async def seek(self, seq: int) -> None: ...
+```
+
+Move the copy to the original's journal through `seq`, from 0 to `total`: on from where it is, unless a
+checkpoint lies nearer below `seq`, from which a new copy starts, which `session` is then a guest of.
+
+**`page`**
+
+```python
+async def page(self, *, after: int = 0, limit: int = 512) -> Page: ...
+```
+
+A page of the original's events past `after` and through `total`, wherever the copy stands, by which a
+player times itself and finds where it goes.
+
+**`close`**
+
+```python
+async def close(self) -> None: ...
+```
+
+Stop making checkpoints, leave the copies and take back every folder of this replay's.
 
 ### `platoon_harness.session.Session`
 

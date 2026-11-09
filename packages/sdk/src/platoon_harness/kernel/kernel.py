@@ -6,11 +6,13 @@ import json
 import logging
 import os
 import queue
+import re
 import sqlite3
 from collections import defaultdict
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Collection, Generator, Iterable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any, Self
 
@@ -24,7 +26,9 @@ from .core import CORE, list_ops
 from .daemon import keep_running
 from .extension import Extension, Loaded, load
 from .journal import (
+    append,
     check_schema,
+    copy_of,
     decode,
     fingerprint,
     is_live,
@@ -70,6 +74,7 @@ _SEQ_LIMIT = 2**63
 _IDLE_READERS = 4
 _STREAMS_LIMIT = 256
 _STREAM_LENGTH = 512
+_BODY = re.compile(r"sha256:([0-9a-f]{64})")
 
 
 @dataclass(frozen=True)
@@ -157,9 +162,11 @@ class Kernel:
         if writing is None:
             with self._reading() as reader:
                 check_schema(reader)
+                self._copy_of = copy_of(reader)
         else:
             db, lock = writing
             check_schema(db)
+            self._copy_of = copy_of(db)
             self._prepare_views(db)
             self._pulse.head = last_seq(db)
             self._writer = Writer(db, lock, folder / "journal.sqlite", self._pulse, self._seal)
@@ -246,6 +253,12 @@ class Kernel:
             raise Refused("unsupported", "this kernel is read-only")
         return self._writer
 
+    def _commanding(self) -> Writer:
+        """The writer, for a command or a daemon, which a copy refuses: it holds its source's events alone."""
+        if self._copy_of is not None:
+            raise Refused("unsupported", f"this journal is a copy of session {self._copy_of}'s, which takes no command")
+        return self._writing()
+
     # Commands.
 
     async def submit(
@@ -273,7 +286,8 @@ class Kernel:
             command.check()
             if self._writer is None:
                 return self._answered_before(command)
-            return await self._writer.call(lambda db: self._execute(db, command), owner=principal.id)
+            writer = self._commanding()
+            return await writer.call(lambda db: self._execute(db, command), owner=principal.id)
         except Refused as refused:
             return command.refused(refused.refusal, None)
 
@@ -361,6 +375,63 @@ class Kernel:
         `drift` says what runs now that differs from what the session began under, which `runtime.started` keeps."""
         return await self.submit(self.runtime, "runtime.start", {"drift": drift})
 
+    async def copy(self, source: "Kernel", *, through: int) -> None:
+        """Make this journal a copy of `source`'s through `through`: append its events past this head, each as it was
+        committed there, with the bodies they name, and fold them, a page at a time. A copy takes no command and runs
+        no daemon, so it stays a prefix of its source, and it goes on only from the journal it was first copied from.
+        It only grows: a copy through an earlier seq is a copy of its own."""
+        writer = self._writing()
+        head, last = self.head, source.head
+        if source is self or not head <= through <= last:
+            raise Refused("invalid", f"this copy is at {head}, so it goes on to a seq of another journal up to {last}")
+        of = source.session_id
+        while head < through:
+            rows, found, blobs = await asyncio.to_thread(source._copied, head, through)
+            for sha256 in blobs:
+                await asyncio.to_thread(self._blobs.write, sha256, source._blobs.read(sha256))
+            await writer.call(partial(self._take, of=of, rows=rows, bodies=found), owner="runtime")
+            head = rows[-1]["seq"]
+
+    def _copied(self, after: int, through: int) -> tuple[list[sqlite3.Row], list[sqlite3.Row], list[str]]:
+        """A page of events past `after` through `through` as their rows hold them, the rows of the bodies they name,
+        and which of those keep their bytes in `blobs/`."""
+        with self._reading() as db:
+            rows = db.execute(
+                "SELECT * FROM events WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?", (after, through, _SCAN_LIMIT)
+            ).fetchall()
+            named = {
+                sha256 for row in rows for text in (row["data"], row["outcome"] or "") for sha256 in _BODY.findall(text)
+            }
+            found = db.execute(
+                "SELECT * FROM bodies WHERE sha256 IN (SELECT value FROM json_each(?))", (json.dumps(sorted(named)),)
+            ).fetchall()
+        return rows, found, [row["sha256"] for row in found if row["data"] is None]
+
+    def _take(self, db: sqlite3.Connection, *, of: str, rows: list[sqlite3.Row], bodies: list[sqlite3.Row]) -> None:
+        """Append a page of another journal's events and the bodies they name, and fold them, or refuse having written
+        none of it."""
+        found, head = copy_of(db), last_seq(db)
+        if found is None and head:
+            raise Refused("unsupported", "commands wrote this journal, so it is no copy of another")
+        if found not in (None, of):
+            raise Refused("conflict", f"this journal is a copy of session {found}'s, not of {of}'s")
+        if rows[0]["seq"] != head + 1:
+            raise Refused("conflict", f"this copy is at {head}, and the page begins at {rows[0]['seq']}")
+        db.execute("SAVEPOINT copy")
+        try:
+            if found is None:
+                db.execute("INSERT INTO meta VALUES ('copy_of', ?)", (of,))
+            append(db, rows)
+            db.executemany("INSERT OR IGNORE INTO bodies VALUES (?, ?, ?)", map(tuple, bodies))
+            for row in rows:
+                self._apply(decode(row, with_outcome=False))
+        except Exception as error:
+            db.execute("ROLLBACK TO copy")
+            raise Refused("unavailable", f"the copy cannot fold its source's events: {error!r}") from error
+        finally:
+            db.execute("RELEASE copy")
+        self._copy_of = of
+
     async def rebuild(self, view: type[View]) -> None:
         """Drop one view and refold it."""
         await self._writing().call(lambda db: refold(db, view), owner="runtime")
@@ -374,7 +445,7 @@ class Kernel:
 
     async def put_body(self, body: bytes) -> str:
         """Store a body and return its sha256, durable before this returns. An orphan is harmless."""
-        writer = self._writing()
+        writer = self._commanding()
         sha256 = hashlib.sha256(body).hexdigest()
         inline = body if len(body) <= BODY_LIMIT else None
         if inline is None:
@@ -603,7 +674,7 @@ class Kernel:
 
     async def supervise(self) -> None:
         """Run every daemon, one for one, until cancelled. Cancel this before `close`."""
-        self._writing()
+        self._commanding()
         await asyncio.gather(*(keep_running(daemon, self) for daemon in self._daemons))
 
     @property

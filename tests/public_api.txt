@@ -383,6 +383,7 @@ platoon_harness.runtime.paths.open_log
 platoon_harness.runtime.paths.OWNER_TOKEN
 platoon_harness.runtime.paths.read_conformance
 platoon_harness.runtime.paths.read_running
+platoon_harness.runtime.paths.REPLAYS
 platoon_harness.runtime.paths.Running
 platoon_harness.runtime.paths.RUNNING
 platoon_harness.runtime.paths.root_of
@@ -426,9 +427,17 @@ platoon_harness.schema.Problem
 platoon_harness.schema.problems_in
 platoon_harness.schema.seconds
 platoon_harness.schema.Sorted
+platoon_harness.Replay
 platoon_harness.Session
 platoon_harness.session.Ending
 platoon_harness.session.Reason
+platoon_harness.session.CHECKPOINT_EVENTS
+platoon_harness.session.CHECKPOINTS
+platoon_harness.session.Replay
+platoon_harness.session.Replay.close()
+platoon_harness.session.Replay.open(name,*,root)
+platoon_harness.session.Replay.page(*,after,limit)
+platoon_harness.session.Replay.seek(seq)
 platoon_harness.session.Session
 platoon_harness.session.Session.agents()
 platoon_harness.session.Session.annotate(target,*,kind,producer,producer_version,scope,status,head_seq,value,params,evidence)
