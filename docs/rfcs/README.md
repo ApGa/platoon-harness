@@ -94,6 +94,7 @@ amended or extended an RFC.
 | [0076](0076-holding-an-agent-is-agent-hold.md) | Holding an agent is `agent hold`, and a takeover drives its terminal | Accepted |
 | [0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) | A look waits only for looks of its own workspace | Draft |
 | [0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) | A span carries the labels of the work it was done for | Draft |
+| [0079](0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md) | A client edits the project's team file in place, from fields made from its schema | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.
