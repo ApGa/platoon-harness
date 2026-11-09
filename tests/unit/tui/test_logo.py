@@ -49,6 +49,6 @@ async def test_the_sessions_screen_s_logo_is_never_torn(tmp_path: Path, monkeypa
         brand = app.screen.query_one("#brand").region
 
     art = sprite(SMALL, TRUECOLOUR)
-    rows = text.splitlines()[brand.y + 1 : brand.y + 1 + len(art)]
+    rows = text.splitlines()[brand.y : brand.y + len(art)]
     assert [row[2 : 2 + art[0].cell_length] for row in rows] == [line.plain for line in art]
-    assert brand.height == len(art) + 2
+    assert brand.height == len(art) + 1
