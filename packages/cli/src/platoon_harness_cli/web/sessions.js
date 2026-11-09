@@ -2,14 +2,16 @@
 // said for a session token, which it keeps in this tab alone, lists every session under the root as the terminal's
 // sessions screen does, and opens, starts, resumes or stops one, going to a control link of the page `web` serves a
 // session on to open it. It asks once before a resume, which can spend money, and before a stop, in the terminal's words,
-// and asks what the server asks before a start. Whatever a session or the server says is put in as text, never as
-// markup.
+// and asks what the server asks before a start and a save. Its team editor draws the project's team as the server
+// makes its fields, from the team's schema, with each problem at its field. Whatever a session or the server says is put
+// in as text, never as markup.
 (function () {
   'use strict';
   const KEY = 'platoon-harness.sessions.token';
   const WAITING = 'Sent, and waiting for its answer.';
   const NO_LINK = 'Open the link `platoon-harness web` says on its terminal. It opens once, within ten minutes.';
   const UNLISTED = 'Start waits for the list, which says where a session starts and that starting can spend money.';
+  const CHECKING = 'Waiting for the check of your last change.';
   const $ = selector => document.querySelector(selector);
   let token = sessionStorage.getItem(KEY), found = null, busy = false;
 
@@ -148,17 +150,18 @@
     }
   }
 
-  // One act at a time: every act waits, saying so, until its answer comes, and a refusal is said with its reason.
-  async function act(route, body, saying) {
+  // One act at a time: every act waits, saying so, until its answer comes, and a refusal is said with its reason, where
+  // `tell` says it.
+  async function act(route, body, saying, tell = say) {
     busy = true;
     settle();
-    say(saying);
+    tell(saying);
     try {
       const p = await post(route, body);
-      if (p.refused) say(p.refused, true);
+      if (p.refused) tell(p.refused, true);
       return p.refused ? null : p;
     } catch (x) {
-      say(x.message, true);
+      tell(x.message, true);
       return null;
     } finally {
       busy = false;
@@ -184,9 +187,11 @@
     look();
   }
 
-  // A start asks what the server asks first, each once, and goes again with the answer: never without it.
+  // A start asks what the server asks first, each once, and goes again with the answer: never without it. From the
+  // project's team, the team editor's changes are saved first.
   async function start(form) {
     let args = {team: form.team.value.trim(), name: form.name.value.trim()};
+    if (!args.team && changes() && !await save()) return;
     for (;;) {
       const p = await act('/x/start', args, 'Starting the session.');
       if (!p) return look();
@@ -195,10 +200,285 @@
       args = {...args, ...p.ask.answer};
     }
   }
-  $('#start [data-act]').xWhy = () => found ? null : UNLISTED;
+  $('#start [data-act]').xWhy = () => {
+    if (!found) return UNLISTED;
+    if (T.edits.length && T.asked !== T.drawn) return CHECKING;
+    if (!changes()) return null;
+    if (!$('#start').team.value.trim()) return T.draft.blocked;
+    return `Team file names another file, and the team editor holds changes to ${T.draft.file} not yet saved: save `
+      + 'them, or leave Team file empty to start from them.';
+  };
+  $('#start').team.addEventListener('input', settle);
   $('#start').addEventListener('submit', e => {
     e.preventDefault();
     if (!cannot(e.target.querySelector('[data-act]'))) start(e.target);
+  });
+
+  // The team editor. A person's changes are edits the page keeps and sends whole with each check, so the server keeps no
+  // draft: a field's change, an entry added or removed, each asks for a check, of which only the newest answer is drawn.
+  // An add or a removal that could not be made is said once and dropped; a field keeps what was typed in it until it is
+  // changed again. Save writes what the diff shows, asking what the server asks first, and refused because the file
+  // changed since, the check that follows shows what it holds now with the changes on it.
+  const T = {open: false, draft: null, edits: [], asked: 0, drawn: 0};
+  const same = (a, b) => a.length === b.length && a.every((key, i) => key === b[i]);
+  const changes = () => !!(T.edits.length && T.draft && T.draft.diff);
+  const teamSay = (text, bad) => {
+    $('#team-said').textContent = text;
+    $('#team-said').classList.toggle('bad', !!bad);
+  };
+  let ids = 0;
+
+  function element(tag, text, kind) {
+    const el = document.createElement(tag);
+    if (text != null) el.textContent = text;
+    if (kind) el.className = kind;
+    return el;
+  }
+
+  // Words that name keys and values between backticks, as the reference writes them, each name drawn as code, as text.
+  function prose(tag, text, kind) {
+    const el = element(tag, null, kind);
+    el.append(...text.split('`').map((part, i) => i % 2 ? element('code', part) : part));
+    return el;
+  }
+
+  function problemList(problems) {
+    const list = element('ul', null, 'problems');
+    list.id = `t${++ids}`;
+    list.append(...problems.map(problem => prose('li', problem.said, problem.level)));
+    return list;
+  }
+
+  function control(field, value) {
+    let el;
+    if (field.kind === 'choice' || field.kind === 'yes-no') {
+      el = element('select');
+      const option = (key, said) => Object.assign(element('option', said), {value: key});
+      el.append(option('', field.empty), ...field.choices.map(choice => option(choice.value, choice.said)));
+    } else if (field.kind === 'lines') {
+      el = element('textarea');
+      el.rows = 4;
+    } else {
+      el = element('input');
+      el.placeholder = field.empty;
+      el.autocomplete = 'off';
+      if (field.kind === 'integer') el.inputMode = 'numeric';
+      if (field.kind === 'number') el.inputMode = 'decimal';
+    }
+    el.spellcheck = false;
+    el.value = value;
+    return el;
+  }
+
+  // A field: its key, what it holds, what it takes, and each problem at it, which are its accessible description. One
+  // that cannot be changed here says why first, and takes focus but no change. It shows what was typed in it last, until
+  // a save or a read takes that change, and what is typed goes as a change once focus leaves it or Enter is pressed, so
+  // a field drawn again as it is typed in, which keeps what was typed, loses none of it.
+  function fieldBox(field, label, changed) {
+    const box = element('div', null, 'field');
+    const typed = [...T.edits].reverse().find(edit => edit.set && same(edit.set, field.path));
+    const value = typed ? typed.to : field.text, el = control(field, value);
+    const help = prose('p', field.fixed ? `${field.fixed} ${field.help}` : field.help, 'help');
+    const problems = problemList(field.problems), name = element('label', label);
+    el.id = `t${++ids}`;
+    el.dataset.where = field.where;
+    name.htmlFor = el.id;
+    help.id = `${el.id}-help`;
+    el.setAttribute('aria-describedby', `${help.id} ${problems.id}`);
+    if (field.problems.some(problem => problem.level === 'error')) el.setAttribute('aria-invalid', 'true');
+    if (field.kind === 'lines') box.classList.add('wide');
+    if (field.fixed) {
+      disable(el, field.fixed);
+      if (el.tagName !== 'SELECT') el.readOnly = true;
+    }
+    let known = value;
+    const commit = () => {
+      const to = el.tagName === 'TEXTAREA' ? el.value : el.value.trim();
+      if (field.fixed) el.value = known;
+      else if (to !== known) changed(known = to);
+    };
+    if (el.tagName === 'SELECT') el.addEventListener('change', commit);
+    else el.addEventListener('focusout', commit);
+    if (el.tagName === 'INPUT') el.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); });
+    box.append(name, el, help, problems);
+    return box;
+  }
+
+  function actButton(label, act, run) {
+    const el = element('button', label);
+    el.type = 'button';
+    el.dataset.act = act;
+    el.addEventListener('click', run);
+    return el;
+  }
+
+  function groupBox(group) {
+    const box = element('fieldset'), legend = element('legend', group.title);
+    box.dataset.where = group.where;
+    box.append(legend);
+    if (group.about) box.append(prose('p', group.about, 'help'));
+    const fields = element('div', null, 'fields');
+    for (const field of group.fields) {
+      const label = field.path.slice(group.path.length).join('.');
+      fields.append(fieldBox(field, label, to => change({set: field.path, to})));
+    }
+    box.append(problemList(group.problems), fields);
+    if (group.kept) box.append(prose('p', group.kept, 'help'));
+    if (group.removable) {
+      box.append(element('div', null, 'acts'));
+      box.lastChild.append(actButton(`Remove ${group.title}`, 'remove', () => change({remove: group.path})));
+    }
+    return box;
+  }
+
+  // An entry to add: its name, typed or chosen, and the field it needs, given as it is added.
+  function addingBox(adding) {
+    const box = element('div', null, 'adding'), name = adding.names.length
+      ? control({kind: 'choice', empty: 'choose one', choices: adding.names.map(value => ({value, said: value}))}, '')
+      : control({kind: 'text', empty: 'a name'}, '');
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-label', adding.title);
+    name.id = `t${++ids}`;
+    const named = element('label', adding.names.length ? 'preset' : 'name');
+    named.htmlFor = name.id;
+    box.append(named, name);
+    let first = null;
+    if (adding.first) {
+      first = control(adding.first, '');
+      first.id = `t${++ids}`;
+      const help = prose('p', adding.first.help, 'help');
+      const label = element('label', adding.first.path.join('.') || 'values');
+      help.id = `${first.id}-help`;
+      first.setAttribute('aria-describedby', help.id);
+      label.htmlFor = first.id;
+      box.append(label, first, help);
+    }
+    box.append(element('div', null, 'acts'));
+    box.lastChild.append(actButton(adding.title, 'add', () => {
+      const to = first ? (first.tagName === 'TEXTAREA' ? first.value : first.value.trim()) : '';
+      change({add: [...adding.under, name.value.trim()], to});
+    }));
+    return box;
+  }
+
+  function sectionBox(section) {
+    const box = element('section'), heading = element('h3', section.title);
+    heading.id = `t${++ids}`;
+    box.setAttribute('aria-labelledby', heading.id);
+    box.append(heading, ...section.groups.map(groupBox), ...section.adding.map(addingBox));
+    return box;
+  }
+
+  function diffLines(diff) {
+    if (!diff) return [element('span', 'Nothing: the draft is the file as it stands.')];
+    return diff.replace(/\n$/, '').split('\n').map(line => element('span', `${line}\n`,
+      /^\+(?!\+\+ )/.test(line) ? 'added' : /^-(?!-- )/.test(line) ? 'removed' : ''));
+  }
+
+  // Draw the newest answer, giving focus back to the field or act that had it, with what was typed in it.
+  function drawTeam() {
+    const had = document.activeElement, where = had && had.dataset && had.dataset.where;
+    const typed = where && 'value' in had ? [had.value, had.selectionStart, had.selectionEnd] : null;
+    const act = had && had.dataset && had.dataset.act, d = T.draft;
+    if (d) {
+      $('#editor-about').textContent = `${d.file}, in ${d.here}, which Start starts from when Team file is empty.`
+        + (changes() ? ' Your changes are not saved yet: Save saves them, and Start saves them first.' : '');
+      const top = element('div');
+      if (d.kept) top.append(prose('p', d.kept, 'help'));
+      top.append(problemList(d.problems));
+      $('#team-top').replaceChildren(top);
+      $('#team-form').replaceChildren(...d.sections.map(sectionBox));
+      $('#preview').textContent = d.shown
+        || 'Nothing yet: the loader takes no team from this draft, as its problems say.';
+      $('#diff').replaceChildren(...diffLines(d.diff));
+    }
+    settle();
+    const again = where ? $(`#team-form [data-where="${CSS.escape(where)}"]`)
+      : act ? $(`#editor [data-act="${act}"]`) : null;
+    if (again && !$('#editor').contains(had)) {
+      again.focus();
+      if (typed && again.value !== typed[0]) {
+        again.value = typed[0];
+        if (again.setSelectionRange && typed[1] != null) again.setSelectionRange(typed[1], typed[2]);
+      }
+    }
+  }
+
+  // Check the draft the edits make, `route` reading the file and this machine's harnesses again as well.
+  async function check(route = '/x/check') {
+    const n = ++T.asked, sent = T.edits.slice();
+    settle();
+    let d;
+    try {
+      d = await post(route, {edits: sent});
+    } catch (x) {
+      if (n === T.asked) {
+        T.drawn = n;
+        teamSay(x.message, true);
+        settle();
+      }
+      return;
+    }
+    if (n !== T.asked) return;
+    T.drawn = n;
+    if (d.refused) {
+      teamSay(d.refused, true);
+      settle();
+      return;
+    }
+    const unmade = new Set(d.unmade.map(i => sent[i]).filter(edit => !edit.set));
+    T.edits = T.edits.filter(edit => !unmade.has(edit));
+    T.draft = d;
+    drawTeam();
+  }
+
+  function change(edit) {
+    if (edit.set) T.edits = T.edits.filter(old => !(old.set && same(old.set, edit.set)));
+    T.edits.push(edit);
+    check();
+  }
+
+  async function save() {
+    const sent = T.edits.slice();
+    let args = {base: T.draft.base, edits: sent};
+    for (;;) {
+      const p = await act('/x/save', args, `Saving ${T.draft.file}.`, teamSay);
+      if (!p) {
+        await check();
+        return false;
+      }
+      if (p.said) {
+        T.edits = T.edits.filter(edit => !sent.includes(edit));
+        teamSay(p.said);
+        await check();
+        return true;
+      }
+      if (!await ask(p.ask.question, p.ask.yes)) {
+        teamSay('Nothing was saved.');
+        return false;
+      }
+      args = {...args, ...p.ask.answer};
+    }
+  }
+
+  $('#save').xWhy = () => !T.draft ? 'Edit reads the team first.' : T.asked !== T.drawn ? CHECKING : T.draft.blocked;
+  $('#save').addEventListener('click', () => { if (!cannot($('#save'))) save(); });
+  $('#reread').addEventListener('click', async () => {
+    if (cannot($('#reread'))) return;
+    const file = T.draft ? T.draft.file : 'the team file';
+    const question = `Read ${file} and this machine's harnesses again, dropping your changes?`;
+    if (T.edits.length && !await ask(question, 'Read again')) return;
+    T.edits = [];
+    teamSay('');
+    check('/x/team');
+  });
+  $('#edit').addEventListener('click', () => {
+    if (cannot($('#edit'))) return;
+    T.open = !T.open;
+    $('#editor').hidden = !T.open;
+    $('#edit').setAttribute('aria-expanded', String(T.open));
+    $('#edit').textContent = T.open ? 'Close' : 'Edit';
+    if (T.open && !T.draft && T.asked === T.drawn) check('/x/team');
   });
 
   $('#look').addEventListener('click', look);

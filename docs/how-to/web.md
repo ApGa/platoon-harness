@@ -2,14 +2,15 @@
 
 This guide shows how to watch a session from a browser and act on it there. `platoon-harness web SESSION` serves
 [SwarmChat](https://swarmchat.io)'s page over one session's journal, and `platoon-harness web` alone a page of your sessions,
-which opens, starts, resumes and stops each. A session's page is a client like any other: it reads what the journal holds,
+which opens, starts, resumes and stops each, and edits the project's team. A session's page is a client like any other: it reads what the journal holds,
 decides nothing, and computes no status, and what a person does there is an op, through the same path as the terminal's.
 The sessions page's acts are not ops of a session, and they are the terminal's sessions screen's: Start starts a session
 with no prompt on a runtime of its own, Resume is `session resume` and Stop is `session stop`. [tui.md](tui.md) is the
 terminal's guide and [cli.md](../reference/cli.md) the command line's reference.
 
-**Goal:** start, open, resume and stop your sessions from one page, read a session's chats as yourself or as one of its
-agents, answer what needs you and act on the session as you, and give someone else a link that only reads.
+**Goal:** start, open, resume and stop your sessions from one page, set up the project's team there, read a session's chats
+as yourself or as one of its agents, answer what needs you and act on the session as you, and give someone else a link that
+only reads.
 
 **Prerequisites:**
 
@@ -85,6 +86,16 @@ below never comes into it. From another machine, forward its port as that last l
 says it when it opens one: the address the page went to opens once its forward is up, within the link's ten minutes. Ctrl+C
 or `SIGTERM` stops `web`, which ends every browser's session on every page it serves, and leaves every session as it was,
 those it started among them.
+
+### The project's team
+
+Edit, under The project's team, opens the team editor on `platoon-harness.toml` in the folder `web` runs in: a field for
+each key a person sets, its roles with their harness, model and effort among them, its topology, budget, labels, auth
+profiles and test command, each problem under its field as `team check` says it, what the team allows in `team show`'s
+sentences, and the diff a save makes. Save writes the file in place, keeping its comments and layout, over nothing changed
+since it was read and never through a link, asking once first where it writes what would run as you or a credential to
+pass on. Start, with Team file left empty, saves the editor's changes first. [Edit a team in the browser](edit-a-team.md)
+is its guide.
 
 ## Choose a link
 

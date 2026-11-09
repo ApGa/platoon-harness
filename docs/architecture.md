@@ -1835,7 +1835,11 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   and Start, Resume and Stop do what the sessions screen does, each asking first, once, what only the person may allow: the
   page asks before a resume, which can spend money, and a stop, and the server, which alone can tell, before a start whose
   team needs trust, naming each value as the team holds it, with trust carrying the digest of what was shown, or would run several
-  agents on one plan login. [web.md](how-to/web.md) is its guide, and
+  agents on one plan login. Its team editor draws the project's team file where `web` runs as the fields `team_editor.py`
+  makes from the team's schema, which the terminal's is to draw too, each problem the loader and `team check` find at its
+  field, `team show`'s sentences and the diff a save makes, and saves the file in place, asking once before it writes what
+  only trust may take ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md),
+  a draft). [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
   [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
   and [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md), a draft, its decisions.
@@ -2250,7 +2254,11 @@ the kernel refuses in any session: discovery says so of either before any import
 **Configuration** is pydantic, frozen, `extra="forbid"`, loaded from TOML with stdlib `tomllib`, or built in Python. Precedence, low to high: defaults, user
 config (`$XDG_CONFIG_HOME/platoon-harness/config.toml`), project config (`platoon-harness.toml`), team file, environment (`PLATOON_HARNESS_CONFIG`, TOML text),
 command line (TOML lines, such as `--set 'budget.usd = 5'`, and `--harness claude`, which is `roles.claude.harness = "claude"`). Mappings
-merge and lists replace. Every problem is reported at once, with did-you-mean.
+merge and lists replace. Every problem is reported at once, with did-you-mean. A client sets a team in the project file and
+keeps no layer of its own: the keys a person sets map one to one onto the schema, and are written into the file's own text by
+a format-preserving parser, which `tomllib` reads back, so a person's comments and layout survive and what is written means
+what was set ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md), a
+draft).
 The sanitized resolved form reloads alone, and is refused if it holds the value of a variable an auth profile names. The manifest records it with resolved
 component versions, and schema and protocol versions.
 

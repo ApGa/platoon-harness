@@ -108,8 +108,10 @@ async def web(
     session's page here, on a port of its own, and goes to a control link of it, and Start, Resume and Stop do what the
     terminal's sessions screen does, each first asking once what only you may allow: trusting what the team's files
     name to run as you, shown as written, several agents on one plan login, a resume, which can spend money, and a
-    stop. A session started or resumed there runs on a runtime of its own. Stopping `web` stops serving every page it
-    serves, and leaves every session as it was.
+    stop. A session started or resumed there runs on a runtime of its own. Its team editor reads the project's team,
+    `platoon-harness.toml` where `web` runs, as fields, checks each change as `team check` does, shows the diff a save
+    makes, and saves it in place, keeping its comments, after asking once before it writes what would run as you or a
+    credential to pass on. Stopping `web` stops serving every page it serves, and leaves every session as it was.
 
     It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS. On
     loopback it also says how to reach it from another machine: forward its port under the same number. A session on a

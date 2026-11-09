@@ -40,6 +40,31 @@ dialog { max-width: 560px; border-radius: 10px; border: 1px solid var(--line2); 
   color: inherit; padding: 16px 18px; }
 dialog::backdrop { background: rgb(0 0 0 / .35); }
 #question { margin: 0 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+h3 { font-size: 15px; margin: 24px 0 4px; }
+#editor .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 0 16px;
+  align-items: start; }
+#editor .field.wide { grid-column: 1 / -1; }
+#editor code { font-size: 12.5px; }
+#editor fieldset { min-width: 0; margin: 12px 0; padding: 8px 14px 14px; border: 1px solid var(--line2); border-radius: 10px; }
+#editor legend { font-weight: 600; padding: 0 4px; overflow-wrap: anywhere; }
+#editor .field { display: grid; gap: 4px; margin-top: 12px; }
+#editor .field label { margin: 0; overflow-wrap: anywhere; }
+#editor input, #editor select, #editor textarea { width: 100%; box-sizing: border-box; min-width: 0; font: inherit;
+  padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line2); background: var(--panel); color: inherit; }
+#editor textarea { resize: vertical; }
+#editor [aria-invalid="true"] { border-color: var(--bad); }
+#editor .help { color: var(--muted); font-size: 13px; margin: 0; overflow-wrap: anywhere; }
+#editor .problems { margin: 4px 0 0; padding: 0; list-style: none; font-size: 13.5px; }
+#editor .problems li { overflow-wrap: anywhere; white-space: pre-wrap; }
+#editor .problems .error { color: var(--bad); }
+#editor .adding { display: grid; gap: 4px; margin: 12px 0; padding: 10px 14px; border: 1px dashed var(--line2);
+  border-radius: 10px; }
+#editor pre { margin: 4px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--panel); font-size: 13px;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+#diff .added { color: var(--good); }
+#diff .removed { color: var(--bad); }
+#team-said { min-height: 1.5em; overflow-wrap: anywhere; white-space: pre-wrap; }
+#team-said.bad { color: var(--bad); }
 </style>
 </head>
 <body>
@@ -53,6 +78,25 @@ dialog::backdrop { background: rgb(0 0 0 / .35); }
   </table>
   <p id="none" hidden>No sessions yet.</p>
   <button id="look" type="button">Look again</button>
+  <h2 id="team-title">The project's team</h2>
+  <p class="about" id="editor-about">Edit reads the project's team file where <code>web</code> runs, and what
+    <code>doctor</code> finds of this machine's harnesses, as fields to change, check and save.</p>
+  <div class="acts">
+    <button type="button" id="edit" data-act="edit" aria-expanded="false" aria-controls="editor">Edit</button>
+  </div>
+  <section id="editor" aria-labelledby="team-title" hidden>
+    <div id="team-top"></div>
+    <div id="team-form"></div>
+    <h3>What it allows</h3>
+    <pre id="preview"></pre>
+    <h3>What saving changes</h3>
+    <pre id="diff"></pre>
+    <p id="team-said" role="status" aria-live="polite"></p>
+    <div class="acts">
+      <button type="button" id="save" data-act="save">Save</button>
+      <button type="button" id="reread" data-act="reread">Read again</button>
+    </div>
+  </section>
   <h2>Start a session</h2>
   <form id="start">
     <label>Team file <input name="team" autocomplete="off" spellcheck="false" aria-describedby="team-about"></label>

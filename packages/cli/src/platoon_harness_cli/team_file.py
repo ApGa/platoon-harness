@@ -192,7 +192,8 @@ command line, `load_team` in Python, and the project file, `{PROJECT_FILE}`, has
 [Architecture section 17](../architecture.md#17-extensions-and-configuration) says how the layers combine: the user's
 config, the project file, a team file, `{ENVIRONMENT_VARIABLE}` and each `--set` line.
 [Topologies](../how-to/topologies.md) has a worked team for each preset, and [Workspaces](../how-to/workspaces.md) what
-each `workspace` promises.
+each `workspace` promises. The sessions page of `platoon-harness web` edits the project file in place, keeping its
+comments, and [Edit a team in the browser](../how-to/edit-a-team.md) says which keys it sets.
 
 Each section is one model: where its tables go, what its docstring says, and a row for each key, with its type and its
 default, `required` where it has none. A table refuses a key its model does not declare.

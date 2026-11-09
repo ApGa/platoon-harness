@@ -1,8 +1,9 @@
 """The sessions page, which `platoon-harness web` serves with no session, on loopback alone: every session under the
 root and how each stands, and opening, starting, resuming or stopping one, as the terminal's sessions screen does on a
-terminal. What only the person may allow is asked first, once each: the page asks before a resume, which can spend
-money, and before a stop, and the server, which alone can tell, before a start whose team needs trust or runs several
-agents on one plan login.
+terminal, and the team editor, which reads, checks and saves the project's team where `web` runs. What only the person
+may allow is asked first, once each: the page asks before a resume, which can spend money, and before a stop, and the
+server, which alone can tell, before a start whose team needs trust or runs several agents on one plan login, and
+before a save that writes what would run as them or a credential to pass on.
 
 Its server mints one link, which the command says, and keeps credentials of its own, so no link of a session's page
 opens it and its token opens no session's page. A session opened from it is served in this process, on a port of its
@@ -12,8 +13,8 @@ own on the same host, as `web SESSION` serves one, and the page goes to a contro
 import asyncio
 import base64
 import hashlib
-import json
 import ssl
+from collections.abc import Sequence
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -26,16 +27,18 @@ from platoon_harness.kernel import Clock, SystemClock, is_held
 from platoon_harness.runtime.paths import find_root, listing, session_folder
 from platoon_harness.schema import Problem
 
+from .. import team_editor
 from ..exits import Usage
 from ..output import note, refused
 from ..sessions import ask_to_stop
+from ..team_editor import Asked, Draft, Edit, Field, Harness, Section
 from ..teams import Source
 from . import forward, loopback, serve
 from .credentials import Credentials
 from .page import Unpinned, load
 from .server import HEADERS, JSON_LIMIT, Request, Web, authorities_of, json_answer, params_of, refusal_answer
 
-ACTS = ("/x/sessions", "/x/open", "/x/start", "/x/resume", "/x/stop")
+ACTS = ("/x/sessions", "/x/open", "/x/start", "/x/resume", "/x/stop", "/x/team", "/x/check", "/x/save")
 """What the page asks of its server, each on the session token its link was spent for."""
 TRUST = "The team names what would run as you, or a credential to pass on, which needs your trust:"
 """What a start asks first of a team that needs trust, above each value that needs it."""
@@ -84,6 +87,7 @@ class Sessions(Server[Request]):
         self._host, self._tls = host, tls
         self._scheme = "https" if tls else "http"
         self._served: dict[str, Served] = {}
+        self._harnesses: tuple[Harness, ...] | None = None
 
     @property
     def authorities(self) -> tuple[str, ...]:
@@ -146,6 +150,12 @@ class Sessions(Server[Request]):
                 return json_answer(await self._resume(_name(params)))
             case "/x/stop":
                 return json_answer(await self._stop(_name(params)))
+            case "/x/team":
+                return json_answer(await self._team())
+            case "/x/check":
+                return json_answer(await self._check(_edits(params)))
+            case "/x/save":
+                return json_answer(await self._save(params))
         return json_answer(await self._open(_name(params)))
 
     # The page's reads and acts.
@@ -214,6 +224,40 @@ class Sessions(Server[Request]):
         await session.leave()
         return await self._open(session.name)
 
+    async def _team(self) -> dict[str, Any]:
+        """Read the project's team where `web` runs, and what `doctor` finds of this machine's harnesses, which each
+        check after keeps, as the team editor opens or reads them again."""
+        self._harnesses = await asyncio.to_thread(team_editor.harnesses)
+        return await self._check(())
+
+    async def _check(self, edits: Sequence[Edit]) -> dict[str, Any]:
+        """The project's team with a person's edits, written as its file would be and checked as `team check` checks
+        it, or refused, saying why, where the file is one the editor leaves to the file."""
+        if self._harnesses is None:
+            self._harnesses = await asyncio.to_thread(team_editor.harnesses)
+        try:
+            found = await asyncio.to_thread(team_editor.draft, Path.cwd(), edits, self._harnesses)
+        except ConfigError as error:
+            return {"refused": _problems(error)}
+        return _drawn(found)
+
+    async def _save(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Save the project's team with a person's edits, over the file `base` is the digest of, as it was read, or
+        over nothing where it is null. First ask, once, where it writes what would run as the person or a credential to
+        pass on, which `trust`, the digest of what was shown, answers; or refuse, saying why."""
+        base, trust, edits = params.get("base"), params.get("trust"), _edits(params)
+        if not isinstance(base, str | None) or not isinstance(trust, str | None):
+            raise Rejected(400, why="a save names the file as it was read and trust in what was shown, each as text")
+        if self._harnesses is None:
+            self._harnesses = await asyncio.to_thread(team_editor.harnesses)
+        try:
+            saved = await asyncio.to_thread(team_editor.save, Path.cwd(), base, edits, self._harnesses, trust)
+        except ConfigError as error:
+            return {"refused": _problems(error)}
+        if isinstance(saved, Asked):
+            return {"ask": {"question": saved.question, "yes": saved.yes, "answer": {"trust": saved.trust}}}
+        return {"said": f"Saved {PROJECT_FILE} in {Path.cwd()}."}
+
     async def _resume(self, name: str) -> dict[str, Any]:
         """Resume a session no runtime holds, on a runtime of its own, and open it, the page having said first, once,
         that its harnesses come back, which can spend money; or refuse, saying why."""
@@ -267,23 +311,85 @@ def _name(params: dict[str, Any]) -> str:
     return name
 
 
+def _edits(params: dict[str, Any]) -> tuple[Edit, ...]:
+    try:
+        return team_editor.edits_of(params.get("edits", []))
+    except ValueError as error:
+        raise Rejected(400, why=str(error)) from None
+
+
 def _problems(error: ConfigError) -> str:
     return "\n".join(map(str, error.problems))
 
 
 def _trusting(needing: tuple[Problem, ...], team: Team) -> str:
     """What trusting a team asks: each value its files give that would run code as the person or pass on a credential,
-    `needing`, by its place and as the team that runs holds it, defaults filled in, in JSON that escapes all but
-    ASCII."""
-    data = team.model_dump(mode="json")
-    lines = []
-    for problem in needing:
-        value: Any = data
-        for key in problem.where.split("."):
-            value = value.get(key) if isinstance(value, dict) else None
-        lines.append(f"{problem.where} = {json.dumps(value)}" if value is not None else str(problem))
-    named = "\n".join(lines)
+    `needing`, as the team that runs holds it."""
+    named = "\n".join(team_editor.trusted(needing, team))
     return f"{TRUST}\n{named}\nTrust it, as shown here, and start?"
+
+
+def _drawn(found: Draft) -> dict[str, Any]:
+    """A draft as the page draws it, in the editor's own words, each problem as `team check` says it, and each field
+    with its place as a path of keys and as a problem names it."""
+    return {
+        "file": PROJECT_FILE,
+        "here": str(Path.cwd()),
+        "base": found.base,
+        "sections": [_section(section) for section in found.sections],
+        "kept": team_editor.keeping(found.kept),
+        "problems": _said(found.problems),
+        "shown": found.shown,
+        "diff": found.diff,
+        "blocked": found.blocked,
+        "unmade": list(found.unmade),
+    }
+
+
+def _section(section: Section) -> dict[str, Any]:
+    groups = [
+        {
+            "title": group.title,
+            "path": list(group.path),
+            "where": group.where,
+            "about": group.about,
+            "fields": [_field(field) for field in group.fields],
+            "kept": team_editor.keeping(group.kept),
+            "removable": group.removable,
+            "problems": _said(group.problems),
+        }
+        for group in section.groups
+    ]
+    adding = [
+        {
+            "title": adding.title,
+            "under": list(adding.under),
+            "names": list(adding.names),
+            "first": None if adding.first is None else _field(adding.first),
+        }
+        for adding in section.adding
+    ]
+    return {"title": section.title, "groups": groups, "adding": adding}
+
+
+def _field(field: Field) -> dict[str, Any]:
+    return {
+        "path": list(field.path),
+        "where": field.where,
+        "kind": field.kind,
+        "help": field.help,
+        "text": field.text,
+        "empty": field.empty,
+        "choices": [{"value": choice.value, "said": choice.said} for choice in field.choices],
+        "trust": field.trust,
+        "fixed": field.fixed,
+        "problems": _said(field.problems),
+    }
+
+
+def _said(problems: Sequence[Problem]) -> list[dict[str, str]]:
+    """Problems as `team check` says each, with its level apart."""
+    return [{"level": problem.level, "said": f"{problem.level}: {problem}"} for problem in problems]
 
 
 def _why(task: asyncio.Task[None]) -> str:

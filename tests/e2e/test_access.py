@@ -19,7 +19,7 @@ from platoon_harness_cli.web.server import Web
 from ..unit.runtime.gitting import repository
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.web.support import QUIET, caught_up, team
-from .support import SECONDS, chat, opened, said, serving, watched
+from .support import PHONE, REACHED, SECONDS, chat, opened, said, serving, watched
 
 pytestmark = [pytest.mark.e2e, pytest.mark.timeout(120)]
 
@@ -197,29 +197,7 @@ async def test_no_disabled_control_lacks_a_reason_a_screen_reader_reads(browser:
     assert [place for place, count in held.items() if not count] == []
 
 
-PHONE = {"width": 390, "height": 844}
-"""A phone's screen held upright, in CSS pixels, as an iPhone 12, 13 or 14 gives it."""
 WIDE = {"width": 1280, "height": 800}
-REACHED = """() => {
-    const screen = document.documentElement, shown = el => el.checkVisibility({visibilityProperty: true});
-    const pointed = el => getComputedStyle(el).cursor === 'pointer'
-        && !(el.parentElement && getComputedStyle(el.parentElement).cursor === 'pointer');
-    const controls = 'button, a[href], input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
-    const shows = document.querySelector('#overlay.on') || document.body;
-    const acts = [...shows.querySelectorAll('*')].filter(el => shown(el) && (el.matches(controls) || pointed(el)));
-    const missed = [];
-    for (const act of acts) {
-        act.closest('.msg')?.focus({preventScroll: true});
-        act.scrollIntoView({block: 'nearest', inline: 'nearest'});
-        const r = act.getBoundingClientRect(), x = r.left + r.width / 2;
-        const hit = document.elementFromPoint(x, r.top + Math.min(r.height, screen.clientHeight) / 2);
-        if (r.left < 0 || r.right > screen.clientWidth + 0.5 || !act.contains(hit)) missed.push(act.outerHTML);
-    }
-    return {acts: acts.length, missed, wider: screen.scrollWidth - screen.clientWidth};
-}"""
-"""Every act shown, a control or what the pointer presses, each scrolled into view, its message given focus first as a
-press gives it: the count, each that lies past the screen's sides or under something else, and how much wider than
-the screen the page scrolls."""
 PANES = {
     "who reached whom": ("#layout=chat&interactions=1", "#pane .x-provenance button"),
     "tool activity": ("#person=lead&tools=lead", "#pane .x-provenance button"),

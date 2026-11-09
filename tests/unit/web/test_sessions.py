@@ -1,6 +1,6 @@
 """The sessions page's server, which `web` with no session serves: its one link and its own credentials, the list,
-opening a session on a port of its own, and starting, resuming and stopping one, each asking first what only the
-person may allow, over sessions the test owns or starts, on a real socket."""
+opening a session on a port of its own, starting, resuming and stopping one, each asking first what only the person may
+allow, and reading, checking and saving the project's team, over sessions the test owns or starts, on a real socket."""
 
 import asyncio
 import base64
@@ -17,6 +17,8 @@ from platoon_harness import Session, Team, config
 from platoon_harness.config import Manifest
 from platoon_harness.kernel import ManualClock, is_held
 from platoon_harness.runtime.paths import read_running
+from platoon_harness_cli import team_editor
+from platoon_harness_cli.team_editor import SAVING, Harness
 from platoon_harness_cli.web import hold
 from platoon_harness_cli.web.sessions import EXPIRED, TRUST, Sessions
 
@@ -28,6 +30,9 @@ from .support import QUIET, Browser, served
 
 pytestmark = pytest.mark.timeout(60)
 
+HARNESSES = (Harness("claude", "not on PATH", ()),)
+"""What `doctor` finds of this machine's harnesses, as the team editor is told it."""
+
 
 @pytest.fixture
 async def page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Sessions]:
@@ -35,7 +40,9 @@ async def page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
     starts finds the scripted harnesses."""
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[3]))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(team_editor, "harnesses", lambda: HARNESSES)
     server = Sessions(ManualClock(1_000_000.0))
     await server.listen("127.0.0.1")
     try:
@@ -78,6 +85,7 @@ async def test_the_sessions_page_refuses_a_foreign_host_and_a_post_from_another_
     ours = await Browser(page).opened()
     start = {"team": "solo.toml", "name": "s"}
     start |= (await ours.request("POST", "/x/start", start)).json()["ask"]["answer"]
+    save = {"base": None, "edits": [{"add": ["roles", "lead"], "to": "claude"}]}
     link = page.link()
     secret = link.partition("#link=")[2]
     rebound = f"rebound.localhost:{page.port}"
@@ -91,7 +99,11 @@ async def test_the_sessions_page_refuses_a_foreign_host_and_a_post_from_another_
     ]
 
     hosts, posts = [], []
-    for route, body, token in (("/x/exchange", {}, secret), ("/x/start", start, ours.token)):
+    for route, body, token in (
+        ("/x/exchange", {}, secret),
+        ("/x/start", start, ours.token),
+        ("/x/save", save, ours.token),
+    ):
         for headers in foreign:
             hosts.append((await ours.request("POST", route, body, token=token, headers=headers)).status)
         for origin in origins:
@@ -99,8 +111,9 @@ async def test_the_sessions_page_refuses_a_foreign_host_and_a_post_from_another_
     hosts.append((await ours.request("GET", "/", headers={"Host": rebound})).status)
     spent = await Browser(page).exchange(link)
 
-    assert hosts == [421] * 5 and posts == [403] * 10
+    assert hosts == [421] * 7 and posts == [403] * 15
     assert spent.status == 200 and not (tmp_path / "sessions" / "s").exists()
+    assert not (tmp_path / "platoon-harness.toml").exists()
 
 
 async def test_the_sessions_page_is_served_under_a_policy_that_lets_only_its_own_script_run(page):
@@ -317,3 +330,81 @@ async def test_a_stop_answers_once_the_runtime_has_let_go(page, tmp_path):
     assert stopped == {"said": "Stopped s. Resume restarts it, which can spend money."} and not held
     assert again == {"refused": "refused conflict: no runtime holds session s: it has stopped"}
     assert listed == [{"name": "s", "live": False, "state": "stopped"}]
+
+
+def edit(where: str, text: str) -> dict:
+    return {"set": where.split("."), "to": text}
+
+
+def field(answer: dict, where: str) -> dict:
+    """A field of the team editor's answer, by its place."""
+    found = (field for section in answer["sections"] for group in section["groups"] for field in group["fields"])
+    return next(field for field in found if field["where"] == where)
+
+
+async def test_the_team_editor_reads_checks_and_saves_the_project_s_team_and_a_start_runs_what_it_saved(page, tmp_path):
+    """The read gives each field as the file has it, a check of edits gives the diff a save makes, problems at their
+    fields and `team show`'s sentences, the save writes the file, keeping its comments, and a start from the project's
+    team runs what was saved, which the session's manifest keeps."""
+    project = tmp_path / "platoon-harness.toml"
+    project.write_text(f"# Bob, alone.\n{solo('saying')}")
+    ours = await Browser(page).opened()
+
+    read = (await ours.request("POST", "/x/team", {})).json()
+    edits = [edit("roles.bob.model", "m1"), edit("roles.bob.count", "two")]
+    wrong = (await ours.request("POST", "/x/check", {"edits": edits})).json()
+    edits[1] = edit("roles.bob.approvals", "allow")
+    checked = (await ours.request("POST", "/x/check", {"edits": edits})).json()
+    saved = (await ours.request("POST", "/x/save", {"base": checked["base"], "edits": edits})).json()
+    given = {"team": "", "name": "s"}
+    given |= (await ours.request("POST", "/x/start", given)).json()["ask"]["answer"]
+    started = (await ours.request("POST", "/x/start", given)).json()
+    manifest = Manifest.model_validate_json((tmp_path / "sessions" / "s" / "manifest.json").read_bytes())
+    malformed = await ours.request("POST", "/x/check", {"edits": [{"set": "roles.bob.model"}]})
+    await ours.request("POST", "/x/stop", {"name": "s"})
+
+    assert (read["file"], read["here"], read["diff"], read["unmade"]) == ("platoon-harness.toml", str(tmp_path), "", [])
+    assert read["base"] == hashlib.sha256(f"# Bob, alone.\n{solo('saying')}".encode()).hexdigest()
+    assert field(read, "roles.bob.harness")["choices"][0] == {
+        "value": "tests.integration.scripts:saying",
+        "said": "tests.integration.scripts:saying, as the file has it",
+    }
+    assert field(wrong, "roles.bob.count")["problems"] == [
+        {"level": "error", "said": "error: roles.bob.count: is a whole number"}
+    ]
+    assert wrong["blocked"] == "Fix each change marked first: the editor could not make it." and wrong["unmade"] == [1]
+    assert '+model = "m1"' in checked["diff"] and checked["blocked"] is None and checked["shown"]
+    assert saved == {"said": f"Saved platoon-harness.toml in {tmp_path}."}
+    assert project.read_text() == f'# Bob, alone.\n{solo("saying")}model = "m1"\napprovals = "allow"\n'
+    assert "link" in started
+    assert Team.loads(manifest.team).roles["bob"].model == "m1"
+    assert malformed.status == 400
+
+
+async def test_a_save_of_a_file_changed_since_it_was_read_is_refused_and_one_that_writes_a_test_command_asks_once(
+    page, tmp_path
+):
+    """Nothing is written over a file that changed since the check the person saw, and the next check shows the edits
+    on what it holds now. A save that writes what would run as you asks once, naming it, and the answer covers it."""
+    project = tmp_path / "platoon-harness.toml"
+    project.write_text(solo("saying"))
+    ours = await Browser(page).opened()
+    edits = [edit("test.command", "make test"), edit("test.timeout", "5m")]
+
+    checked = (await ours.request("POST", "/x/check", {"edits": edits})).json()
+    project.write_text(solo("listening"))
+    refused = (await ours.request("POST", "/x/save", {"base": checked["base"], "edits": edits})).json()
+    untouched = project.read_text()
+    again = (await ours.request("POST", "/x/check", {"edits": edits})).json()
+    asked = (await ours.request("POST", "/x/save", {"base": again["base"], "edits": edits})).json()
+    saved = (
+        await ours.request("POST", "/x/save", {"base": again["base"], "edits": edits, **asked["ask"]["answer"]})
+    ).json()
+
+    assert refused["refused"].startswith("platoon-harness.toml: changed since it was read, so nothing was saved")
+    assert untouched == solo("listening") and again["base"] != checked["base"]
+    assert field(again, "roles.bob.harness")["text"] == "tests.integration.scripts:listening"
+    assert asked["ask"]["question"] == f'{SAVING}\ntest.command = ["make", "test"]\nSave it, as shown here?'
+    assert asked["ask"]["yes"] == "Save it"
+    assert saved == {"said": f"Saved platoon-harness.toml in {tmp_path}."}
+    assert project.read_text() == f'{solo("listening")}\n[test]\ncommand = ["make", "test"]\ntimeout = "5m"\n'

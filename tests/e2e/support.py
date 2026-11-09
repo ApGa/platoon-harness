@@ -20,6 +20,28 @@ REBOUND = "rebound.localhost"
 """A name that reaches loopback, as a rebinding attacker's name would: Chromium and Firefox resolve a name under
 `localhost` to loopback themselves, so neither needs a flag of its own. Whether WebKit does is unverified until CI's
 WebKit job runs, as WebKit has run nowhere yet."""
+PHONE = {"width": 390, "height": 844}
+"""A phone's screen held upright, in CSS pixels, as an iPhone 12, 13 or 14 gives it."""
+REACHED = """() => {
+    const screen = document.documentElement, shown = el => el.checkVisibility({visibilityProperty: true});
+    const pointed = el => getComputedStyle(el).cursor === 'pointer'
+        && !(el.parentElement && getComputedStyle(el.parentElement).cursor === 'pointer');
+    const controls = 'button, a[href], input, textarea, select, [role="button"], [tabindex]:not([tabindex="-1"])';
+    const shows = document.querySelector('#overlay.on') || document.body;
+    const acts = [...shows.querySelectorAll('*')].filter(el => shown(el) && (el.matches(controls) || pointed(el)));
+    const missed = [];
+    for (const act of acts) {
+        act.closest('.msg')?.focus({preventScroll: true});
+        act.scrollIntoView({block: 'nearest', inline: 'nearest'});
+        const r = act.getBoundingClientRect(), x = r.left + r.width / 2;
+        const hit = document.elementFromPoint(x, r.top + Math.min(r.height, screen.clientHeight) / 2);
+        if (r.left < 0 || r.right > screen.clientWidth + 0.5 || !act.contains(hit)) missed.push(act.outerHTML);
+    }
+    return {acts: acts.length, missed, wider: screen.scrollWidth - screen.clientWidth};
+}"""
+"""Every act shown, a control or what the pointer presses, each scrolled into view, its message given focus first as a
+press gives it: the count, each that lies past the screen's sides or under something else, and how much wider than
+the screen the page scrolls."""
 
 
 ABORTED = "due to access control checks"
