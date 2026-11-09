@@ -21,8 +21,8 @@ from ..machine import Starter, finding
 from ..sessions import ask_to_stop
 from ..teams import Source
 from . import logo
-from .dialogs import Confirm, Form
-from .keymap import bindings, keys
+from .dialogs import Confirm, Form, Keys
+from .keymap import bindings, footer, keys
 from .rows import Row, Rows
 from .safe import SafeText, note
 from .workspace import Workspace
@@ -42,18 +42,12 @@ class Sessions(Screen[None]):
         yield Static(id="brand")
         yield Rows(id="sessions")
         yield Static(id="said")
-        yield Static(id="footer")
+        yield Keys(id="footer")
 
     def on_mount(self) -> None:
         self.query_one(Rows).focus()
         self.query_one(Rows).border_title = Content("sessions")
-        footer = [
-            part
-            for key in keys("sessions")
-            if key.footer
-            for part in ((key.shown, "bold $accent"), (f" {key.name}  ", "dim"))
-        ]
-        self.query_one("#footer", Static).update(Content.assemble(*footer))
+        self.query_one("#footer", Static).update(footer("sessions"))
         self.app.theme_changed_signal.subscribe(self, lambda _: self._brand())
         self.action_look()
         if not Path(PROJECT_FILE).exists(follow_symlinks=False):

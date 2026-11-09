@@ -7,6 +7,7 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.content import Content
 from textual.screen import ModalScreen
+from textual.style import Style
 from textual.widgets import Input, Static
 
 from .keymap import WHERE, bindings, keys
@@ -15,6 +16,20 @@ from .rows import Row, Rows
 _SAID = 42
 """How wide what a key does is wrapped in the help, so it fits beside the key and its typed command in a dialog on 80
 columns."""
+
+
+def hint(*keys: tuple[str, str]) -> Content:
+    """What a dialog's keys do, each said dim and run by a click as by its key: each a word and the action it runs."""
+    said = [Content.styled(word, "dim").stylize(Style.from_meta({"@click": f"screen.{runs}"})) for word, runs in keys]
+    return Content("    ").join(said)
+
+
+class Keys(Static):
+    """Keys, each of which a click runs as its key does, drawn in their own colours and not in a link's."""
+
+    def __init__(self, keys: Content | None = None, *, id: str | None = None, classes: str | None = None) -> None:
+        super().__init__(Content("") if keys is None else keys, id=id, classes=classes)
+        self.set_reactive(Keys.auto_links, False)
 
 
 class Confirm(ModalScreen[bool]):
@@ -30,7 +45,7 @@ class Confirm(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
             yield Static(self._question)
-            yield Static(Content.styled("y: yes    n or Esc: no", "dim"))
+            yield Keys(hint(("y: yes", "yes"), ("n or Esc: no", "no")))
 
     def action_yes(self) -> None:
         self.dismiss(True)
@@ -57,13 +72,16 @@ class Form(ModalScreen[dict[str, str] | None]):
             for name, about, value in self._fields:
                 yield Static(about, classes="about")
                 yield Input(value=value, id=f"field-{name}", compact=True)
-            yield Static(Content.styled("Enter: next, and from the last, go    Esc: leave", "dim"))
+            yield Keys(hint(("Enter: next, and from the last, go", "send"), ("Esc: leave", "leave")))
 
     def on_input_submitted(self, submitted: Input.Submitted) -> None:
         inputs = list(self.query(Input))
         if submitted.input is not inputs[-1]:
             inputs[inputs.index(submitted.input) + 1].focus()
             return
+        self.action_send()
+
+    def action_send(self) -> None:
         values = {name: self.query_one(f"#field-{name}", Input).value.strip() for name, _, _ in self._fields}
         self.dismiss({name: value for name, value in values.items() if value})
 

@@ -78,7 +78,8 @@ would, after one confirmation, and it stays resumable. Enter opens one: live as 
 runtime holds it, with `/resume` offered to resume it. `/detach` comes back here from a session opened here, which runs
 on. `l` looks again, `t` chooses a theme, `c` copies what you selected, `?` shows every key, `p` opens the palette and
 `q` quits. In a form, Enter goes to the next field,
-and from the last sends it.
+and from the last sends it. A click on a key in the footer, or on a question's or a form's keys below it, does what the
+key does.
 
 ## The workspace
 

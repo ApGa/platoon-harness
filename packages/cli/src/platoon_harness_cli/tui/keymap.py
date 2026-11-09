@@ -2,11 +2,14 @@
 from it."""
 
 import sys
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from textual.binding import Binding, BindingType
+from textual.content import Content
+from textual.style import Style
 
 Where = Literal[
     "everywhere",
@@ -316,6 +319,19 @@ def keys(where: Where) -> tuple[Key, ...]:
 def bindings(where: Where) -> list[BindingType]:
     """The bindings of one place, from the table."""
     return [Binding(key.keys, key.runs, key.name, show=False, priority=key.priority) for key in keys(where) if key.keys]
+
+
+def footer(where: Where, disabled: Collection[str] = ()) -> Content:
+    """The footer of one place: each of its footer's keys, named by what it does, dim where its action is `disabled`,
+    and a click on it running it, as the key does."""
+    parts = []
+    for key in keys(where):
+        if key.footer:
+            runs = key.runs if "." in key.runs else f"screen.{key.runs}"
+            style = "dim" if key.action in disabled else "bold $accent"
+            said = Content.assemble((key.shown, style), (f" {key.name}  ", "dim"))
+            parts.append(said.stylize(Style.from_meta({"@click": runs})))
+    return Content.assemble(*parts)
 
 
 def action_of(where: Where, pressed: str) -> str | None:

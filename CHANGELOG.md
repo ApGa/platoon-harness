@@ -13,6 +13,8 @@ named here is closed.
 
 ### New features
 
+- **A click on a key does what the key does.** In the terminal, a click on a key in the sessions screen's footer runs it,
+  and so does a click on a question's `y` or `n` or on a form's keys below it. Before, only the keys did.
 - **The project's team, edited in the browser.** The sessions page of `platoon-harness web` gains a team editor: Edit reads
   `platoon-harness.toml` where `web` runs as a field for each key a person sets, made from the team's schema, each role's
   harness chosen from the drivers this machine has with what `doctor` finds of each, its model and effort as free text, and

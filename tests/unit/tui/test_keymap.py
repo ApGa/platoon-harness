@@ -7,6 +7,7 @@ from pathlib import Path
 from rich.cells import cell_len
 from textual.actions import parse
 from textual.binding import Binding
+from textual.content import Content
 
 from platoon_harness import Session, Team
 from platoon_harness.config import PROJECT_FILE
@@ -26,7 +27,7 @@ from platoon_harness_cli.tui.transcript import Focus, Transcript
 from platoon_harness_cli.tui.workspace import Dock, Navigator, Workspace
 
 from ..runtime.support import harness, in_state
-from .support import drawn, workspace
+from .support import click_on, drawn, workspace
 
 GUIDE = Path(__file__).parents[3] / "docs" / "how-to" / "tui.md"
 PLACES = {
@@ -248,6 +249,29 @@ async def test_the_help_shows_every_key_of_the_table_its_typed_command_and_why_o
         await pilot.press("f1")
         await pilot.pause()
         assert not any(isinstance(screen, Help) for screen in app.screen_stack), "F1 in the help opened another"
+
+
+async def test_a_click_on_a_key_in_the_footer_or_a_dialog_does_what_the_key_does(tmp_path, monkeypatch):
+    """The sessions screen's footer, a form's keys and a question's each run, on a click, what their key runs."""
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / PROJECT_FILE).write_text("")
+    answers: list[bool] = []
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda text: "No sessions yet" in text)
+        await click_on(pilot, "#footer", "? help")
+        await drawn(pilot, lambda _: isinstance(app.screen, Help))
+        await pilot.press("escape")
+        await drawn(pilot, lambda _: isinstance(app.screen, Sessions))
+        await click_on(pilot, "#footer", "n new")
+        await drawn(pilot, lambda _: isinstance(app.screen, Form))
+        await click_on(pilot, "Keys", "Esc: leave")
+        await drawn(pilot, lambda _: isinstance(app.screen, Sessions))
+        app.push_screen(Confirm(Content("Sure?")), answers.append)
+        await drawn(pilot, lambda _: isinstance(app.screen, Confirm))
+        await click_on(pilot, "Keys", "y: yes")
+        await drawn(pilot, lambda _: answers == [True])
 
 
 def test_a_key_is_shown_as_it_is_typed():

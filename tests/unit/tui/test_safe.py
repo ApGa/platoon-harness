@@ -16,7 +16,7 @@ from .support import drawn, workspace
 from .test_workspace import HOSTILE, UNSAFE, attached, team
 
 TUI = Path(tui.__file__).parent
-LABELS = {"Static", "Label", "Button", "Option", "Hit", "DiscoveryHit", "Row", "Confirm"}
+LABELS = {"Static", "Label", "Button", "Option", "Hit", "DiscoveryHit", "Row", "Confirm", "Keys"}
 """What draws a label: Textual's widgets that read a str as markup, and ours that take a line."""
 METHODS = {"update", "notify"}
 ATTRIBUTES = {"border_title", "border_subtitle", "tooltip"}
@@ -47,13 +47,27 @@ def _name(node: ast.AST) -> str | None:
     return node.id if isinstance(node, ast.Name) else node.attr if isinstance(node, ast.Attribute) else None
 
 
+def _drawing() -> set[str]:
+    """The terminal UI's own functions, of a module and not a class, that say they return Content and nothing else."""
+    return {
+        node.name
+        for path in TUI.glob("*.py")
+        for node in ast.parse(path.read_text()).body
+        if isinstance(node, ast.FunctionDef) and node.returns is not None and ast.unparse(node.returns) == "Content"
+    }
+
+
+DRAWING = _drawing()
+
+
 def _content(node: ast.expr, known: set[str]) -> bool:
-    """Whether an expression is visibly Content: made by `SafeText` or `Content`, a method of Content, a name the file
-    says holds it, or a choice between two of these."""
+    """Whether an expression is visibly Content: made by `SafeText` or `Content`, or by a function of the terminal UI's
+    that says it returns Content, a method of Content, a name the file says holds it, or a choice between two of
+    these."""
     if isinstance(node, ast.Call):
         func = node.func
         if isinstance(func, ast.Name):
-            return func.id in ("SafeText", "Content")
+            return func.id in ("SafeText", "Content", *DRAWING)
         return isinstance(func, ast.Attribute) and (_name(func.value) == "Content" or _content(func.value, known))
     if isinstance(node, ast.IfExp):
         return _content(node.body, known) and _content(node.orelse, known)
@@ -128,6 +142,7 @@ def test_a_label_like_widget_is_never_given_a_bare_str(path):
         "Row(name)",
         'Static(row["gist"])',
         "Static(SafeText(gist) if ok else gist)",
+        "Static(str(hint(gist)))",
     ],
 )
 def test_the_lint_finds_a_bare_str(planted):
@@ -142,6 +157,7 @@ def test_the_lint_finds_a_bare_str(planted):
         "def f(said: Content):\n    label.update(said)",
         'Static(Content("\\n").join(lines))',
         "for name, about in fields:\n    Static(about)\ndef g(fields: list[tuple[str, Content]]): ...",
+        "Keys(hint(('y: yes', 'yes')))",
     ],
 )
 def test_the_lint_takes_what_is_visibly_content(kept):

@@ -33,6 +33,14 @@ def screen_text(app: TerminalUI) -> str:
     return "\n".join("".join(strip.text for strip in line) for line in update.strips)
 
 
+async def click_on(pilot: Pilot, selector: str, words: str) -> None:
+    """Click the first character of `words` where the widget `selector` draws them, as a person would."""
+    region = pilot.app.screen.query_one(selector).region
+    lines = screen_text(pilot.app).splitlines()
+    y = next(y for y in range(region.y, region.y + region.height) if words in lines[y][region.x :])
+    await pilot.click(offset=(lines[y].index(words, region.x), y))
+
+
 def workspace(app: TerminalUI) -> Workspace:
     screen = app.screen
     assert isinstance(screen, Workspace), type(screen)
