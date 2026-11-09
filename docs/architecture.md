@@ -2221,9 +2221,12 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
   other address with 78 as it starts: one whose manifest keeps the opt-in, one of whose agents' harnesses came up last
   on a plan login, as the roster says, or one with a role that names no auth profile whose harness says now that it is
   on one, as a control link can spawn any role. While it serves another address it stops with 78 once an agent comes up
-  on a plan login after all, and what a control link did before then stands. The sessions page, `web` with no session, and
-  every session it opens are on loopback alone, so it starts several agents on one plan login after asking once, as the
-  TUI does.
+  on a plan login after all, and what a control link did before then stands. A replay is the one exception: `web SESSION
+  --replay` serves one past loopback whatever login its agents ran on, as its links act on nothing, not even as the
+  person, though they read every event and view of the record as its runtime did
+  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)'s question 3, whose
+  default waits for the owner's ruling). The sessions page, `web` with no session, and every session it opens are on
+  loopback alone, so it starts several agents on one plan login after asking once, as the TUI does.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference, an auth profile or a `test` command, needs an explicit trust step when it comes from a
   project or team file: `--trust` on the command line, `trust_project` to `load_team`, the trust field of the terminal's start

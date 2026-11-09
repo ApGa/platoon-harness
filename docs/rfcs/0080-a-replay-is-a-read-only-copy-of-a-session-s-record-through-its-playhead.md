@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`kernel.py`](../../packages/sdk/src/platoon_harness/kernel/kernel.py), [`session.py`](../../packages/sdk/src/platoon_harness/session.py), [`tui/workspace.py`](../../packages/cli/src/platoon_harness_cli/tui/workspace.py), [`web/server.py`](../../packages/cli/src/platoon_harness_cli/web/server.py), [architecture sections 3, 4, 5 and 12](../architecture.md#12-clients), [RFC 0003](0003-events-are-the-only-truth.md), [RFC 0011](0011-annotations-beside-the-journal.md), [RFC 0027](0027-the-browser-on-our-backend.md) and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) |
 | Discussion | The owner's request of 2026-11-09: "I was wondering if we have a replay functionality, where we can replay a session's history in a streaming way, with ability to move forward and backward". The owner's rulings of the same day: a replay plays in both clients, the terminal and the browser; and rewards and credit, which estimators write beside the journal after the session, are shown while replaying, each when the playhead reaches the event it is about, labelled with when it was written, so it is never passed off as known at that moment. The rest is this design's, and waits for the owner's acceptance |
-| Implementation | `docs: Add RFC 0080 on replaying a session`; `feat: Replay a session from copies of its record that a seek moves either way`; `feat: Replay a session in the terminal`; `feat: Replay a session in the browser` |
+| Implementation | `docs: Add RFC 0080 on replaying a session`; `feat: Replay a session from copies of its record that a seek moves either way`; `feat: Replay a session in the terminal`; `feat: Replay a session in the browser`; and after review, `fix: Answer a replay's queries at the time its playhead stood`, `fix: Keep a replay's copy going through checkpoints and take back what a killed replay left`, `fix: Draw a replay's banner where its client has drawn it, from a fold the page keeps at each checkpoint` and `docs: Say who a replay's links read as and that it alone is served past loopback on a plan login` |
 
 ## Summary
 
@@ -265,8 +265,12 @@ projection holds where the replay went.
 - The kernel has a journal that no op writes. Its events are its source's, verbatim, so nothing a copy holds was not
   committed by an op somewhere, and a copy refuses every command.
 - Opening a replay copies the record once more on disk, for its checkpoints, under the root, until it closes.
-- A replay reads as the runtime, so it shows every event and view whatever the person's grants, which on the person's own
-  machine are theirs to read through `events` already.
+- A replay reads as the runtime, so it shows every event and view whatever the person's grants. The page and the
+  terminal ask a replay for nothing a session's owner does not read on a normal `web` page or in the terminal: the
+  record's events through `events`, its views, provenance, and the panes a control link reads, as the owner reads every
+  event already. The runtime's grants also reach its own query ops, which a person's do not, though no pane asks for
+  one. Served past loopback, by question 3's default, a holder of a replay's view or control link reads what the runtime
+  reads of the record through its playhead, and acts on nothing.
 - What is unknown: how this behaves at the Scale case's 100,000 events, which nothing has measured; and on macOS, where
   nothing has run.
 
@@ -288,7 +292,9 @@ Each is taken at the default below, pending the owner's ruling, and none is buil
 2. **Who moves a page's replay.** Default: a control link moves it and a view link watches, as a view link acts on
    nothing; every page of one `web` shares one playhead.
 3. **Past loopback.** Default: a replay is served past loopback whatever login its session's agents ran on, as its links
-   act on nothing, not even as you.
+   act on nothing, not even as you. A holder of a view or control link to it reads what the runtime reads of the record
+   through the playhead: every event and view, as the session's owner reads them, and nothing it could act on. Security
+   and the web guide say this is the one exception to a plan login's loopback.
 4. **Idle skipped.** Default: the recorded pace at 1x, with every gap longer than a second cut to a second.
 5. **Checkpoints.** Default: at most eight, at least 1,024 events apart. A tighter spacing buys quicker seeks for disk.
 

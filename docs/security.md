@@ -13,7 +13,7 @@ Section 15 keeps each threat in a tier of its own:
 |---|---|---|
 | Model arguments: hallucination, and prompt injection through a tool's arguments | An agent is who its token says, never what its arguments claim: no tool schema has a field for the caller's identity, an undeclared argument is refused and journaled, and every op is authorized by the server, at call time | [§15](architecture.md#15-security), [laws 6 and 7](architecture.md#3-laws), [the tool plane](architecture.md#10-tool-plane) |
 | Untrusted content: board entries, repository files, tool output, Markdown | Content is data, never instructions: the terminal draws it through `SafeText`, and the page escapes it and runs scripts by hash alone | [§15](architecture.md#15-security), [the web guide's Security](how-to/web.md#security) |
-| Network: the browser, and anything else that reaches a port | Loopback by default; any other address needs TLS, a wildcard is refused, and a session on a plan login is served on loopback alone, which `web` checks as it starts and again as each agent comes up. Your sessions, `web` with no session, are served on loopback alone, from one link only the command says. View and control links are separate classes, open once and expire, and `web` keeps only their hashes. `Host` must name the authority served and a POST's `Origin` the page's own | [§15](architecture.md#15-security), [the web guide's Security](how-to/web.md#security) |
+| Network: the browser, and anything else that reaches a port | Loopback by default; any other address needs TLS, a wildcard is refused, and a session on a plan login is served on loopback alone, which `web` checks as it starts and again as each agent comes up; a replay of one, whose links act on nothing, is served past loopback too, by a default that waits for the owner's ruling. Your sessions, `web` with no session, are served on loopback alone, from one link only the command says. View and control links are separate classes, open once and expire, and `web` keeps only their hashes. `Host` must name the authority served and a POST's `Origin` the page's own | [§15](architecture.md#15-security), [the web guide's Security](how-to/web.md#security) |
 | An agent that can run commands, as you | Nothing in this tier: see below | [§15](architecture.md#15-security), [workspaces](how-to/workspaces.md#where-an-isolated-agent-runs) |
 | Extensions and drivers | They are trusted code: installing one is trusting it, and a team or project file can select one but never install one | [§15](architecture.md#15-security), [extensions](architecture.md#17-extensions-and-configuration) |
 
@@ -23,9 +23,13 @@ with `--plan-login`, or `plan_login=True` from Python. `web` serves a session on
 control link acts as you, on your login. It refuses another address as it starts, from the session's opt-in, the logins
 its agents came up on and what each role's harness says now, as a control link can spawn any role. It stops with 78 if
 an agent comes up on a plan login while it serves, as when a harness was signed in on one since, and what a control link
-did before then stands. [RFC 0016](rfcs/0016-plan-logins-and-credentials.md) says why. The sessions page, `web` with no
-session, serves on loopback alone, and so does every session it opens, so it starts several agents on one plan login only
-after asking you once whether it is your own work, as the terminal does.
+did before then stands. [RFC 0016](rfcs/0016-plan-logins-and-credentials.md) says why. A replay is the one exception:
+`web SESSION --replay` serves one past loopback whatever login its agents ran on, as its links act on nothing, not even
+as you, though they read every event and view of the record as its runtime did. That is
+[RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)'s default for its
+question 3, pending the owner's ruling. The sessions page, `web` with no session, serves on loopback alone, and so does
+every session it opens, so it starts several agents on one plan login only after asking you once whether it is your own
+work, as the terminal does.
 
 A team or project file is untrusted too. What it names that would run code as you, a command, a `module:attr` or a test
 command, or a credential it would pass on, an auth profile, runs only once you trust it: `--trust` on the command line, the

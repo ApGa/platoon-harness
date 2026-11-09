@@ -368,6 +368,11 @@ What the whole of platoon-harness protects, and what it does not, is in [securit
   stops with 78 once an agent comes up on a plan login after all, as when a harness was signed in on one since, and what
   a control link did before then stands. A harness that cannot say which login it has is not counted, as the runtime
   does not count it either. From another machine, forward the loopback port, as Open it shows.
+  A replay is the one exception: `web SESSION --replay` serves one past loopback whatever login its agents ran on, as
+  its links act on nothing, not even as you, though a link to one reads every event and view of the record as its
+  runtime did. That is
+  [RFC 0080](../rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)'s default for its
+  question 3, pending the owner's ruling.
   A name with several addresses, as `localhost` has, is served on one port at each, so no other program on the machine can
   take that port on one of them and be what a browser reaches. A port that is the scheme's own, 80 or 443, is left out of
   the address, as a browser leaves it out.
