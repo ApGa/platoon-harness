@@ -95,6 +95,7 @@ amended or extended an RFC.
 | [0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) | A look waits only for looks of its own workspace | Draft |
 | [0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) | A span carries the labels of the work it was done for | Draft |
 | [0079](0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md) | A client edits the project's team file in place, from fields made from its schema | Draft |
+| [0080](0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md) | A replay is a read-only copy of a session's record through its playhead | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.
