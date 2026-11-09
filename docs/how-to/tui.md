@@ -102,36 +102,58 @@ read or written loses only badges, which is said once.
 
 ### How it looks
 
-The workspace is drawn in titled panels with thin rounded borders, the one that has focus in the accent, on a dark ink
-background with one accent colour, the logo's sky blue: the theme `platoon-ink`. `/theme`, or `t` on the sessions screen,
-chooses another of Textual's themes for this run, `ansi-dark` among them, which draws in your terminal's own colours, and
-it says the line that keeps it: `theme = "nord"` in `tui.toml`, in `$XDG_CONFIG_HOME/platoon-harness`, or
-`~/.config/platoon-harness` where that is not set, beside the user config a team loads. A name there that is none of the
-themes is said, and the default stays.
+The workspace is drawn in titled panels with thin rounded borders, the one that has focus in the accent, on a
+dark ink background with one accent colour, the logo's sky blue: the theme `platoon-ink`, which the owner chose. Warnings,
+`history` and what needs you are a muted amber in it, never a yellow, and each is told apart by its glyph and its words as
+well. `/theme`, or `t` on the sessions screen, chooses another of Textual's themes for this run, `ansi-dark` among them,
+which draws in your terminal's own colours, and it says the line that keeps it: `theme = "nord"` in `tui.toml`, in
+`$XDG_CONFIG_HOME/platoon-harness`, or `~/.config/platoon-harness` where that is not set, beside the user config a team
+loads. `tui.toml` takes two keys: `theme`, the name of a theme, and `motion`, which `false` turns off. A file that cannot
+be read, holds any other key, gives either as another kind of value, or names no theme there is, is not taken at all, and
+it says why.
 
-Platoon's agents stand beside the session's name at the navigator's top, and larger beside the wordmark on the sessions
-screen: a sprite drawn by hand from the icon of [Platoon](https://github.com/ApGa/platoon) (MIT, © Apurva Gandhi), two
-pixels to a cell in half blocks, in the icon's blue to green, and in your terminal's own blue, cyan and green under a
-theme that keeps to them.
+Platoon's agents stand at the navigator's top, three marching up, and on the sessions screen beside the wordmark, three of
+one size, round-headed with big white eyes, the middle one a step ahead: sprites drawn by hand from the icon of
+[Platoon](https://github.com/ApGa/platoon) (MIT, © Apurva Gandhi), two pixels to a cell in half blocks, in the icon's blue
+to green, and in your terminal's own blue, cyan and green under a theme that keeps to them. The header says the session's
+name and how it stands, so nothing stands beside the small ones. On the sessions screen the large ones stand where the
+screen has the rows and the columns beside the words, and small ones where it does not, and a line too long for the screen
+is cut at its edge, so the logo is never torn.
 
 Each agent's state has a glyph as well as a colour, so neither alone says it:
 
 | Glyph | State |
 |---|---|
 | `◉` | needs you |
-| `●` | working, turning while animation is on |
+| `●` | working, which stirs while motion is on |
 | `◌` | blocked |
-| `○` | idle |
+| `○` | idle, which breathes while motion is on |
 | `✓` | done |
 | `✗` | failed |
 | `⊘` | lost: the runtime lost it |
 | `?` | unknown: a state this terminal does not know |
 
-The glyph of a working agent turns as a spinner, eight times a second, on a timer that decides nothing, and
-`TEXTUAL_ANIMATIONS=none` keeps it still. Where the header does not fit, the amounts spent with no limit give way to the
-meters first, then the meters go, then its segments from its end, what is spent and then what changed, and under 60
-columns it keeps the name and the counts. When an agent comes to need you while another is in view, a toast names it, why
-it waits and the key that goes to it.
+Where the header does not fit, the amounts spent with no limit give way to the meters first, then the meters go, then its
+segments from its end, what is spent and then what changed, and under 60 columns it keeps the name and the counts. When an
+agent comes to need you while another is in view, a toast names it, why it waits and the key that goes to it.
+
+### Motion
+
+The agents move a little, at four frames a second at most, from the session's state as its record says it and from
+nothing else:
+
+- While agents work, the logo's agents step in turn, faster as more work, one step a second for one, and a working
+  agent's `●` stirs.
+- While every agent that has not ended rests, they blink now and then, one at a time every six seconds, and a resting
+  agent's `○` breathes while the session is live.
+- On an event, a flourish under a second: the front agent waves as an agent finishes or the session settles, their eyes
+  look up at you in amber as one comes to need you, and they stir as more start working.
+
+A session that is history, which no runtime holds, never moves, and an agent whose state is unknown shows no motion that
+would say it works or rests, nor does the logo blink while one is unknown. The sessions screen's logo stands still, as that
+screen reads no agent's state. Only the logo's rows and the glyphs that move are drawn again, and only when their frame
+changes: a live session at rest took 0.6% of a core, measured. `motion = false` in `tui.toml` turns it off, and so does
+Textual's animation level below full, as `TEXTUAL_ANIMATIONS=basic` or `none` sets it. Its timer decides nothing.
 
 The mouse does what a key does, and each key still does it: a click on a row of the navigator, or a tab of the strip under
 80 columns, shows that agent or channel, as Alt+↓ goes to it; a click on a line chooses it, as the arrows do, and a click
@@ -379,7 +401,7 @@ provenance; Esc goes back one hop, and from the first leaves. A line that opens 
 does not, says why in its place, and an `Informed-By` value that cites nothing says why it does not. Each part says the head it was
 read at; Sources says where it stops counting, below the model call that chose the event, where the journal recorded it, or a
 commit's look; what an answer does not hold below there reads as not held there, never as never; and an answer whose turn had not
-ended says a later report can still confirm an offer or join a call. Yellow marks what is unknown, missing or cut, and a part an
+ended says a later report can still confirm an offer or join a call. The warning colour, amber in `platoon-ink`, marks what is unknown, missing or cut, and a part an
 answer cut names the command line command that reads on. With no line chosen, it says so: what an agent is saying now is no event
 until the journal holds it. [Its snapshot](../assets/tui-provenance.svg) shows the panel of the mixed team's lead's answer, on the recorded session.
 
@@ -388,9 +410,9 @@ browser's pane uses. Each pair of makers is a heading, `events by @alice reached
 line for each kind of edge that leads from the first's events to the second's, labelled by the kind and saying how that kind is
 known: `declared` citations, each its citer's claim; `observed` offers the second's harness said it took, handed over and taken,
 never understood; `cause`, causes named; and `ancestry`, next versions and commits on a commit. Each is counted apart and never
-summed. The offers between them the harness had not said it took are a line of their own, `unconfirmed`, in yellow, as unknown,
+summed. The offers between them the harness had not said it took are a line of their own, `unconfirmed`, in the warning colour, as unknown,
 neither observed nor none. Enter on a line shows the provenance of the event that holds the first edge it counts, an offer for
-`observed` and `unconfirmed`, and Esc comes back. The first line says the head it was read at, and, in yellow, when an offer it
+`observed` and `unconfirmed`, and Esc comes back. The first line says the head it was read at, and, in the warning colour, when an offer it
 counts as unconfirmed went to an agent that has not ended, whose harness can still say it took it. Each agent's unknowns follow,
 in the order the agents were spawned: the surfaces of its harness no stored result proves observed, which today is every one,
 and the gaps content could have come through, so an agent no pair names is not shown to be reached by nobody. A person and a

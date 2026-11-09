@@ -4,6 +4,7 @@ socket."""
 import asyncio
 import base64
 import contextlib
+import os
 import re
 import threading
 import time
@@ -24,9 +25,10 @@ from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 from platoon_harness_cli.ops import _command, person_ops
 from platoon_harness_cli.output import safe
 from platoon_harness_cli.provenance import Line, shows
+from platoon_harness_cli.tui import app as app_module
 from platoon_harness_cli.tui import live as live_module
 from platoon_harness_cli.tui import transcript as transcript_module
-from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.app import TerminalUI, settings
 from platoon_harness_cli.tui.approvals import Approval
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.dialogs import Form
@@ -34,7 +36,7 @@ from platoon_harness_cli.tui.keymap import keys
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.transcript import Transcript
-from platoon_harness_cli.tui.workspace import CHOOSE, Dock, Workspace, _asked, _value
+from platoon_harness_cli.tui.workspace import CHOOSE, Dock, Navigator, Workspace, _asked, _value
 
 from ..runtime.support import BALLOT, SECONDS, extension, harness, in_state, of_type, until
 from ..runtime.test_recovery import HangsOnAnswers, asked_then_crashed
@@ -1222,6 +1224,25 @@ async def test_the_header_says_what_changed_and_each_limit_in_a_few_characters(r
         assert header.rstrip().endswith(("1 turn unmeasured", "/1,000", " 1/8"))
 
 
+async def test_the_agents_move_while_a_live_session_works_or_rests_and_never_in_one_that_is_history(root):
+    """The logo's agents and the navigator's glyphs follow the roster: a stir as the lead starts working, the working
+    motion while it works, and once the session is history, nothing."""
+    played = []
+    async with attached(team([Hang()]), root) as (owner, app, pilot):
+        navigator = workspace(app).query_one(Navigator)
+        resting = await drawn(pilot, lambda _: navigator.motion.idle == 1) and navigator._ticking is not None
+        play = navigator.motion._play
+        navigator.motion._play = lambda flourish: (played.append(flourish), play(flourish))  # type: ignore[method-assign]
+        await pilot.press(*"go", "enter")
+        await drawn(pilot, lambda _: navigator.motion.working == 1)
+        working = navigator._ticking is not None
+        await owner.leave()
+        await drawn(pilot, lambda text: "this is its history" in text and navigator._ticking is None)
+
+    assert resting and working and played[:1] == ["stir"]
+    assert not navigator.motion.moving
+
+
 async def test_provenance_given_a_ref_opens_it_or_says_why_not(root):
     """`/provenance` opens its form, filled in with the chosen line's ref, which a person sends as it is or changes: a
     ref that names an event opens its panel, as a link followed does, one that names none opens one that says why, and
@@ -1496,26 +1517,51 @@ async def test_an_agent_that_comes_to_need_you_while_another_is_in_view_is_said_
     assert toasts == ["@w1 needs you: it asks you to approve. Alt+A or /next-place goes to it."]
 
 
-async def test_the_theme_is_tui_toml_s_or_the_default_and_theme_chooses_one_for_the_run(root, tmp_path, monkeypatch):
-    """`theme` in `tui.toml` names one of Textual's themes, a name that is none of them saying so and keeping the
-    default, and `/theme` chooses another, saying what keeps it."""
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
-    (tmp_path / "config" / "platoon-harness").mkdir(parents=True)
-    settings = tmp_path / "config" / "platoon-harness" / "tui.toml"
-    themes = []
-    for at, named in enumerate(('theme = "nord"', 'theme = "no-such"', "theme = [")):
-        settings.write_text(named)
-        monkeypatch.setenv("PLATOON_HARNESS_HOME", str(root / str(at)))
-        (root / str(at)).mkdir()
-        async with attached(team(), root / str(at)) as (_, app, pilot):
-            themes.append(app.theme)
-            notices = [notice.message for notice in app._notifications]
-            if named.endswith("["):
-                await pilot.press(*"/theme", "enter")
-                await pilot.press(*"dracula", "enter")
-                await drawn(pilot, lambda _: app.theme == "dracula")
-                notices = [notice.message for notice in app._notifications]
+def test_tui_toml_is_kept_beside_the_user_config():
+    assert settings({"XDG_CONFIG_HOME": "/config"}) == Path("/config/platoon-harness/tui.toml")
+    assert settings({}) == Path.home() / ".config" / "platoon-harness" / "tui.toml"
 
-    assert themes == ["nord", "platoon-ink", "platoon-ink"]
-    assert f'The theme is dracula for this run: `theme = "dracula"` in {settings} keeps it.' in notices
-    assert any(f"{settings} was not read, so the theme is platoon-ink" in said for said in notices)
+
+@pytest.mark.parametrize(
+    ("said", "theme", "motion", "why"),
+    [
+        ('theme = "nord"\nmotion = false', "nord", False, None),
+        ('theme = "no-such"', "platoon-ink", True, "names the theme 'no-such', which is none of "),
+        ("theme = [", "platoon-ink", True, "was not read: "),
+        ("theme = 3", "platoon-ink", True, "gives theme as 3, which is not a theme's name"),
+        ("[theme]\nname = 'nord'", "platoon-ink", True, "gives theme as {'name': 'nord'}, which is not a theme's name"),
+        ('motion = "no"', "platoon-ink", True, "gives motion as 'no', which is not true or false"),
+        ('theme = "nord"\ncolour = "blue"', "platoon-ink", True, "holds 'colour', which it does not take: it takes"),
+    ],
+)
+async def test_tui_toml_names_a_theme_and_turns_motion_off_and_is_refused_saying_why_where_it_holds_anything_else(
+    root, monkeypatch, said, theme, motion, why
+):
+    """`theme` names one of Textual's themes and `motion = false` stops the agents moving. A file that cannot be read,
+    or holds a key it does not take, a value of another kind than its key's, or a theme there is none of, is not taken
+    at all, saying why, and the defaults stand."""
+    path = root / "tui.toml"
+    path.write_text(said)
+    monkeypatch.setattr(app_module, "settings", lambda environ=os.environ: path)
+    app = TerminalUI("nothing")
+    async with app.run_test(size=(80, 24)):
+        notices = [notice.message for notice in app._notifications]
+
+    assert (app.theme, app.motion) == (theme, motion)
+    refused = f"{path} {why}" if why else None
+    assert [said for said in notices if str(path) in said and "is not taken" in said] == (
+        [] if refused is None else [said for said in notices if said.startswith(refused)]
+    )
+    assert refused is None or any(said.startswith(refused) and said.endswith("the agents move") for said in notices)
+
+
+async def test_theme_chooses_a_theme_for_the_run_saying_what_keeps_it(root, monkeypatch):
+    path = root / "tui.toml"
+    monkeypatch.setattr(app_module, "settings", lambda environ=os.environ: path)
+    async with attached(team(), root) as (_, app, pilot):
+        await pilot.press(*"/theme", "enter")
+        await pilot.press(*"dracula", "enter")
+        await drawn(pilot, lambda _: app.theme == "dracula")
+        notices = [notice.message for notice in app._notifications]
+
+    assert f'The theme is dracula for this run: `theme = "dracula"` in {path} keeps it.' in notices

@@ -22,7 +22,7 @@ INK = Theme(
     primary="#5cb8e6",
     secondary="#4ece60",
     accent="#5cb8e6",
-    warning="#e8c35f",
+    warning="#e0a46c",
     error="#f0717c",
     success="#5fcf7a",
     foreground="#d9dbe4",
@@ -31,9 +31,10 @@ INK = Theme(
     panel="#262834",
     dark=True,
 )
-"""The default theme: dark ink with one accent, the logo's sky blue, and state colours that stay legible on it."""
-THEME = "theme"
-"""The key of `tui.toml` that names the theme."""
+"""The default theme: dark ink with one accent, the logo's sky blue, state colours that stay legible on it, and for
+warnings and what needs you a muted amber, which sits with the ink as a yellow does not."""
+SETTINGS = {"theme": str, "motion": bool}
+"""What `tui.toml` takes: `theme`, the name of a theme, and `motion`, which `false` turns off."""
 
 CSS = """
 Screen { layers: base overlay; }
@@ -96,6 +97,8 @@ class TerminalUI(App[str | None], inherit_bindings=False):
         super().__init__()
         self._session = session
         self._choosing = False
+        self.motion = True
+        """Whether the agents move, which `motion = false` in `tui.toml` turns off, as Textual's animation level can."""
         self.register_theme(INK)
         self.theme = INK.name
 
@@ -104,23 +107,34 @@ class TerminalUI(App[str | None], inherit_bindings=False):
         self._take_settings()
 
     def _take_settings(self) -> None:
-        """Take the theme `tui.toml` names, or keep the default, saying why."""
+        """Take what `tui.toml` says, or keep the defaults, saying why: a file that cannot be read, holds a key it does
+        not take or a value of another kind than its key's, or names no theme there is, is not taken."""
         path = settings()
         try:
-            named = tomllib.loads(path.read_text()).get(THEME)
+            said = tomllib.loads(path.read_text())
         except FileNotFoundError:
             return
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
-            note(self.screen, f"{path} was not read, so the theme is {self.theme}: {error}", severity="warning")
+            self._refuse(path, f"was not read: {error}")
             return
-        if named is None:
-            return
-        if named not in self.available_themes:
+        for key, value in said.items():
+            if key not in SETTINGS:
+                self._refuse(path, f"holds {key!r}, which it does not take: it takes {' and '.join(SETTINGS)}")
+                return
+            if not isinstance(value, SETTINGS[key]):
+                kind = "a theme's name" if key == "theme" else "true or false"
+                self._refuse(path, f"gives {key} as {value!r}, which is not {kind}")
+                return
+        if "theme" in said and said["theme"] not in self.available_themes:
             known = ", ".join(sorted(self.available_themes))
-            said = f"{path} names the theme {named!r}, which is none of {known}, so the theme is {self.theme}"
-            note(self.screen, said, severity="warning")
+            self._refuse(path, f"names the theme {said['theme']!r}, which is none of {known}")
             return
-        self.theme = named
+        self.theme = said.get("theme", self.theme)
+        self.motion = said.get("motion", True)
+
+    def _refuse(self, path: Path, why: str) -> None:
+        said = f"{path} {why}, so it is not taken: the theme is {self.theme} and the agents move"
+        note(self.screen, said, severity="warning")
 
     def action_theme(self) -> None:
         """Choose a theme for this run from a list of them, which says, once one is chosen, what keeps it."""
@@ -130,7 +144,7 @@ class TerminalUI(App[str | None], inherit_bindings=False):
     def watch_theme(self, theme: str) -> None:
         if self._choosing:
             self._choosing = False
-            note(self.screen, f'The theme is {theme} for this run: `{THEME} = "{theme}"` in {settings()} keeps it.')
+            note(self.screen, f'The theme is {theme} for this run: `theme = "{theme}"` in {settings()} keeps it.')
 
     def action_copy(self) -> None:
         """Copy, as OSC 52, which a terminal may put on the clipboard: what is selected in the field you type in, or

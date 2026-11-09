@@ -1,8 +1,8 @@
 """The terminal UI's budgets, from section 7.9 of tui-expectations.md: event-loop lag at 100 agents with one live
 stream, an append at a large history, and resident memory. Short runs on a loaded shared host, so the numbers are
 printed and the bounds are the research's own. Opening and closing a line at a full window is held to the append's,
-and every fold at once to a bound of ours. And an attach to the journal of the Scale case, held to a budget twice what
-docs/reference/scale.md publishes."""
+and the motion of a live session at rest to a small share of a core, which is ours. And an attach to the journal of
+the Scale case, held to a budget twice what docs/reference/scale.md publishes."""
 
 import asyncio
 import statistics
@@ -15,7 +15,9 @@ from textual.app import App, ComposeResult
 from platoon_harness import Session, Team
 from platoon_harness.kernel import Event
 from platoon_harness_cli.tui.app import TerminalUI
+from platoon_harness_cli.tui.motion import FPS
 from platoon_harness_cli.tui.transcript import WINDOW, Focus, Transcript
+from platoon_harness_cli.tui.workspace import Navigator
 
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.tui.support import drawn, workspace
@@ -26,6 +28,8 @@ pytestmark = pytest.mark.timeout(180)
 
 LAG = 0.050
 APPEND = 0.060
+IDLE = 0.02
+"""The most of a core a live session at rest may take to move its agents: two percent, ours."""
 UNFOLD = 0.25
 """The longest opening or closing every fold of a full window may take, as one act a person asks for: ours."""
 ATTACH = 0.86
@@ -225,6 +229,49 @@ async def test_opening_and_closing_a_line_at_a_full_window_stays_in_budget():
     assert held == WINDOW
     assert p99(toggles) < APPEND
     assert max(every) < UNFOLD
+
+
+@pytest.mark.slow
+async def test_an_animated_live_session_at_rest_costs_a_little_each_frame_and_draws_only_what_moves(tmp_path):
+    """A live session of 20 agents, every one resting: the logo blinks now and then and each agent's ring breathes, at
+    four frames a second. A minute of frames, stepped by hand: each frame's cost, its own and the drawing it asks for,
+    and the rows it draws again, which are only those whose frame changed."""
+    team = Team.model_validate({"roles": {"idle": {"harness": inside("saying"), "count": 20}}})
+    guest = await Session.start(team, name="s", root=tmp_path, detach=True)
+    app = TerminalUI("s")
+    async with app.run_test(size=(120, 60)) as pilot:
+        await drawn(pilot, lambda text: "idle  20" in text)
+        screen = workspace(app)
+        navigator = screen.query_one(Navigator)
+        await drawn(pilot, lambda _: navigator.motion.idle == 20 and navigator._ticking is not None)
+        navigator._ticking.stop()  # type: ignore[union-attr]
+        refreshed: list[int] = []
+        refresh = navigator.refresh_lines
+
+        def counted(y: int, count: int = 1) -> None:
+            refreshed.append(y)
+            refresh(y, count)
+
+        navigator.refresh_lines = counted  # type: ignore[method-assign]
+        costs, rows = [], []
+        for _ in range(60 * FPS):
+            refreshed.clear()
+            began = time.process_time()
+            navigator.advance()
+            await pilot.pause()
+            costs.append(time.process_time() - began)
+            rows.append(len(refreshed))
+        moving = {index for index, row in enumerate(navigator.rows) if row.moves}
+
+    await guest.leave()
+    busy = sum(costs) / 60
+    print(
+        f"a minute of motion at rest: {busy * 100:.2f}% of a core, a frame p50 {statistics.median(costs) * 1000:.2f} "
+        f"ms, p99 {p99(costs) * 1000:.2f} ms, max {max(costs) * 1000:.2f} ms; {sum(rows)} rows drawn again in "
+        f"{len(rows)} frames, {max(rows)} at most, of {len(moving)} that move"
+    )
+    assert max(rows) <= len(moving) and sum(1 for count in rows if count) < len(rows) / 2
+    assert p99(costs) < LAG and busy < IDLE
 
 
 @pytest.mark.scale

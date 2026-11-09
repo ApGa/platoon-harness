@@ -16,6 +16,7 @@ from textual.css.query import NoMatches
 from textual.message import Message
 from textual.screen import Screen
 from textual.style import Style
+from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Static
 
@@ -36,6 +37,7 @@ from .composer import ADDRESS, Composer
 from .dialogs import Confirm, Form
 from .keymap import KEYMAP, action_of, bindings, command, keys, reach
 from .live import Live
+from .motion import GLYPHS, TICK, Motion, allowed
 from .provenance import Provenance
 from .review import Review
 from .rows import Row, Rows
@@ -103,9 +105,60 @@ class Dock(Rows):
 
 
 class Navigator(Rows):
-    """The agents and channels, a row each, of which Enter shows the chosen one."""
+    """The agents and channels, a row each, of which Enter shows the chosen one, under the logo's agents. What of its
+    rows moves, the logo and the glyphs of agents working or resting, moves as `Motion` draws it, a few frames a second
+    while it says to and motion is on, each frame drawing again only the rows whose frame changed. Its timer decides
+    nothing."""
 
     BINDINGS = bindings("panel")
+
+    def __init__(self, *, id: str | None = None) -> None:
+        super().__init__(id=id)
+        self.motion = Motion()
+        self._ticking: Timer | None = None
+        self._art: tuple[tuple[tuple[str, ...], bool], list[Content]] | None = None
+
+    def follow(self, states: Mapping[str, str], *, live: bool, settled: bool) -> None:
+        """Take each agent's state and whether the session settled, as the record says them now, and move while they
+        say to."""
+        self.motion.follow(states, live=live, settled=settled)
+        self._tick_while(self.motion.moving and allowed(self.app))
+
+    def _tick_while(self, moving: bool) -> None:
+        if moving and self._ticking is None:
+            self._ticking = self.set_interval(TICK, self.advance)
+        elif not moving and self._ticking is not None:
+            self._ticking.stop()
+            self._ticking = None
+            self.refresh()
+
+    def advance(self) -> None:
+        """Move a frame on, drawing again each row whose frame changed, and only those, and stop where nothing moves."""
+        before = self._frames()
+        self.motion.advance()
+        after = self._frames()
+        for index, row in enumerate(self.rows):
+            if row.moves and before[row.moves] != after[row.moves]:
+                self.refresh_lines(index)
+        self._tick_while(self.motion.moving and allowed(self.app))
+
+    def _frames(self) -> dict[str, object]:
+        return {"logo": self.motion.sprite(), **{state: self.motion.glyph(state) for state in GLYPHS}}
+
+    def moving(self, row: Row, index: int) -> Content | None:
+        """The logo's row at `index` as this frame draws it, the logo's rows being the first, or an agent's row with its
+        glyph as this frame draws it; None while nothing moves, or for a glyph that stands still."""
+        if self._ticking is None:
+            return None
+        if row.moves == "logo":
+            pixels, ansi = self.motion.sprite(), self.app.current_theme.ansi
+            if self._art is None or self._art[0] != (pixels, ansi):
+                self._art = ((pixels, ansi), logo.sprite(pixels, logo.ANSI if ansi else logo.TRUECOLOUR))
+            return self._art[1][index]
+        if (glyph := self.motion.glyph(row.moves)) is None:
+            return None
+        at = row.lead - 2
+        return row.line[:at] + Content(glyph, list(row.line[at : at + 1].spans)) + row.line[at + 1 :]
 
 
 class Edge(Static):
@@ -321,6 +374,9 @@ class Workspace(Screen[None]):
         await self._read_queue(live)
         await self._inspect(live)
         self._toast(live)
+        states = {row["agent"]: _state(row) for row in live.roster}
+        settled = bool(live.status.get("settled"))
+        self.query_one(Navigator).follow(states, live=live.runtime == "live", settled=settled)
         self._redraw()
 
     def _toast(self, live: Live) -> None:
@@ -570,7 +626,7 @@ class Workspace(Screen[None]):
         """The session's mark, then the agents in the roster's groups, each a tree by parent of two lines, its glyph and
         name over its state, harness and what it is doing, then the channels."""
         mentioned = self._mentions(live)
-        rows = self._brand(live)
+        rows = self._brand()
         members: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in live.roster:
             members[_state(row) if _state(row) in ("lost", "unknown") else row["group"]].append(row)
@@ -595,24 +651,16 @@ class Workspace(Screen[None]):
             rows.append(Row(line, focus.key, lead=2))
         return rows
 
-    def _brand(self, live: Live) -> list[Row]:
-        """The logo's agents beside the session's name, how it stands and how many agents it has, where the screen is
-        tall enough to give it the rows."""
+    def _brand(self) -> list[Row]:
+        """The logo's agents, which move as `Motion` draws them, where the screen is tall enough to give them the rows.
+        The header says the session's name and how it stands."""
         if self.size.height < 16:
             return []
-        art = logo.sprite(logo.SMALL, logo.ANSI if self.app.current_theme.ansi else logo.TRUECOLOUR)
-        runtime = ("live", "$success") if live.runtime == "live" else ("history", "$warning")
-        said = [
-            SafeText(self.session_name, "bold"),
-            Content.styled(*runtime),
-            SafeText(live.status.get("state", ""), "dim"),
-            Content.styled(_some(len(live.roster), "agent"), "dim"),
-        ]
-        lead = art[0].cell_length + 2
-        return [
-            *(Row(Content.assemble(cells, "  ", words), lead=lead) for cells, words in zip(art, said, strict=True)),
-            Row(Content("")),
-        ]
+        art: list[Content] = logo.sprite(logo.SMALL, logo.ANSI if self.app.current_theme.ansi else logo.TRUECOLOUR)
+        rows = []
+        for cells in art:
+            rows.append(Row(cells, lead=cells.cell_length, moves="logo"))
+        return [*rows, Row(Content(""))]
 
     def _tree(
         self, under: dict[str | None, list[dict[str, Any]]], parent: str | None, depth: int, mentioned: set[str]
@@ -641,8 +689,8 @@ class Workspace(Screen[None]):
                 (" · " if doing else "", "dim"),
                 inline(doing).stylize("dim"),
             )
-            spins = state == "working"
-            rows += [Row(named, key, lead=len(indent) + 2, spins=spins), Row(how, key, lead=len(indent) + 2)]
+            moves = state if state in GLYPHS else ""
+            rows += [Row(named, key, lead=len(indent) + 2, moves=moves), Row(how, key, lead=len(indent) + 2)]
             rows += self._tree(under, row["agent"], depth + 1, mentioned)
         return rows
 

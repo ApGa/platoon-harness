@@ -15,25 +15,20 @@ from textual.message import Message
 from textual.scroll_view import ScrollView
 from textual.selection import Selection
 from textual.strip import Strip
-from textual.timer import Timer
 
 from .keymap import bindings
-
-SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-"""The frames a working agent's glyph turns through while animation is on, eight a second."""
-SPIN = 1 / 8
 
 
 @dataclass(frozen=True)
 class Row:
     """One line. A row with no `key` is a heading, which the cursor passes over, and rows that share a key are one
     choice, as a long line wrapped is. Its first `lead` characters decorate it, as a glyph does, and a selection copies
-    none of them. A row that `spins` turns the character before its lead's last through the spinner's frames."""
+    none of them. A row that `moves` names what of it moves, which `Rows.moving` draws a frame at a time."""
 
     line: Content
     key: str | None = None
     lead: int = 0
-    spins: bool = False
+    moves: str = ""
 
 
 def strip_of(line: Content, width: int, style: Style) -> Strip:
@@ -95,8 +90,6 @@ class Rows(ScrollView, can_focus=True):
         super().__init__(id=id)
         self.rows: list[Row] = []
         self.cursor: str | None = None
-        self._frame = 0
-        self._spinning: Timer | None = None
         self._drawn: LRUCache[tuple[int, int, bool, Style], Strip] = LRUCache(1024)
 
     def on_mount(self) -> None:
@@ -117,23 +110,12 @@ class Rows(ScrollView, can_focus=True):
         if self.cursor not in keys:
             self.cursor = keys[0] if keys else None
         self.virtual_size = Size(0, len(rows))
-        self._spin_while(any(row.spins for row in rows) and self.app.animation_level != "none")
         self.refresh()
 
-    def _spin_while(self, spinning: bool) -> None:
-        """Turn the spinner while a row spins, and let its timer go once none does. It decides nothing."""
-        if spinning and self._spinning is None:
-            self._spinning = self.set_interval(SPIN, self._turn)
-        elif not spinning and self._spinning is not None:
-            self._spinning.stop()
-            self._spinning = None
-
-    def _turn(self) -> None:
-        """Turn each spinning row's glyph a frame, drawing those rows alone."""
-        self._frame += 1
-        for index, row in enumerate(self.rows):
-            if row.spins:
-                self.refresh_lines(index)
+    def moving(self, row: Row, index: int) -> Content | None:
+        """The row at `index` as this frame draws it where it moves now, or None where it stands still, as every row of
+        a plain list does."""
+        return None
 
     @property
     def keys(self) -> list[str]:
@@ -204,21 +186,16 @@ class Rows(ScrollView, can_focus=True):
             return Strip.blank(width, self.rich_style)
         row = self.rows[index]
         chosen = row.key is not None and row.key == self.cursor
-        spinning = row.spins and self._spinning is not None
+        frame = self.moving(row, index) if row.moves else None
         key = (index, width, chosen, self.rich_style)
-        strip = None if spinning else self._drawn.get(key)
+        strip = None if frame is not None else self._drawn.get(key)
         if strip is None:
-            line = row.line
-            if spinning:
-                at = row.lead - 2
-                frame = Content(SPINNER[self._frame % len(SPINNER)], list(line[at : at + 1].spans))
-                line = line[:at] + frame + line[at + 1 :]
-            strip = strip_of(line, width, self.rich_style)
+            strip = strip_of(row.line if frame is None else frame, width, self.rich_style)
             if chosen:
                 strip = Strip(
                     Segment.apply_style(strip, post_style=self.get_component_rich_style("rows--chosen")), width
                 )
-            if not spinning:
+            if frame is None:
                 self._drawn[key] = strip
         if (selection := self.text_selection) is not None:
             strip = highlighted(

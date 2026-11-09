@@ -37,21 +37,26 @@ named here is closed.
   each label's values as an `enum`, and leaves the argument out where the team declares none. Before, nothing on the record
   said what kind of work a task or a spawn was. This is step 1 of RFC 0078, a draft.
 - **A new look for the terminal UI.** The workspace is drawn in titled panels with thin rounded borders, the one with
-  focus in the accent, on the theme `platoon-ink`: dark ink with one accent, the logo's sky blue. Each agent in the
-  navigator is two lines, a glyph and its name over its state, its harness and what it is doing, the glyph saying its
-  state as its colour does, a working agent's turning while animation is on. The header is segments, the session's name
-  and how it stands, the counts with their glyphs, what changed and each limit with a thin meter, giving way where they
-  do not fit, and under 80 columns the team is tabs over the transcript, the agent in view filled with the accent. A
-  toast says when an agent comes to need you while another is in view. Before, the screen was plain text on panels with
-  no title, an agent's state was a glyph beside its name alone, and nothing said an agent came to need you but the
-  header's count.
+  focus in the accent, on the theme `platoon-ink`: dark ink with one accent, the logo's sky blue, and a muted
+  amber, not a yellow, for warnings, `history` and what needs you. Each agent in the navigator is two lines, a glyph and
+  its name over its state, its harness and what it is doing, the glyph saying its state as its colour does. The header
+  is segments, the session's name and how it stands, the counts with their glyphs, what changed and each
+  limit with a thin meter, giving way where they do not fit, and under 80 columns the team is tabs over the transcript, the agent in view filled with the accent. A toast says when an agent
+  comes to need you while another is in view. Before, the screen was plain text on panels with no title, an agent's state
+  was a glyph beside its name alone, and nothing said an agent came to need you but the header's count.
 - **Themes in the terminal.** `/theme`, or `t` on the sessions screen, chooses one of Textual's themes for the run,
   `ansi-dark` among them for the terminal's own colours, and `theme = "nord"` in `~/.config/platoon-harness/tui.toml`
-  keeps one. This reverses, at the owner's request, the default that themes wait.
-- **Platoon's agents in the terminal.** A sprite of the Platoon project's logo, its round-headed agents in their
-  blue-to-green gradient, drawn by hand from its icon (MIT, Apurva Gandhi) in half blocks, stands small beside the
-  session's name at the navigator's top and larger beside the wordmark on the sessions screen, in the terminal's own
-  colours under a theme that keeps to them.
+  keeps one. `tui.toml` takes `theme` and `motion`, and one that holds anything else, or either as another kind of value,
+  is not taken, saying why. This reverses, at the owner's request, the default that themes wait.
+- **Platoon's agents in the terminal.** Sprites of the Platoon project's logo, its round-headed, big-eyed agents in their
+  blue-to-green gradient, drawn by hand from its icon (MIT, Apurva Gandhi) in half blocks: three small ones marching up at
+  the navigator's top, and on the sessions screen three of one size beside the wordmark, the middle one a step ahead,
+  never torn at a narrow width, in the terminal's own colours under a theme that keeps to them.
+- **Agents that move.** While agents of a live session work, the logo's agents step in turn and a working agent's dot
+  stirs; while they rest, they blink now and then and a resting agent's ring breathes; and an agent finishing, one
+  coming to need you, or more starting work gets a flourish under a second. Motion follows the session's state alone, a
+  session that is history never moves, and `motion = false` in `tui.toml` or Textual's animation level below full turns
+  it off. It takes under 1% of a core at rest, measured.
 - **A calmer transcript, in levels.** A turn shows what its agent said, each message and its report whole, wrapped, and
   all else it did is one quiet line that counts it, `▸ 5 tool calls · ✗ 1 failed · 3 thoughts · 1 spawn`, which opens
   on each call by its tool's name and its input in short, each thought as one dim line and each spawn under its call, and
