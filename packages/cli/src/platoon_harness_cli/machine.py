@@ -267,7 +267,13 @@ def _say_report(report: dict[str, Any], problems: list[str]) -> None:
 def finding(name: str) -> str | None:
     """What `doctor` says of the harness `name`, after its name, or None where it looks for no harness of that name."""
     driver = dict(harnesses()).get(name)
-    return None if driver is None else _said(_harness(name, driver, find_root()))
+    return None if driver is None else found(name, driver, find_root())
+
+
+def found(name: str, driver: Driver, root: Path) -> str:
+    """What `doctor` says of a harness after its name: why it is not here, or its version, its login's kind and what
+    its checks found. It blocks, as it runs the harness to ask."""
+    return _said(_harness(name, driver, root))
 
 
 def _said(harness: dict[str, Any]) -> str:

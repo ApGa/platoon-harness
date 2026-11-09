@@ -25,6 +25,7 @@ dependencies = [
     "rich>=14",
     "swarmchat==0.1.0",
     "textual>=8.2,<9",
+    "tomlkit>=0.15,<0.16",
 ]
 
 [project.urls]

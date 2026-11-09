@@ -56,29 +56,29 @@ def _limits(item: Any) -> Iterator[str]:
         yield f"at least {least}"
 
 
-def _kind(hint: Any) -> str:
-    """A value's type in a file's words."""
+def type_said(hint: Any) -> str:
+    """A value's type in a file's words, as the reference and the team editor say it."""
     if hint == Duration:
         return "duration, such as `30m`"
     if isinstance(hint, TypeAliasType):
-        return _kind(hint.__value__)
+        return type_said(hint.__value__)
     origin, args = get_origin(hint), get_args(hint)
     if origin is Annotated:
         base, *metadata = args
         patterns = [item.pattern for item in metadata if getattr(item, "pattern", None)]
-        kind = _pattern(patterns[0]) if patterns else _kind(base)
+        kind = _pattern(patterns[0]) if patterns else type_said(base)
         return ", ".join([kind, *(limit for item in metadata for limit in _limits(item))])
     if origin in (Union, UnionType):
-        kinds = list(dict.fromkeys(_kind(arg) for arg in args if arg is not NoneType))
+        kinds = list(dict.fromkeys(type_said(arg) for arg in args if arg is not NoneType))
         return "number" if kinds == ["integer", "number"] else either(kinds)
     if origin is Literal:
         return either(f"`{json.dumps(value)}`" for value in args)
     if origin in (tuple, Sequence):
-        return f"list of {_plural(_kind(args[0]))}"
+        return f"list of {_plural(type_said(args[0]))}"
     if origin is Mapping:
         key, value = args
-        keys = _kind(key).replace('"', "")
-        return f"{_plural(_kind(value))}, by {'key' if keys == 'string' else keys}"
+        keys = type_said(key).replace('"', "")
+        return f"{_plural(type_said(value))}, by {'key' if keys == 'string' else keys}"
     if hint is JsonValue:
         return "any value"
     if isinstance(hint, type) and issubclass(hint, BaseModel):
@@ -86,7 +86,8 @@ def _kind(hint: Any) -> str:
     return WORDS[hint]
 
 
-def _value(value: Any) -> str:
+def default_said(value: Any) -> str:
+    """A default in a file's words: `required` where there is none."""
     if value is inspect.Parameter.empty:
         return "required"
     if value is None:
@@ -145,7 +146,7 @@ def _section(model: type[BaseModel], places: list[str], discriminator: str | Non
     hints = get_type_hints(model, include_extras=True)
     required = {name for name, field in model.model_fields.items() if field.is_required()} | {discriminator}
     rows = [
-        f"| `{name}` | {_kind(hints[name])} | {'required' if name in required else _value(field.default)} |"
+        f"| `{name}` | {type_said(hints[name])} | {'required' if name in required else default_said(field.default)} |"
         for name, field in model.model_fields.items()
         if (model, name) not in HIDDEN
     ]
@@ -170,7 +171,7 @@ def _section(model: type[BaseModel], places: list[str], discriminator: str | Non
 def _preset(name: str) -> str:
     preset = PRESETS[name]
     parameters = inspect.signature(preset).parameters.values()
-    rows = [f"| `{item.name}` | {_kind(item.annotation)} | {_value(item.default)} |" for item in parameters]
+    rows = [f"| `{item.name}` | {type_said(item.annotation)} | {default_said(item.default)} |" for item in parameters]
     lines = [f"### {name}", "", f"At `[topology.{name}]`.", "", inspect.cleandoc(preset.__doc__ or "")]
     return "\n".join([*lines, "", "| Key | Type | Default |", "|---|---|---|", *rows])
 

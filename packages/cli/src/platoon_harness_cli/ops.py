@@ -33,7 +33,7 @@ _KINDS = {"string": str, "integer": int, "number": float, "boolean": bool}
 _LITERAL: Any = Literal  # A flag's type is made from a schema when the command line is, for cyclopts to parse by.
 _TUPLE: Any = tuple
 _SESSION_HELP = "A session, by name. `platoon-harness session list` shows them."
-_SEVERAL = "Separate several with commas."
+SEVERAL = "Separate several with commas."
 """How a form takes a list, where a command line takes its flag again for each."""
 _SESSION = inspect.Parameter("session", inspect.Parameter.POSITIONAL_ONLY, annotation=str)
 _KEY = inspect.Parameter(
@@ -310,7 +310,7 @@ def forms(held: Iterable[Mapping[str, Any]]) -> list[Form]:
         schema = entry["schema"]
         fields = _fields(schema)
         asked = tuple(
-            replace(field, help=f"{field.help} {_SEVERAL}".strip()) if field.kind == "list" else field
+            replace(field, help=f"{field.help} {SEVERAL}".strip()) if field.kind == "list" else field
             for field in fields
             if field.name != "via"
         )
