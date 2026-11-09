@@ -18,10 +18,11 @@ named here is closed.
   harness chosen from the drivers this machine has with what `doctor` finds of each, its model and effort as free text, and
   the topology, budget, labels, auth profiles and test command. Each change is checked as `run` loads the team and `team
   check` checks it, each problem under its field, beside `team show`'s sentences and the diff a save makes. Save writes the
-  file in place, keeping its comments and layout, never through a link and over nothing changed since it was read, and asks
-  once before it writes what would run as you or a credential to pass on; Start saves the editor's changes first. The
-  command line now requires `tomlkit`, which writes the file's own text. Before, a team was a file written by hand or by
-  `init`. This is RFC 0079, a draft; the terminal's editor, on the same fields, is next.
+  file in place, keeping its comments and layout, never through a link, refusing a file found changed since it was read,
+  though a change made in the moment before its write is overwritten, and asks once before it writes what would run as you
+  or a credential to pass on; Start saves the editor's changes first. The command line now requires `tomlkit`, which writes
+  the file's own text. Before, a team was a file written by hand or by `init`. This is RFC 0079, a draft; the terminal's
+  editor, on the same fields, is next.
 - **The labels of the work a span was done for.** `spans` gives each span the claims its agent held while its calls were made,
   each claim held from the call after the one that chose it through the one that completed, failed or released it, or to its
   lease's lapse or its agent's end, and `None`, unknown, where the record cannot place a claim or its end to say whether the span

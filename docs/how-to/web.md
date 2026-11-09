@@ -2,8 +2,9 @@
 
 This guide shows how to watch a session from a browser and act on it there. `platoon-harness web SESSION` serves
 [SwarmChat](https://swarmchat.io)'s page over one session's journal, and `platoon-harness web` alone a page of your sessions,
-which opens, starts, resumes and stops each, and edits the project's team. A session's page is a client like any other: it reads what the journal holds,
-decides nothing, and computes no status, and what a person does there is an op, through the same path as the terminal's.
+which opens, starts, resumes and stops each, and edits the project's team. A session's page is a client like any other: it
+reads what the journal holds, decides nothing, and computes no status, and what a person does there is an op, through the
+same path as the terminal's.
 The sessions page's acts are not ops of a session, and they are the terminal's sessions screen's: Start starts a session
 with no prompt on a runtime of its own, Resume is `session resume` and Stop is `session stop`. [tui.md](tui.md) is the
 terminal's guide and [cli.md](../reference/cli.md) the command line's reference.
@@ -92,10 +93,10 @@ those it started among them.
 Edit, under The project's team, opens the team editor on `platoon-harness.toml` in the folder `web` runs in: a field for
 each key a person sets, its roles with their harness, model and effort among them, its topology, budget, labels, auth
 profiles and test command, each problem under its field as `team check` says it, what the team allows in `team show`'s
-sentences, and the diff a save makes. Save writes the file in place, keeping its comments and layout, over nothing changed
-since it was read and never through a link, asking once first where it writes what would run as you or a credential to
-pass on. Start, with Team file left empty, saves the editor's changes first. [Edit a team in the browser](edit-a-team.md)
-is its guide.
+sentences, and the diff a save makes. Save writes the file in place, keeping its comments and layout, never through a
+link, refusing a file found changed since it was read, though a change made in the moment before its write is
+overwritten, and asking once first where it writes what would run as you or a credential to pass on. Start, with Team file
+left empty, saves the editor's changes first. [Edit a team in the browser](edit-a-team.md) is its guide.
 
 ## Choose a link
 

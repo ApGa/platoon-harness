@@ -53,11 +53,13 @@ What only the file sets is kept as the file has it and named in its group: `exte
 ## Save, then start
 
 Save writes the diff it showed into `platoon-harness.toml`, keeping your comments, the order of your keys and their
-layout. It writes the whole file at once, never through a link, and only over the file as it was when the editor last read
-it: a file changed since, by you in another editor or by anything else, is refused, nothing is written, and the editor
-shows your changes on what it holds now, for you to save again. Save waits while a change is being checked, and is disabled,
-saying why, while there is nothing to save, or while the loader refuses the draft or a change could not be made. What
-`team check` finds does not stop a save, as a team may name a harness this machine lacks.
+layout; a change you take back leaves the file as it was. It writes the whole file at once, never through a link, and
+first compares the file with what the editor last read: a file found changed since, by you in another editor or by
+anything else, is refused, nothing is written, and the editor shows your changes on what it holds now, for you to save
+again. A change made in the moment between that comparison and the write is overwritten, as a rename cannot compare. Save
+waits while a change is being checked, and is disabled, saying why, while there is nothing to save, or while the loader
+refuses the draft or a change could not be made. What `team check` finds does not stop a save, as a team may name a
+harness this machine lacks.
 
 A save that writes a test command or an auth profile asks once first, naming each value as the team would hold it, as it is
 what would run as you or a credential to pass on. A start from the team asks for trust again, as every start does.

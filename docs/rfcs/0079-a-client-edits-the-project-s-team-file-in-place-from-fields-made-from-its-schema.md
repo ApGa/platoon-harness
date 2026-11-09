@@ -6,8 +6,8 @@
 | Created | 2026-11-09 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`config.py`](../../packages/sdk/src/platoon_harness/config.py), [`team.py`](../../packages/sdk/src/platoon_harness/team.py), [`team_file.py`](../../packages/cli/src/platoon_harness_cli/team_file.py), [`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py), [`teams.py`](../../packages/cli/src/platoon_harness_cli/teams.py), [`web/sessions.py`](../../packages/cli/src/platoon_harness_cli/web/sessions.py), [architecture sections 12 and 17](../architecture.md#12-clients), [RFC 0017](0017-config-and-entry-points.md), [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md), [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) and [RFC 0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) |
-| Discussion | The owner's request of 2026-11-09: "it'd be great if we can configure the team from within the team, harnesses, topology, models, efforts, etc. from within the tui/web ui instead of forcing us to write a config file a priori". The owner's rulings of the same day: the editor reads and writes the project's team file, `platoon-harness.toml`, so the command line, the terminal and the browser always agree, starting from the editor saves first, and the session's record keeps the exact team it ran; and changing a running session's settings is later, a stage of its own. The request accepts no design: this one waits for the owner's acceptance |
-| Implementation | `docs: Add RFC 0079 on editing the project's team from a client`; `feat: Edit the project's team file in place from fields made from its schema`; `feat: Edit the project's team from the browser's sessions page` |
+| Discussion | The owner's request of 2026-11-09: "it'd be great if we can configure the team from within the team, harnesses, topology, models, efforts, etc. from within the tui/web ui instead of forcing us to write a config file a priori". The owner's rulings of the same day, in summary, as their words were not kept: the editor edits the project's `platoon-harness.toml`; a start from the editor saves first; and switching a running session's model or effort comes later. The rest, which keys a person sets among it, is this design's. The request accepts no design: this one waits for the owner's acceptance |
+| Implementation | `docs: Add RFC 0079 on editing the project's team from a client`; `feat: Edit the project's team file in place from fields made from its schema`; `feat: Edit the project's team from the browser's sessions page`; and the fixes the review asked for |
 
 ## Summary
 
@@ -20,8 +20,8 @@ schema and the reference made from it, a harness is chosen from the drivers this
 each, and a model is free text. A draft is the file as read with a person's edits, written as the file's own text by a
 format-preserving TOML library, so comments, order and layout survive; it is loaded by the same loader `run` uses and
 checked by `team check`, every problem shown at its field, with `team show`'s sentences of it and the diff a save makes. A
-save writes the whole file through a file beside it, never through a link, over nothing changed since it was read, and asks
-once before it writes what would run as the person or a credential to pass on. The browser's sessions page
+save writes the whole file through a file beside it, never through a link, refuses a file found changed since it was read,
+and asks once before it writes what would run as the person or a credential to pass on. The browser's sessions page
 ([RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md)) gains the editor first; the terminal's, on the same
 module, follows the terminal's redesign.
 
@@ -113,14 +113,14 @@ draft offers it: a place that is no field, a name that is no name, a value a fie
 a problem at its place and leaves the draft as it was. A field left empty leaves its key out, and a table it leaves empty
 goes with it, but an entry a person named, which stays until it is removed.
 
-The file is parsed by a format-preserving TOML library, and each edit is written into that document: a changed value keeps
-its line's comment, a new key goes after its table's last key and before the comments that end the table, which are about
-what follows, a new table goes after the last of its kind with those comments after it, and a removed table goes with the
-comments right above its header and leaves those about what follows. A table a removal leaves empty goes too, as
-`[topology]` does with its only preset, and edits that together change nothing the file means leave it as it was, byte
-for byte. Beside the text, the editor keeps the data the edits
-mean; after each edit the text is read back with `tomllib`, the loader's own parser, and an edit whose text does not mean
-that data is refused, saying to make the change in the file. A file that is not TOML or not UTF-8 is left to the file.
+The file is parsed by a format-preserving TOML library, and each edit is written into that document: a changed value
+keeps its line's comment, a new key goes after its table's last key and before the comments that end the table, which
+are about what follows, a new table goes after the last of its kind with those comments after it, and a removed table
+goes with the comments right above its header and leaves those about what follows. A table a removal leaves empty goes
+too, as `[topology]` does with its only preset, and edits that together change nothing the file means leave it as it
+was, byte for byte. Beside the text, the editor keeps the data the edits mean; after each edit the text is read back
+with `tomllib`, the loader's own parser, and an edit whose text does not mean that data is refused, saying to make the
+change in the file. A file that is not TOML or not UTF-8 is left to the file.
 
 ### 4. Checked as `run` loads it and as `team check` checks it
 
@@ -135,12 +135,13 @@ saved, saying so; what `team check` finds is said and does not stop a save, as a
 ### 5. Written in place
 
 A save sends the edits and `base`, the digest of the file's bytes the person's last check read, or none where there was no
-file. The server makes the draft again from the file as it is: a file that changed is refused, writing nothing, and the
+file. The server makes the draft again from the file as it is: a file found changed is refused, writing nothing, and the
 next check shows the edits on what it holds now. The draft is written whole to a file beside the project's, created over
 nothing and never following a link, synced, and renamed over it, keeping its mode; a new project file is linked into place,
-which fails if a file came to be. A project file that is a link, or anything but a file, is refused when it is read, so the
-person learns before editing that the editor writes through none. A save is shown first as the diff it makes, which the
-client shows beside the fields.
+which fails if a file came to be. A change made between the save's last look at the file and the rename is overwritten, as
+the hard parts say. A project file that is a link, or anything but a file, is refused when it is read, so the person learns
+before editing that the editor writes through none. A save is shown first as the diff it makes, which the client shows
+beside the fields.
 
 ### 6. Trust
 
@@ -199,7 +200,7 @@ of problems and its save are this module's, so the terminal draws them as the pa
 | Edits sent as the file's text, typed by the person | A text editor in the page, which the person has already; the schema's forms are what the owner asked for |
 | A draft kept on the server between checks | State a reload or a second tab would contend for, where the edits are small enough to send whole |
 | Checks of the editor's own, in Python or in JavaScript | A second set of rules beside the loader and `team check`, which would drift from what `run` refuses |
-| Every key of the schema a field | Keys that run code as the person would be set unseen in a form; the owner named the keys a person sets, and the rest stay the file's |
+| Every key of the schema a field | Keys that run code as the person would be set unseen in a form. The owner asked for harnesses, topology, models and efforts; this design adds the budget, labels, auth profiles and test command, and leaves the rest to the file |
 | A model chosen from a list | No driver lists the models its harness takes: a list made here would be invented |
 | Saving without asking about trust, as writing runs nothing | The page acts as the person, and what it writes runs at the next start: never trusting silently means asking where it writes such a value |
 
@@ -236,9 +237,10 @@ SDK keeps reading TOML with `tomllib` alone, and the read back with `tomllib` ch
    start too, is the owner's. The default, pending the owner's ruling, is that each asks, as a save writes and a start runs;
    the other answer drops one question and tears nothing out.
 2. Whether more keys become fields, such as `allow_native_children`, which a role on an ACP harness must set and which the
-   editor now leaves to the file, saying what `team check` says, is the owner's. The default is the owner's list alone.
+   editor now leaves to the file, saying what `team check` says, is the owner's. The default, pending the owner's ruling,
+   is the keys section 1 lists and no more.
 3. Whether the driver contract gains an optional list of the models a harness takes, which the model field would offer, is
-   the owner's, and an RFC of its own. The default is none, and a model is free text.
+   the owner's, and an RFC of its own. The default, pending the owner's ruling, is none, and a model is free text.
 
 ## Evidence
 
