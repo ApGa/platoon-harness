@@ -2,14 +2,20 @@
 either way, from a checkpoint of its views where one lies nearer."""
 
 import asyncio
+import contextlib
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from platoon_harness import Refused, Replay, Session
 from platoon_harness import session as session_module
+from platoon_harness.kernel import Kernel, ManualClock
+from platoon_harness.kernel.journal import open_writer
+from platoon_harness.primitives import PRIMITIVES
 from platoon_harness.testing import Say
 
+from ...recorded import RECORDED, restored
 from .support import in_state, of_type, solo, until
 
 pytestmark = pytest.mark.timeout(60)
@@ -36,6 +42,22 @@ async def recorded(root: Path, *said: str) -> int:
         return await session.head()
 
 
+def then(original: Path, journal: Path, at: int) -> Kernel:
+    """A kernel over the original's events through `at` and their bodies, a journal written as a session's is and no
+    copy, whose clock stands at the wall time of the event at `at`: the session as it stood then."""
+    uri = f"{(original / 'journal.sqlite').as_uri()}?mode=ro"
+    with (
+        contextlib.closing(sqlite3.connect(uri, uri=True)) as read,
+        contextlib.closing(open_writer(journal, 0.0)) as db,
+    ):
+        read.row_factory = sqlite3.Row
+        events = read.execute("SELECT * FROM events WHERE seq <= ?", (at,)).fetchall()
+        with db:
+            db.executemany(f"INSERT INTO events VALUES ({', '.join('?' * len(events[0]))})", map(tuple, events))
+            db.executemany("INSERT INTO bodies VALUES (?, ?, ?)", map(tuple, read.execute("SELECT * FROM bodies")))
+    return Kernel.open(journal.parent, clock=ManualClock(events[-1]["wall_time"]), extensions=PRIMITIVES)
+
+
 async def test_a_replay_reads_as_the_session_read_at_its_playhead(tmp_path):
     await recorded(tmp_path, "first", "second")
     async with Replay.open("s", root=tmp_path) as replay:
@@ -50,6 +72,27 @@ async def test_a_replay_reads_as_the_session_read_at_its_playhead(tmp_path):
         said = [event.gist for event in await of_type(replay.session, "item.recorded")]
         assert said == ["heard first", "heard second"]
         assert (await replay.session.status())["state"] == "stopped"
+
+
+async def test_a_replay_works_out_what_was_due_spent_or_stalled_at_its_playhead_s_time_never_now(tmp_path):
+    """The mixed team's recorded session stalled a second in, at event 45, waiting for its person, and had spent half a
+    minute of its 20 by event 200: a replay at each says so, as a kernel over the same events at that event's wall time
+    does, where today's clock would call it done, with a timer due and its wall time spent."""
+    name = restored(RECORDED, tmp_path)
+    original = tmp_path / "sessions" / name
+    async with Replay.open(name, root=tmp_path) as replay:
+        for at in (45, 200):
+            await replay.seek(at)
+            (tmp_path / str(at)).mkdir()
+            kernel = then(original, tmp_path / str(at) / "journal.sqlite", at)
+            try:
+                assert await replay.session.status() == kernel.query(Kernel.runtime, "session.status", {}).result
+                assert await replay.session.budgets() == kernel.query(Kernel.runtime, "budget.status", {}).result
+            finally:
+                kernel.close()
+            if at == 45:
+                assert (await replay.session.status())["stalled"] is True
+        assert 0 < {row["unit"]: row["spent"] for row in await replay.session.budgets()}["wall"] < 60
 
 
 async def test_nothing_in_a_replay_acts_on_its_session_and_each_write_says_why(tmp_path):

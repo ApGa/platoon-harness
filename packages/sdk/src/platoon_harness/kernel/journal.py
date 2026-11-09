@@ -344,6 +344,12 @@ def insert(db: sqlite3.Connection, event: Event, data: str) -> None:
     )
 
 
+def newest_time(db: sqlite3.Connection) -> float | None:
+    """The wall time of the newest event, or None before the first."""
+    row = db.execute("SELECT wall_time FROM events ORDER BY seq DESC LIMIT 1").fetchone()
+    return None if row is None else row[0]
+
+
 def copy_of(db: sqlite3.Connection) -> str | None:
     """The session id of the journal this one is a copy of, or None for a journal commands write."""
     row = db.execute("SELECT value FROM meta WHERE key = 'copy_of'").fetchone()

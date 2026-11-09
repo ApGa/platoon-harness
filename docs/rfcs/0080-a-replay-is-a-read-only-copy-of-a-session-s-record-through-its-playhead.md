@@ -14,15 +14,16 @@
 A replay of a session is a copy of its record, whose journal is the original's through a playhead: each event as it was
 committed there, folded into views as the session folded it, so a client draws the copy exactly as it draws a session,
 its folds, panes and agents' motion included, and the copy's state moves as the playhead does. Playing appends the next
-events at their recorded pace, at 1x, 4x or 16x, or with idle gaps cut to a second. Going back starts a new copy from the
-nearest checkpoint of the views at or below where it goes and copies on from there, so a seek stays quick on a long
-record. The kernel gains one method, `Kernel.copy`, which makes a journal a copy of another's through a seq; a copy takes
-no command and runs no daemon. The SDK gains `Replay`, which keeps the copies under the root, never in the session's
-folder, and takes them back when it closes. One module of the command line's holds the controls, the pacing and the
-words, which both clients use: `attach SESSION --replay` and `web SESSION --replay` open one, and so do the sessions
-screen and the sessions page. A banner always says it is a replay, of which session, at which event of how many and at
-what time, and every act and form says why it does nothing. What estimators said is shown where a panel shows an event,
-each statement with when it was written and whether that was after the point the replay stands at.
+events at their recorded pace, at 1x, 4x or 16x, or with idle gaps cut to a second. Going back starts a new copy from
+the nearest checkpoint of the views at or below where it goes and copies on from there, so a seek stays quick on a long
+record. The kernel gains one method, `Kernel.copy`, which makes a journal a copy of another's through a seq; a copy
+takes no command, runs no daemon, and answers what depends on the time as of its newest event. The SDK gains `Replay`,
+which keeps the copies under the root, never in the session's folder, and takes them back when it closes. One module of
+the command line's holds the controls, the pacing and the words, which both clients use: `attach SESSION --replay` and
+`web SESSION --replay` open one, and so do the sessions screen and the sessions page. A banner always says it is a
+replay, of which session, at which event of how many and at what time, and every act and form says why it does nothing.
+What estimators said is shown where a panel shows an event, each statement with when it was written and whether that was
+after the point the replay stands at.
 
 ## Motivation
 
@@ -70,6 +71,14 @@ journal's `meta`, which is written once, and from then on:
 A page of events and their bodies goes in one writer job, which writes none of it where a check or a fold fails. Its views
 are then the source's views as they stood at that seq, which law 1's refold already promises: the copy folds the same
 events in the same order (`test_a_copy_through_a_seq_holds_its_source_s_events_as_committed_and_folds_them_as_it_did`).
+
+A query works out what is due, spent or stalled from the time: a timer, a budget's wall time, a session waiting for its
+person. A copy's queries take the wall time of its newest event as that time, not its clock's, so a copy answers as its
+source did then, and a replay of a session that stalled a second in says it stalled, where today's clock would call it
+done with its wall budget spent
+(`test_a_replay_works_out_what_was_due_spent_or_stalled_at_its_playhead_s_time_never_now`). Every other event a session
+commits enters through `submit`, and this is the one other way into a journal: only one no command wrote may take it,
+and from then on it takes no command.
 
 ### 2. A replay keeps its copies under the root and moves either way
 

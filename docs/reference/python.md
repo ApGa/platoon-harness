@@ -2443,7 +2443,8 @@ async def copy(self, source: "Kernel", *, through: int) -> None: ...
 Make this journal a copy of `source`'s through `through`: append its events past this head, each as it was
 committed there, with the bodies they name, and fold them, a page at a time. A copy takes no command and runs
 no daemon, so it stays a prefix of its source, and it goes on only from the journal it was first copied from.
-It only grows: a copy through an earlier seq is a copy of its own.
+It only grows: a copy through an earlier seq is a copy of its own. Its queries work out time from its newest
+event's, so what was due, spent or stalled is as its source said it then.
 
 **`rebuild`**
 

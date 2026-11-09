@@ -75,8 +75,9 @@ replay, and a view link watches it as it moves: each of its controls is disabled
 
 Everything a session shows, as it stood at the event the replay stands at: the agents and their states, which move as
 the replay plays, the transcript and its folds, what needed you, what changed, tasks and entries, and each event's
-provenance. Going back draws the session anew from that point: in the terminal, the agent or channel in view stays in
-view where it was there then; the page takes a fresh snapshot.
+provenance. What depends on the time, a timer due, a budget's wall time, a session stalled waiting for you, is as it
+stood at the event the replay stands at, never as it would be now. Going back draws the session anew from that point:
+in the terminal, the agent or channel in view stays in view where it was there then; the page takes a fresh snapshot.
 
 What an agent was saying as it said it, its live text, was never in the record, so a replay has none.
 

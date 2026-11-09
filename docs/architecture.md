@@ -272,8 +272,9 @@ no op reads, and a client draws by. Around these sit `authenticate(token)`, `put
 head as its source's row holds it, with the bodies it names, and folds it as a live fold would, so its views are the
 source's as they stood then, as law 1 promises. Its first copy writes `copy_of` in `meta`, and from then on a copy takes no
 command and runs no daemon, refusing `submit`, `put_body`, `recover` and `supervise` `unsupported`, goes on only from that
-source, refusing another's `conflict`, and only grows, so going back is a copy of its own
-([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md), a draft).
+source, refusing another's `conflict`, and only grows, so going back is a copy of its own. A query of a copy works out
+what is due, spent or stalled at the wall time of its newest event, not its clock's, so a copy answers as its source did
+then ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md), a draft).
 `gauges()` is what the kernel has measured since it opened its journal for writing, the writer's depth, the commands in flight
 by principal, the writes refused `busy` and each write's ack latency, and what its process has used, as a `Gauges`; a read-only
 kernel measures nothing, so it has None (§16).
@@ -284,7 +285,10 @@ kernel holding them has, its own ops among them, which a surface derives from be
 ### 5.1 One write
 
 `submit → authorize → op → emit → fold → commit → pulse → ack.` Timers, driver reports and effect results enter
-through `submit` too, so no second path exists.
+through `submit` too, so every event a session commits enters this way. The one other path into a journal is `copy`
+(§5), which only a journal no command wrote may take: it appends another journal's events as that journal committed
+them, and from its first copy on, that journal refuses every command
+([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)).
 
 1. **Ingress.** The transport maps its credential to a `Principal`. Decoding is strict: nothing is coerced, and an undeclared
    field or an argument that is not JSON is refused and journaled. An op name or key that is not printable, or is over 256

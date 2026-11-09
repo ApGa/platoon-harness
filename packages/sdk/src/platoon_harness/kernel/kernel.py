@@ -33,6 +33,7 @@ from .journal import (
     fingerprint,
     is_live,
     last_seq,
+    newest_time,
     open_reader,
     open_writer,
     prior_outcome,
@@ -379,7 +380,8 @@ class Kernel:
         """Make this journal a copy of `source`'s through `through`: append its events past this head, each as it was
         committed there, with the bodies they name, and fold them, a page at a time. A copy takes no command and runs
         no daemon, so it stays a prefix of its source, and it goes on only from the journal it was first copied from.
-        It only grows: a copy through an earlier seq is a copy of its own."""
+        It only grows: a copy through an earlier seq is a copy of its own. Its queries work out time from its newest
+        event's, so what was due, spent or stalled is as its source said it then."""
         writer = self._writing()
         head, last = self.head, source.head
         if source is self or not head <= through <= last:
@@ -526,10 +528,17 @@ class Kernel:
                     raise Refused("unsupported", "this op is a command")
                 if operation.exposes and principal.kind == "agent":
                     raise Refused("unsupported", "an agent's read is a command, because it records exposure")
-                txn = Txn(db, me, self.clock.now(), gauges=self.gauges)
+                txn = Txn(db, me, self._now(db), gauges=self.gauges)
                 return command.answered(jsonable(operation.fn(txn, decoded)))
         except Exception as error:
             return command.refused(self._as_refusal(error), target)
+
+    def _now(self, db: sqlite3.Connection) -> float:
+        """The time a query works out what is due, spent or stalled at: the clock's, or in a copy the wall time of the
+        newest event it holds, so a copy answers as its source did then."""
+        if self._copy_of is not None and (newest := newest_time(db)) is not None:
+            return newest
+        return self.clock.now()
 
     def authenticate(self, token: str) -> Principal:
         """Resolve a credential by its hash, or refuse."""
