@@ -49,10 +49,10 @@ named here is closed.
   section, each problem under its field, and beside the fields, or below them under 100 columns, `team show`'s sentences
   and the diff a save makes. Enter, or a click, opens a field's form, a line of text, several lines or a list of its
   choices, and adds or removes an entry. Each change is checked as it is made; `s` saves, asking first, in the page's
-  question, where it writes what would run as you; `n` saves, then opens the start form; `r` and Esc ask before they drop
-  changes; and a disabled act is dim and says why. A field whose value holds a control character a terminal would act on
-  is not changed in the terminal, which says to edit it in the file. Before, the terminal had no editor. This is RFC 0079's
-  second stage, a draft.
+  question, its yes saying `save it` as the page's button does, where it writes what would run as you; `n` saves, then
+  opens the start form; `r` and Esc ask before they drop changes; and a disabled act is dim and says why. A field whose
+  value holds a control character a terminal would act on is not changed in the terminal, which says to edit it in the
+  file. Before, the terminal had no editor. This is RFC 0079's second stage, a draft.
 - **A click on a key does what the key does.** In the terminal, a click on a key in the sessions screen's footer runs it,
   and so does a click on a question's `y` or `n` or on a form's keys below it. Before, only the keys did.
 - **The project's team, edited in the browser.** The sessions page of `platoon-harness web` gains a team editor: Edit reads

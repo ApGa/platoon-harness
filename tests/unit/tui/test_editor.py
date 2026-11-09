@@ -248,7 +248,7 @@ async def test_save_writes_the_diff_keeping_comments_and_asks_trust_once_naming_
         await setting(pilot, "test.timeout", *"5m")
         diff = diff_of(screen)
         await pilot.press("s")
-        await drawn(pilot, lambda _: isinstance(app.screen, Confirm))
+        yes = await drawn(pilot, lambda text: isinstance(app.screen, Confirm) and "n or Esc: no" in text)
         question = app.screen.query(Static).first().content
         await pilot.press("n")
         await drawn(pilot, lambda _: team_editor.NOT_SAVED in told(app) and checked(app))
@@ -263,6 +263,7 @@ async def test_save_writes_the_diff_keeping_comments_and_asks_trust_once_naming_
         isinstance(question, Content)
         and question.plain == f'{SAVING}\ntest.command = ["make", "test"]\nSave it, as shown here?'
     )
+    assert "y: save it" in yes and "y: yes" not in yes
     assert untouched == TEAM
     assert (project / PROJECT_FILE).read_text() == f'{TEAM}\n[test]\ncommand = ["make", "test"]\ntimeout = "5m"\n'
     assert '+command = ["make", "test"]' in diff

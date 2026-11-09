@@ -441,7 +441,7 @@ class TeamEditor(Screen[bool]):
                 self._draw_state()
             if not isinstance(saved, Asked):
                 break
-            if not await self.app.push_screen_wait(Confirm(SafeText(saved.question))):
+            if not await self.app.push_screen_wait(Confirm(SafeText(saved.question), saved.yes)):
                 note(self, team_editor.NOT_SAVED, severity="warning")
                 return False
             trust = saved.trust

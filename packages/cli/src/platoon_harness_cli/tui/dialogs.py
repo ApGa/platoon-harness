@@ -34,18 +34,19 @@ class Keys(Static):
 
 class Confirm(ModalScreen[bool]):
     """One confirmation of an act that cannot be taken back, that can spend money, or that writes a file. Only `y` says
-    yes, so a key pressed for something else never does."""
+    yes, so a key pressed for something else never does, and `yes` is what it says, as a button would."""
 
     BINDINGS = bindings("question")
 
-    def __init__(self, question: Content) -> None:
+    def __init__(self, question: Content, yes: str = "yes") -> None:
         super().__init__()
         self._question = question
+        self._yes = yes
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
             yield Static(self._question)
-            yield Keys(hint(("y: yes", "yes"), ("n or Esc: no", "no")))
+            yield Keys(hint((f"y: {self._yes[:1].lower()}{self._yes[1:]}", "yes"), ("n or Esc: no", "no")))
 
     def action_yes(self) -> None:
         self.dismiss(True)
