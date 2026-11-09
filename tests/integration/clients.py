@@ -384,7 +384,7 @@ async def the_tui_sends_from_its_composer_and_draws_the_reply_once(team: Team, r
         async with app.run_test(size=(120, 30)) as pilot:
             await drawn(pilot, lambda text: "@bob" in text, within=TIMEOUT)
             await pilot.press(*"go", "enter")
-            await drawn(pilot, lambda text: f"    {SAID}" in text, within=TIMEOUT)
+            await drawn(pilot, lambda text: f"   {SAID}" in text, within=TIMEOUT)
             lines = [block.line.plain for block in workspace(app).query_one(Transcript).blocks]
         sent = [event for event in await of_type(session, "message.sent") if event.actor == "human:you"]
         said = [event for event in await of_type(session, "item.recorded") if event.data["kind"] == "message"]

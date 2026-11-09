@@ -49,7 +49,7 @@ printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
   come, so a stray Tab from a draft, then the draft going on, answers nothing. A click chooses a place and gives no focus.
 - A part hidden while it has focus, by a resize, `/navigator` or a dock left empty, gives focus back to the composer.
 - Esc in the composer interrupts the agent in view, and from any other part goes back to the composer, interrupting
-  nothing. The footer names Esc by what it does from the part with focus, and that part is marked: the navigator by its
+  nothing, but that in the transcript it first closes the chosen line one level. The footer names Esc by what it does from the part with focus, and that part is marked: the navigator by its
   edge, the transcript by its title and the dock by its band.
 - Where nothing is typed, on the sessions screen, in a question, a form or the help, every act has a plain key, quitting
   included.
@@ -135,48 +135,77 @@ it waits and the key that goes to it.
 
 The mouse does what a key does, and each key still does it: a click on a row of the navigator, or a tab of the strip under
 80 columns, shows that agent or channel, as Alt+↓ goes to it; a click on a line chooses it, as the arrows do, and a click
-on the chosen line opens it, as Enter does; the wheel scrolls, as PgUp and PgDn do; and a drag of the navigator's edge
-widens or narrows it, as Alt+→ and Alt+← do, from 24 columns to 64.
+on its `▸` or `▾` opens or closes it, as Enter does; the wheel scrolls, as PgUp and PgDn do; and a drag of the navigator's
+edge widens or narrows it, as Alt+→ and Alt+← do, from 24 columns to 64.
 
 ### The transcript
 
-Each event is one line, and a run of lines one speaker says stands under one heading, its name, or the sender and where
-it was sent, `@you → @lead`. A line of the runtime's own stands alone, and a turn's start is a rule across the transcript,
-with a blank row before it and before each new speaker. A line reads its words as Markdown, its emphasis and code styled
-and their marks gone. A tool call is a line of its name as its model calls it, but for our tools' `mcp__ph__`, its input
-dim, and a glyph for how it ended, `▸` while it runs, `✓` and `✗`, with the word for an ending other than completed. What
-an agent says in a turn with a gist of whitespace alone, as a model can before a tool call, says nothing and is drawn as no
-line once its body is read and blank too, or at once where it has none; one whose body is unread, cannot be read, or says
-something, is drawn. A page read back above keeps the heading its first line had, so what is on screen does not move, and
-a long run read back says its speaker again where a page began.
+An agent's transcript shows what it said, and folds the rest away, in levels you open as you need them:
 
-A line opens on demand, with Enter on the chosen line, `/open-line` from anywhere, or a click on the chosen line: its
-body as Markdown and code, or its gist whole, then where it came from, with a tool's whole name. Links are followed only to `http` and `https`. The
-transcript holds a window of at most 10,000 lines, read from the journal a page at a time as you scroll either way, and what
-was on screen stays where it was. `/oldest` reads it from the journal's first line. An agent's transcript shows how each child
-it spawned began and ended, inside the turn that spawned it, the spawn under the line of the tool call that made it, even when
-its harness reported that call after the spawn. A spawn whose call no line holds is drawn where the journal has it, as a line
-of its own, not under the one above it, saying it joins no known call, as OpenHands' and an `exec` harness's are: their calls
-come through the shim and `ph`, each under an id of its own, which none of their items holds. A turn that `spans` cuts is
-drawn cut, a line `── span … ends ──` where each span but its last ends, under what its calls made and above the first call of
-the next, naming the span by its last call, which the line shows: `p` on it says that a credit row on that call is the whole
-span's. A turn's last span ends with the turn. The cuts are read as the agent is shown and again as each of its turns ends, so
-a cut made while a turn is under way is drawn when that turn ends, or when the agent is shown again. Each ref a line's words
-name, standing apart from the words around it and in no link's address, is underlined, and a click on it shows that ref's own
-provenance, which says first that it was opened from a ref in text, which records no link; one that names no event says so. A
-ref in an opened line's body is no link. The transcript also shows each approval the agent asked for, which opens on the whole
-of what it asks, as `/ask` does, then who answered it: you or another person, and through what, `tui` or `browser`, or the
-role's policy. One nobody answered before its turn ended went moot with the turn, which no event records, so no answer is
-drawn under it, and the dock no longer lists it. Below the lines is what the agent in view is saying now, live, until the
-journal holds it as an item, and it goes with a runtime that goes. Reading up stops following, and the line under the
-transcript counts what came since; `/follow` follows again. A page the journal would not give is named as lines missed.
+1. **A turn.** A rule across the transcript marks its start. Under the agent's name stand what it said, its messages, and
+   its report, always, each whole, wrapped at the edge. All else it did in the turn is one quiet line that counts it
+   exactly, `▸ 5 tool calls · ✗ 1 failed · 3 thoughts · 1 spawn`, standing where the first of it stands: its tool calls
+   and patches, with how many failed, how many are running and how many ended unknown, as a call whose turn ended with
+   no end of it recorded did, its thoughts and its spawns. Where the window does not hold the turn's start, it says more
+   came before.
+2. **What it did.** That line opens on each step in its place among what was said: a call as its tool's name and its
+   input in short, the values of its JSON, with `✗` and the word for how it ended where it failed; a thought as one dim
+   line; a patch; and each spawn under the call that made it.
+3. **The whole of one.** A step opens on all of it: a call on its whole input, laid out, and what it gave back, a thought
+   on its text, a message on its body as Markdown and code, an approval on what it asks, each with where it came from.
+
+Ended turns rest folded. While a runtime holds the session, a turn under way also shows its latest step under its line,
+`running` where it has no end yet, so you see what an agent is doing now; once the turn ends, it rests folded too. Nothing
+the record holds is out of reach: each line opens, and a fold never hides that something failed, waits on you or is
+unknown. An approval an agent asks for, a gap, a turn that ended other than finished, and a child that ended stand among
+what was said, and a fold says how many of its calls failed or ended unknown. A tool is named only where its harness
+reported it by a name and its input as JSON, as a model's call is reported; a command a harness ran, as Codex reports one,
+is its words whole, its first word no name. That ended turns rest folded, that a turn under way shows its latest step, and
+these keys, are the defaults pending the owner's ruling.
+
+With the transcript in focus, Enter opens or closes the chosen line, Right opens it one level and, on a fold already open,
+goes into it, and Left or Esc closes it one level, or from a step goes out to its fold's line; Esc with nothing open there
+goes back to the composer. Ctrl+O, or `/folds`, from anywhere opens every fold of the focus, and each that comes after, and
+again closes them all. `/open-line` opens or closes the chosen line from the composer.
+
+Each run of lines one speaker says stands under one heading, its name in the accent, or the sender and where it was sent,
+`@you → @lead`. A line of the runtime's own stands alone. A blank row stands before each new speaker, each line of the
+runtime's own after a speaker's, and each turn. A line reads its words as Markdown, its emphasis and code styled and their
+marks gone, and `▸` after them where it opens on more than its words, such as a body. What an agent says in a turn with a
+gist of whitespace alone, as a model can before a tool call, says nothing and is drawn as no line once its body is read and
+blank too, or at once where it has none; one whose body is unread, cannot be read, or says something, is drawn. A page read
+back above keeps the heading its first line had, so what is on screen does not move, and a long run read back says its
+speaker again where a page began. The chosen line is marked `▌` at the left edge while the transcript has focus, as well as
+shaded.
+
+Links are followed only to `http` and `https`. The transcript holds a window of at most 10,000 lines, read from the journal
+a page at a time as you scroll either way, and what was on screen stays where it was. `/oldest` reads it from the journal's
+first line. An agent's transcript shows how each child it spawned began and ended, inside the turn that spawned it, the
+spawn under the line of the tool call that made it, even when its harness reported that call after the spawn. A spawn whose
+call no line holds is drawn where the journal has it, as a line of its own, not under the one above it, saying it joins no
+known call, as OpenHands' and an `exec` harness's are: their calls come through the shim and `ph`, each under an id of its
+own, which none of their items holds. A turn that `spans` cuts is drawn cut, among its steps, a line `── span … ends ──`
+where each span but its last ends, under what its calls made and above the first call of the next, naming the span by its
+last call, which the line shows: `p` on it says that a credit row on that call is the whole span's. A turn's last span ends
+with the turn. The cuts are read as the agent is shown and again as each of its turns ends, so a cut made while a turn is
+under way is drawn when that turn ends, or when the agent is shown again. Each ref a line's words name, standing apart from
+the words around it and in no link's address, is underlined, and a click on it shows that ref's own provenance, which says
+first that it was opened from a ref in text, which records no link; one that names no event says so. A ref in an opened
+line's body is no link. The transcript also shows each approval the agent asked for, which opens on the whole of what it
+asks, as `/ask` does, then who answered it: you or another person, and through what, `tui` or `browser`, or the role's
+policy. One nobody answered before its turn ended went moot with the turn, which no event records, so no answer is drawn
+under it, and the dock no longer lists it. Below the lines is what the agent in view is saying now, live, until the journal
+holds it as an item, and it goes with a runtime that goes. Reading up stops following, and the line under the transcript
+counts what came since, under 16 rows too; `/follow` follows again. A page the journal would not give is named as lines
+missed. A fold's line is no event, so `p` on it says to open it and choose one of its lines, each of which is.
 
 ### Find a line
 
 `/find`, or Ctrl+F, opens a form for words, filled in with the last ones found, and only sending it finds: Ctrl+F is a
 shortcut that decides nothing. The transcript then takes focus and chooses the line before the chosen one whose words hold
-yours, whatever their case and the spaces between them, reading back from the journal a page at a time, as scrolling up
-does, within its window. A line's words are what it shows, not a body it opens on, nor what an agent is saying now. Ctrl+F
+yours, whatever their case and the spaces between them, in the order the lines stand with every fold open, opening the fold
+of a step it finds, and reading back from the journal a page at a time, as scrolling up does, within its window. A line's
+words are what it shows, not a body it opens on, nor what an agent is saying now. Ctrl+F
 then Enter finds the next one back. Where no line holds them, back to the first line of the focus, it says so, and goes back
 to following, or to the line it began from, or where reading back let that line go from the window, to the oldest line
 held. A ref is opened through `/provenance`'s form, not found. That `/find` finds words alone, with Ctrl+F its shortcut, is
@@ -185,14 +214,17 @@ the default pending the owner's ruling.
 ### Copy and paste
 
 A drag with the mouse selects text in the transcript, an open line's body, the inspector, the provenance panel and the
-lists, and Ctrl+C, or `/copy`, copies it as plain text: the words as they read, who says them, and no border, glyph,
-spinner, rule or indent, a line cut short at the edge whole, and each control shown as its escape, as on the screen. A
-double click selects all of a part, and a click elsewhere lets the selection go.
+lists, and Ctrl+C, or `/copy`, copies it as plain text, each control shown as its escape, as on the screen. From the
+transcript it copies the words as they read and who says them, with no border, glyph, rule or indent, Markdown as it
+reads, its marks gone, a line wrapped at the edge on one line, and a folded line as what it shows, its count; from the
+navigator, an agent's name and its state, without its glyph, and nothing of the logo. Elsewhere, in the inspector, the
+provenance panel, the dock and the other lists, a row's glyphs are copied with its words. A double click selects all of a
+part, and a click elsewhere lets the selection go.
 
 With nothing selected, Ctrl+C or `/copy` copies the chosen line: the line as the transcript shows it, who says it and its
-words, and while it is open, the text it opens on, its body as read, its gist whole or an approval's ask, as text and never
-as Markdown. While what it opens on is still being read, its gist goes in its place, which it says. In the composer or a
-form's field, Ctrl+C copies what is selected there.
+words, and while it is open, the text it opens on, its body as read, its gist whole, a call's input and what it gave back,
+or an approval's ask, as text and never as Markdown. While what it opens on is still being read, its gist goes in its
+place, which it says. In the composer or a form's field, Ctrl+C copies what is selected there.
 
 Each is sent to the terminal as OSC 52, the sequence a terminal may take as text for its clipboard, and it says how many
 characters it sent. Whether they reach the clipboard is the terminal's, which may take no OSC 52, or none past a length of
@@ -455,7 +487,8 @@ before the session's. `^` is Ctrl.
 | `Alt+→` | `/wider` | Widen the agents and channels, as dragging their edge does |
 | `Alt+←` | `/narrower` | Narrow the agents and channels, as dragging their edge does |
 | `F2` | `/inspector` | Show or hide why the agent in view waits, and what it runs on |
-| `^O` | `/open-line` | Open or close the chosen line of the transcript |
+|  | `/open-line` | Open or close the chosen line of the transcript |
+| `^O` | `/folds` | Open every fold of the transcript, each turn's calls, thoughts and spawns, or close them all |
 | `PgUp` | `/page-up` | Scroll the transcript up |
 | `PgDn` | `/page-down` | Scroll the transcript down |
 | `^Home` | `/oldest` | Go to the start of the transcript, read back from the journal |
@@ -494,6 +527,9 @@ before the session's. `^` is Ctrl.
 | `↑` | Choose the line above |
 | `↓` | Choose the line below |
 | `Enter` | Open or close the chosen line |
+| `→` | Open the chosen line one level, or go into the fold it opened |
+| `←` | Close the chosen line one level, or go out to the fold it stands in |
+| `Esc` | Close the chosen line one level, as Left does, or with nothing open there go back to the composer |
 | `End` | Go to the newest line and follow what comes |
 | `p` | Show the chosen line's provenance |
 

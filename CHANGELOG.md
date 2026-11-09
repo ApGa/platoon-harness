@@ -52,17 +52,22 @@ named here is closed.
   blue-to-green gradient, drawn by hand from its icon (MIT, Apurva Gandhi) in half blocks, stands small beside the
   session's name at the navigator's top and larger beside the wordmark on the sessions screen, in the terminal's own
   colours under a theme that keeps to them.
-- **A transcript in runs.** An agent's lines stand under one heading, its name, and a sender's under `@you → @lead`, a
-  turn's start is a rule, a line's words read as Markdown, and a tool call reads as its name, as its model calls it but
-  for our tools' `mcp__ph__`, its input dim and a glyph for how it ended, its whole name in the line opened. What an agent
-  says in a turn with a gist of whitespace alone is drawn as no line once its body is read and blank too, as the page's
-  chats leave it out. Before, each line led with its speaker, a tool's line showed its raw name and how it ended alone,
-  Markdown showed its marks, and a model's blank text before a tool call was an empty line.
+- **A calmer transcript, in levels.** A turn shows what its agent said, each message and its report whole, wrapped, and
+  all else it did is one quiet line that counts it, `▸ 5 tool calls · ✗ 1 failed · 3 thoughts · 1 spawn`, which opens
+  on each call by its tool's name and its input in short, each thought as one dim line and each spawn under its call, and
+  each of those on its whole: a call's input and what it gave back, a thought's text, a body. Enter or Right opens a line
+  one level, Left or Esc closes it, Ctrl+O or `/folds` opens or closes every fold, and a click on a `▸` or `▾` does as
+  Enter does. A turn under way shows its latest step, and a fold says what failed or ended unknown. An agent's lines stand
+  under one heading, a sender's under `@you → @lead`, with a blank row between speakers and turns, and Markdown reads as
+  it reads. What an agent says in a turn with a gist of whitespace alone is drawn as no line once its body is read and
+  blank too, as the page's chats leave it out. Before, each event was a line led by its speaker, a tool's by its raw name
+  and how it ended alone, a long line was cut at the edge, Markdown showed its marks, and a model's blank text before a
+  tool call was an empty line.
 - **Text selected with the mouse copied.** A drag selects text in the transcript, an open line's body, the inspector, the
   provenance panel and the lists, and Ctrl+C or `/copy` copies it as plain text, as OSC 52, with no border, glyph, rule
-  or indent in it. Every mouse act has its keyboard twin: a click on a navigator row or a tab shows that agent, a click
-  on a line chooses it and a second opens it, and a drag of the navigator's edge widens it, as Alt+→ and Alt+← do. Before,
-  only `/copy` copied, and only the chosen line.
+  or indent from the transcript or the navigator, and a wrapped line as one. Every mouse act has its keyboard twin: a
+  click on a navigator row or a tab shows that agent, a click on a line chooses it and on its `▸` opens it, and a drag of
+  the navigator's edge widens it, as Alt+→ and Alt+← do. Before, only `/copy` copied, and only the chosen line.
 - **A line copied in the terminal.** `/copy` sends the chosen line's text to the terminal as OSC 52: the line as the
   transcript shows it and, while it is open, the text it opens on, or its gist while that is still being read, which it
   says, each control shown as its escape, so what is pasted acts on no terminal. Whether it reaches the clipboard is the

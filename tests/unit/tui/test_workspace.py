@@ -76,7 +76,7 @@ async def test_a_message_from_the_composer_reaches_the_target_shown_once(root):
         assert app.focused is app.screen.query_one(Composer)
 
         await pilot.press(*"fix the flaky test", "enter")
-        await drawn(pilot, lambda text: "    on it" in text)
+        await drawn(pilot, lambda text: "   on it" in text)
 
         sent = [event for event in await of_type(owner, "message.sent") if event.actor == "human:you"]
         assert [(event.stream, event.gist) for event in sent] == [("inbox/lead", "fix the flaky test")]
@@ -186,7 +186,7 @@ async def test_esc_interrupts_the_agent_in_view_and_is_disabled_with_the_runtime
         assert len(refused) == 1, "a refused act submitted again"
 
         await pilot.press(*"again", "enter")
-        await drawn(pilot, lambda text: "    again" in text)
+        await drawn(pilot, lambda text: "   again" in text)
         assert workspace(app)._refused == {}
 
 
@@ -925,7 +925,7 @@ async def test_a_spoiled_marks_file_loses_only_badges(root):
         async with app.run_test(size=(120, 32)) as pilot:
             await drawn(pilot, lambda text: "@lead" in text and "channels" in text)
             await pilot.press(*"go", "enter")
-            await drawn(pilot, lambda text: "    still here" in text)
+            await drawn(pilot, lambda text: "   still here" in text)
 
             assert app.is_running
             told = [notice.message for notice in app._notifications]
@@ -954,7 +954,7 @@ async def test_an_edited_recall_is_a_draft_neither_key_replaces(root):
     async with attached(team([Say("one")], [Say("two")]), root) as (_, app, pilot):
         composer = app.screen.query_one(Composer)
         await pilot.press(*"fix the flaky test", "enter")
-        await drawn(pilot, lambda text: "    one" in text)
+        await drawn(pilot, lambda text: "   one" in text)
 
         await pilot.press("up", *" and the docs", "down")
         assert composer.text == "fix the flaky test and the docs"
@@ -1008,8 +1008,8 @@ def drawing(app: TerminalUI, part) -> list:
 
 
 async def test_tab_goes_round_the_parts_and_esc_from_one_goes_back_to_the_composer_interrupting_nothing(root):
-    """Each part shows that it has focus, the footer names Esc by what it does from there, and `/` from a part begins a
-    typed command in the composer."""
+    """Each part shows that it has focus, the footer names Esc by what it does from there, which in the transcript
+    closes a line one level before it goes back, and `/` from a part begins a typed command in the composer."""
     async with attached(team([Ask("Ship the fix?"), Hang()]), root) as (owner, app, pilot):
         await pilot.press(*"go", "enter")
         await drawn(pilot, lambda text: "Ship the fix?" in text)
@@ -1025,10 +1025,12 @@ async def test_tab_goes_round_the_parts_and_esc_from_one_goes_back_to_the_compos
         await pilot.press("shift+tab")
         assert app.focused is dock
 
-        for part, shown in ((navigator, navigator), (transcript, screen.query_one("#focus")), (dock, dock)):
+        focus = screen.query_one("#focus")
+        parts = ((navigator, navigator, "back"), (transcript, focus, "close"), (dock, dock, "back"))
+        for part, shown, esc in parts:
             await pilot.press("escape")
             footer = (await drawn(pilot, lambda text: "Esc interrupt" in text.splitlines()[-1])).splitlines()[-1]
-            unfocused, back = drawing(app, shown), footer.replace("Esc interrupt", "Esc back").split()
+            unfocused, back = drawing(app, shown), footer.replace("Esc interrupt", f"Esc {esc}").split()
             part.focus()
             await drawn(pilot, lambda text, back=back: text.splitlines()[-1].split() == back)
             assert drawing(app, shown) != unfocused, f"{part} shows no mark of its focus"
@@ -1226,7 +1228,7 @@ async def test_provenance_given_a_ref_opens_it_or_says_why_not(root):
     with none given nothing opens, saying why."""
     async with attached(team([Say("on it")]), root) as (_, app, pilot):
         await pilot.press(*"fix the flaky test", "enter")
-        await drawn(pilot, lambda text: "    on it" in text)
+        await drawn(pilot, lambda text: "   on it" in text)
         chosen = app.screen.query_one(Transcript).chosen
         assert chosen is not None
         filled, opened = [], {}
@@ -1323,7 +1325,7 @@ async def test_a_thread_opens_on_its_message_and_the_composer_replies_in_it(root
         await until(lambda: of_type(owner, "turn.ended"), owner)
         app = TerminalUI("s")
         async with app.run_test(size=(120, 32)) as pilot:
-            await drawn(pilot, lambda text: "    asked" in text)
+            await drawn(pilot, lambda text: "   asked" in text)
             screen = workspace(app)
             transcript = screen.query_one(Transcript)
 
@@ -1345,7 +1347,7 @@ async def test_a_thread_opens_on_its_message_and_the_composer_replies_in_it(root
             ]
 
             await pilot.press(*"agreed", "enter")
-            await drawn(pilot, lambda text: "    agreed" in text)
+            await drawn(pilot, lambda text: "   agreed" in text)
 
             await pilot.press("alt+up")
             await drawn(pilot, lambda text: "and one for you" in text)
@@ -1353,7 +1355,7 @@ async def test_a_thread_opens_on_its_message_and_the_composer_replies_in_it(root
             text = await drawn(pilot, lambda text: "Thread inbox/you@" in text)
             assert "to: @lead  replying to @lead" in text
             await pilot.press(*"thanks", "enter")
-            await drawn(pilot, lambda text: "    thanks" in text)
+            await drawn(pilot, lambda text: "   thanks" in text)
 
         sent = [event for event in await of_type(owner, "message.sent") if event.actor == "human:you"]
         replies = [(event.stream, event.gist, event.data["reply_to"], event.data["thread"]) for event in sent[3:]]
@@ -1410,22 +1412,24 @@ def osc52(written: list[str]) -> list[str]:
 
 async def test_text_selected_with_the_mouse_is_copied_as_plain_text_without_what_decorates_it(root):
     """A drag over the transcript selects its rows, and Ctrl+C copies what they say as plain text, as OSC 52: who says
-    it and their words as they read, with no border, mark, rule or indent, and a line cut short at the edge whole. In
-    the navigator, an agent's name and state, without its glyph. With nothing selected, it copies the chosen line."""
+    it and their words as they read, with no border, mark, rule or indent, and a line wrapped on one line. In the
+    navigator, an agent's name and state, without its glyph. With nothing selected, it copies the chosen line."""
     long = "a line far longer than the transcript is wide, " * 4
     turns = [Say("on it, **really**"), Say(long), Say("done")]
     async with attached(team(turns), root, size=(100, 32)) as (_, app, pilot):
         written: list[str] = []
         app._driver.write = written.append  # type: ignore[union-attr]
         await pilot.press(*"go", "enter")
-        await drawn(pilot, lambda text: "on it, really" in text and "    done" in text)
+        await drawn(pilot, lambda text: "on it, really" in text and "   done" in text)
         transcript = app.screen.query_one(Transcript)
         rows = [transcript.render_line(y).text for y in range(transcript.size.height)]
         heading = max(y for y, row in enumerate(rows) if row.strip() == "@lead")
+        wrapped = max(y for y, row in enumerate(rows) if "is wide" in row)
+        end = transcript.size.width - 1
 
         await pilot.mouse_down(Transcript, offset=(1, heading))
-        await pilot.hover(Transcript, offset=(1, heading + 3))
-        await pilot.mouse_up(Transcript, offset=(1, heading + 3))
+        await pilot.hover(Transcript, offset=(end, wrapped))
+        await pilot.mouse_up(Transcript, offset=(end, wrapped))
         await pilot.press("ctrl+c")
         await drawn(pilot, lambda _: len(osc52(written)) == 1)
         navigator = app.screen.query_one("#navigator", Rows)

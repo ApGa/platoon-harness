@@ -102,7 +102,7 @@ async def test_a_runtime_stopped_resumed_and_killed_under_the_tui_shows_as_what_
     async with app.run_test(size=(120, 30)) as pilot:
         await drawn(pilot, lambda text: "@lead" in text and " live " in text)
         await pilot.press(*"first", "enter")
-        await drawn(pilot, lambda text: "    done" in text)
+        await drawn(pilot, lambda text: "   done" in text)
 
         await ask_to_stop(guest)
         await drawn(pilot, lambda text: "Its runtime stopped, as its owner asked" in text)
@@ -111,7 +111,7 @@ async def test_a_runtime_stopped_resumed_and_killed_under_the_tui_shows_as_what_
         guest = await Session.resume("s", detach=True)
         await drawn(pilot, lambda text: " live " in text and "owner asked" not in text, within=30)
         await pilot.press(*"second", "enter")
-        await drawn(pilot, lambda text: text.count("    done") == 2)
+        await drawn(pilot, lambda text: text.count("   done") == 2)
 
         running = read_running(tmp_path / "sessions" / "s")
         assert running is not None

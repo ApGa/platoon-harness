@@ -1,7 +1,8 @@
 """The terminal UI's budgets, from section 7.9 of tui-expectations.md: event-loop lag at 100 agents with one live
 stream, an append at a large history, and resident memory. Short runs on a loaded shared host, so the numbers are
-printed and the bounds are the research's own. And an attach to the journal of the Scale case, held to a budget twice
-what docs/reference/scale.md publishes."""
+printed and the bounds are the research's own. Opening and closing a line at a full window is held to the append's,
+and every fold at once to a bound of ours. And an attach to the journal of the Scale case, held to a budget twice what
+docs/reference/scale.md publishes."""
 
 import asyncio
 import statistics
@@ -25,6 +26,8 @@ pytestmark = pytest.mark.timeout(180)
 
 LAG = 0.050
 APPEND = 0.060
+UNFOLD = 0.25
+"""The longest opening or closing every fold of a full window may take, as one act a person asks for: ours."""
 ATTACH = 0.86
 """The longest an attach may take to draw a session of 100,000 events, the roster and the first agent's transcript:
 twice the most docs/reference/scale.md says was measured."""
@@ -143,6 +146,85 @@ async def test_an_append_at_a_large_history_stays_in_budget_and_memory_stays_bou
     assert len(transcript.blocks) == WINDOW
     assert p99(appends) < APPEND
     assert held - at_window < (at_window - before) / 2, "memory grew past the window"
+
+
+def step(seq: int, turn: int, gist: str, data: dict) -> Event:
+    envelope = {"agent": "lead", "context_version": None, "episode": None, "correlation": None}
+    return Event(
+        **envelope, v=2, seq=seq, stream="turn/lead", version=seq, type="item.recorded", actor="agent:lead",
+        turn=f"t{turn}", topology_rev=0, cause=(), based_on=(), native={}, model=None, wall_time=0.0, gist=gist,
+        outcome=None, data=data,
+    )  # fmt: skip
+
+
+def turns(count: int) -> list[Event]:
+    """`count` turns of the lead's, each a rule, four calls, two thoughts and what it said: eight lines, six of them in
+    its fold."""
+    events, seq = [], 0
+    for turn in range(count):
+        said = [("turn", None), *((f'read {{"path": "f{n}.py"}}', "tool") for n in range(4)), ("think", "thought")]
+        for gist, kind in [*said, ("think again", "thought"), (f"turn {turn} is done", "message")]:
+            seq += 1
+            if kind is None:
+                data = {"turn": f"t{turn}"}
+                events.append(step(seq, turn, gist, data).model_copy(update={"type": "turn.started"}))
+            elif kind == "tool":
+                events.append(step(seq, turn, gist, {"kind": kind, "phase": "completed", "native_id": f"c{seq}"}))
+            else:
+                events.append(step(seq, turn, gist, {"kind": kind}))
+    return events
+
+
+@pytest.mark.slow
+async def test_opening_and_closing_a_line_at_a_full_window_stays_in_budget():
+    """At a window of 10,000 lines of an agent's turns, each turn folded, opening and closing a fold, a step in it, and
+    every fold of the focus at once, each laid out and drawn: a fold or a line within the append's budget, as each lays
+    out its own lines alone, and every fold at once, which lays out the window, within a quarter of a second."""
+    app = One()
+    async with app.run_test(size=(120, 40)) as pilot:
+        transcript = app.query_one(Transcript)
+        transcript.focus_on, transcript.through = Focus.of_agent("lead"), 0
+        events = turns(1300)
+        for first in range(0, len(events), 1000):
+            transcript.take(events[first : first + 1000])
+        await pilot.pause()
+        transcript.draw(transcript.tail)  # Laid out at the width its scrollbar leaves, as a person first sees it.
+        folds = list(transcript._folds.values())
+
+        def drawn() -> None:
+            for y in range(transcript.size.height):
+                transcript.render_line(y)
+
+        toggles = []
+        for fold in [*folds[:: max(len(folds) // 50, 1)], folds[-1]]:
+            for _ in range(2):
+                began = time.perf_counter()
+                transcript.toggle(fold)
+                drawn()
+                toggles.append(time.perf_counter() - began)
+            began = time.perf_counter()
+            transcript.toggle(fold)
+            transcript.toggle(fold.steps[1])
+            drawn()
+            toggles.append(time.perf_counter() - began)
+            transcript.toggle(fold.steps[1])
+            transcript.toggle(fold)
+        every = []
+        for _ in range(4):
+            began = time.perf_counter()
+            transcript.unfold()
+            drawn()
+            every.append(time.perf_counter() - began)
+        held = len(transcript.blocks)
+
+    print(
+        f"{held} lines held in {len(folds)} folds; a fold or a line opened or closed p50 "
+        f"{statistics.median(toggles) * 1000:.2f} ms, p99 {p99(toggles) * 1000:.2f} ms; every fold at once "
+        f"{max(every) * 1000:.1f} ms at most"
+    )
+    assert held == WINDOW
+    assert p99(toggles) < APPEND
+    assert max(every) < UNFOLD
 
 
 @pytest.mark.scale

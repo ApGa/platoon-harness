@@ -248,6 +248,7 @@ async def test_a_turn_s_cut_opens_the_span_it_ends_whose_row_is_the_whole_span_s
         app = TerminalUI("s")
         async with app.run_test(size=(140, 40)) as pilot:
             await workspace(app).show(Focus.of_agent("w"))
+            await pilot.press("ctrl+o")
             cut = f"── span {first.ref} ends ──"
             text = await drawn(pilot, lambda text: cut in text and "both are done" in text)
             await choose(pilot, app, f"span {first.ref} ends")
@@ -257,8 +258,8 @@ async def test_a_turn_s_cut_opens_the_span_it_ends_whose_row_is_the_whole_span_s
 
     drawn_in_order = [line.split("│")[-2].strip() if line.count("│") >= 4 else line for line in text.splitlines()]
     at = next(index for index, line in enumerate(drawn_in_order) if cut in line)
-    assert drawn_in_order[at - 2].startswith("✓ task_complete") and drawn_in_order[at - 1] == ""
-    assert drawn_in_order[at + 1] == "@w" and drawn_in_order[at + 2].startswith("✓ task_claim")
+    assert drawn_in_order[at - 2].startswith("▸ task_complete") and drawn_in_order[at - 1] == ""
+    assert drawn_in_order[at + 1] == "@w" and drawn_in_order[at + 2].startswith("▸ task_claim")
     assert text.count("── span ") == 1, "a turn's last span ends with the turn, which draws no cut"
     whole = f"it names a span of @w's, so a credit row on it is the whole span's: the model calls in turn {first.turn}"
     assert f"{whole} from {first.first} to this one" in said_of

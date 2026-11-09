@@ -183,7 +183,7 @@ async def test_a_hostile_ask_reaches_no_renderer_unescaped(root):
         await pilot.press("escape")
         await drawn(pilot, lambda _: isinstance(app.screen, Workspace))
         transcript = workspace(app).query_one(Transcript)
-        await pilot.press("ctrl+o")
+        await pilot.press(*"/open-line", "enter")
         opened = await drawn(pilot, lambda text: any(block.ask for block in transcript.blocks) and "evil" in text)
 
         assert app.is_running

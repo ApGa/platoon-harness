@@ -47,7 +47,7 @@ Screen { layers: base overlay; }
 #edge:hover, #edge.-dragged { background: $accent 50%; }
 #focus { width: 1fr; border: round $panel; border-title-color: $foreground; border-subtitle-color: $accent; }
 #focus:focus-within { border: round $accent; }
-#transcript { height: 1fr; padding: 0 1; }
+#transcript { height: 1fr; padding: 0 1 0 0; }
 #inspector { width: 42; display: none; padding: 0 1; border: round $panel; border-title-color: $foreground; }
 Workspace.medium #inspector { layer: overlay; dock: right; height: 100%; background: $surface; }
 #strip { height: 1; display: none; padding: 0 1; link-style: none; link-background-hover: $accent 30%; }

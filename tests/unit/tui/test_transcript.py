@@ -10,7 +10,19 @@ from platoon_harness.kernel import Event, Page, Refused
 from platoon_harness.primitives import Span, Spans
 from platoon_harness_cli.approvals import Ask
 from platoon_harness_cli.tui import transcript as transcript_module
-from platoon_harness_cli.tui.transcript import Block, Focus, Transcript, line_of, replying_to, text_of
+from platoon_harness_cli.tui.transcript import (
+    GUTTER,
+    Block,
+    Focus,
+    Fold,
+    Transcript,
+    inline,
+    line_of,
+    replying_to,
+    summary,
+    text_of,
+    tool_named,
+)
 
 
 def event(
@@ -22,6 +34,7 @@ def event(
     agent: str = "lead",
     actor: str = "runtime",
     native: dict[str, str] | None = None,
+    turn: str | None = None,
 ) -> Event:
     return Event(
         v=1,
@@ -31,7 +44,7 @@ def event(
         type=type,
         actor=actor,
         agent=agent,
-        turn=None,
+        turn=turn,
         context_version=None,
         episode=None,
         topology_rev=0,
@@ -122,11 +135,11 @@ def drawn(transcript: Transcript) -> list[str]:
 
 
 def shown(transcript: Transcript) -> list[str]:
-    """Each row as it is drawn, top to bottom, headings and blank rows among them, without the padding at its end or
-    a rule's run to the edge."""
+    """Each row as it is drawn, top to bottom, headings and blank rows among them, without the gutter that marks the
+    chosen line, the padding at its end or a rule's run to the edge."""
     width = transcript.scrollable_content_region.width
-    rows = [transcript._strip(block, line, width).text.rstrip() for block, line in transcript._rows]
-    return [row.rstrip("─").rstrip() if row.startswith("──") else row for row in rows]
+    rows = [transcript._strip(block, line, width).text[GUTTER:].rstrip() for block, line in transcript._rows]
+    return [row.rstrip("─").rstrip() if row.lstrip().startswith("──") else row for row in rows]
 
 
 async def test_a_window_s_edge_on_a_tool_s_line_reads_back_nothing_twice(monkeypatch):
@@ -139,14 +152,14 @@ async def test_a_window_s_edge_on_a_tool_s_line_reads_back_nothing_twice(monkeyp
     async with app.run_test(size=(80, 10)):
         transcript = app.query_one(Transcript)
         await transcript.show(Focus.of_agent("lead"), journal, 6)  # type: ignore[arg-type]
-        assert lines(transcript) == ["@lead  Bash  ls", "@lead  between", "@lead  m6"]
+        assert lines(transcript) == ["@lead  Bash ls", "@lead  between", "@lead  m6"]
         assert transcript.blocks[0].event.data["phase"] == "completed"
         monkeypatch.setattr(transcript_module, "WINDOW", 100)
         transcript.following = False
 
         await transcript.page_back()
 
-        assert lines(transcript) == ["@lead  m1", "@lead  m2", "@lead  Bash  ls", "@lead  between", "@lead  m6"]
+        assert lines(transcript) == ["@lead  m1", "@lead  m2", "@lead  Bash ls", "@lead  between", "@lead  m6"]
 
 
 async def test_a_page_read_while_a_child_is_spawned_is_put_in():
@@ -248,7 +261,12 @@ def answered(seq: int, id: str, verdict: str, by: str, via: str | None, *, agent
 
 def opened(transcript: Transcript) -> list[str]:
     """What the open lines show, each line of it stripped, where it came from left out."""
-    return [strip.text.strip() for block in transcript.blocks if block.open for strip in transcript._body(block)[:-1]]
+    return [
+        strip.text.strip()
+        for block in transcript.blocks
+        if block.open
+        for strip in transcript._body(block, transcript._inner())[:-1]
+    ]
 
 
 async def test_an_approval_and_who_answered_it_are_drawn_in_its_agent_s_transcript():
@@ -287,7 +305,7 @@ async def test_an_approval_and_who_answered_it_are_drawn_in_its_agent_s_transcri
             "@lead  asks for approval  Delete it?",
             "turn interrupted",
         ]
-        assert [block.said.mark.plain for block in transcript.blocks] == ["  ", "◉ ", "✓ ", "◉ ", "✗ ", "◉ ", "■ "]
+        assert [block.said.mark.plain for block in transcript.blocks] == ["", "◉ ", "✓ ", "◉ ", "✗ ", "◉ ", "■ "]
         transcript.toggle(transcript.blocks[1])
         transcript.toggle(transcript.blocks[3])
         while any(block.open and block.ask is None for block in transcript.blocks):
@@ -340,17 +358,17 @@ async def test_a_spawn_is_drawn_under_the_call_whose_id_its_anchor_holds():
 
         assert drawn(transcript) == [
             "@lead  two workers",
-            "@lead  spawn  a",
+            "@lead  spawn a",
             "@lead  a spawned as worker",
-            "@lead  spawn  b",
+            "@lead  spawn b",
             "@lead  b spawned as worker",
         ]
         assert shown(transcript) == [
             "@lead",
-            "    two workers",
-            "  ✓ spawn  a",
+            "  two workers",
+            "  ▸ spawn a",
             "    ↳ a spawned as worker",
-            "  ✓ spawn  b",
+            "  ▸ spawn b",
             "    ↳ b spawned as worker",
         ]
 
@@ -367,8 +385,8 @@ async def test_a_spawn_drawn_before_its_call_moves_under_it_once_the_call_is_dra
         before = shown(transcript)
         transcript.take([said(3, "meanwhile"), tool(4, "started", "spawn w", id="call_7")])
 
-        assert before == ["@lead", "    on it", "· w spawned as worker · joins no known call"]
-        assert shown(transcript) == ["@lead", "    on it", "    meanwhile", "  ▸ spawn  w", "    ↳ w spawned as worker"]
+        assert before == ["@lead", "  on it", "", "· w spawned as worker · joins no known call"]
+        assert shown(transcript) == ["@lead", "  on it", "  meanwhile", "  ▸ spawn w", "    ↳ w spawned as worker"]
 
 
 async def test_a_spawn_that_joins_no_call_is_drawn_where_the_journal_has_it_saying_so():
@@ -392,12 +410,13 @@ async def test_a_spawn_that_joins_no_call_is_drawn_where_the_journal_has_it_sayi
 
         assert shown(transcript) == [
             "@lead",
-            "  ✓ spawn",
+            "  ▸ spawn",
+            "",
             "· oh spawned as worker · joins no known call",
             "· nameless spawned as worker · joins no known call",
             "",
             "@lead",
-            "    both started",
+            "  both started",
         ]
 
 
@@ -499,19 +518,19 @@ async def test_a_turn_s_cuts_are_drawn_where_its_spans_end(monkeypatch):
             await transcript.page_back()
         read_back = shown(transcript)
 
-    assert under_way == ["── turn", "@lead", "  ✓ task_complete", "  ✓ task_complete", "    both are done"]
+    assert under_way == ["── turn", "@lead", "  ▸ task_complete", "  ▸ task_complete", "  both are done"]
     assert (
         followed
         == shown_under_way
         == [
             "── turn",
             "@lead",
-            "  ✓ task_complete",
+            "  ▸ task_complete",
             "",
             "── span turn/lead@2 ends",
             "@lead",
-            "  ✓ task_complete",
-            "    both are done",
+            "  ▸ task_complete",
+            "  both are done",
         ]
     )
     assert read_back == [*followed[:7], "@lead", followed[7]], "a page read back above keeps the heading it had"
@@ -533,13 +552,13 @@ class Naming(Alone):
 async def test_a_ref_in_a_line_s_text_opens_its_provenance():
     """A ref a line's words name is a link, standing apart from the words around it, so none is found in a link's
     address: a click on it opens the provenance of the event it names, whatever lines it names of it. A click on the
-    rest of a line chooses it, and on a line chosen already, opens it."""
+    rest of a line chooses it, and opens nothing, chosen already or not: its `▸` opens it."""
     words = "done, as board/notes/spec@3#L1-2 and inbox/you@1 say; https://x/inbox/you@1 is no ref"
     app = Naming()
     async with app.run_test(size=(120, 5)) as pilot:
         transcript = app.query_one(Transcript)
         await transcript.show(Focus.of_agent("lead"), Journal([said(1, "first"), said(2, words)]), 2)  # type: ignore[arg-type]
-        assert shown(transcript) == ["@lead", "    first", f"    {words}"]
+        assert shown(transcript) == ["@lead", "  first", f"  {words}"]
         for ref in ("board/notes/spec@3#L1-2", "inbox/you@1"):
             await pilot.click(Transcript, offset=(shown(transcript)[2].index(ref) + len(ref) - 1, 2))
         await pilot.click(Transcript, offset=(shown(transcript)[2].index("https://x/inbox") + 12, 2))
@@ -552,9 +571,9 @@ async def test_a_ref_in_a_line_s_text_opens_its_provenance():
         await pilot.pause()
 
     assert app.named == ["board/notes/spec@3", "inbox/you@1"]
-    assert opened, "a click on the words of the line chosen, which name no ref, opens it"
+    assert not opened, "a click on the words of a line, which name no ref, opens nothing"
     assert chosen is transcript.blocks[0] and not first_opened, "a click on another line chooses it"
-    assert transcript.blocks[0].open and not transcript.following
+    assert not transcript.blocks[0].open and not transcript.following
 
 
 async def test_find_waits_out_a_read_under_way_and_reads_back_each_page_once():
@@ -659,20 +678,21 @@ async def test_an_agent_s_lines_run_under_one_heading_and_a_turn_stands_apart():
         assert shown(transcript) == [
             "── turn",
             "@lead",
-            "    reading",
-            '  ✓ board_get  {"board": "notes"}',
+            "  reading",
+            "  ▸ board_get  notes",
+            "",
             "✓ w finished: done",
             "",
             "runtime → @lead",
-            "    your wait holds",
-            "    and more",
+            "  your wait holds",
+            "  and more",
             "",
             "@lead",
-            "    Done. Summary: parse fixed",
+            "  Done. Summary: parse fixed",
             "",
             "── turn",
             "@lead",
-            "    again",
+            "  again",
         ]
         styles = {segment.text.strip(): segment.style for segment in transcript._strip(transcript.blocks[6], 0, 80)}
         assert styles["Summary:"].bold and styles["parse"].color != styles["Done."].color
@@ -697,9 +717,9 @@ async def test_a_tool_s_line_drops_our_surface_s_prefix_and_opens_on_its_whole_n
         await transcript.show(Focus.of_agent("lead"), journal, 3)  # type: ignore[arg-type]
         transcript.toggle(transcript.blocks[0])
 
-        assert shown(transcript)[:3] == ["@lead", '  ✗ wait  {"agents": ["@w"]}  failed', "    mcp__ph__wait failed"]
+        assert shown(transcript)[:3] == ["@lead", "  ▾ wait  @w  ✗ failed", "    mcp__ph__wait failed"]
         assert "item.recorded · tool mcp__ph__wait · runtime · seq 2" in shown(transcript)[3]
-        assert shown(transcript)[4] == "  ▸ bash  ls"
+        assert shown(transcript)[4] == "  ▸ bash ls"
 
 
 def body_of(seq: int, gist: str, body: str | None) -> Event:
@@ -739,3 +759,261 @@ async def test_what_an_agent_says_that_is_whitespace_alone_is_no_line_once_its_b
         assert [block.first for block in transcript.blocks] == [1, 5, 6, 7]
         assert not transcript.reading_bodies
         assert transcript.blocks[1].text == "   words"
+
+
+def did(seq: int, gist: str, data: dict[str, Any]) -> Event:
+    """Something the lead did, or said, in its turn `t1`."""
+    return event(seq, "turn/lead", "item.recorded", gist, data, turn="t1")
+
+
+def call(seq: int, phase: str, gist: str, id: str, **data: Any) -> Event:
+    return did(seq, gist, {"kind": "tool", "phase": phase, "native_id": id, **data})
+
+
+A_TURN = [
+    event(1, "turn/lead", "turn.started", "turn t1 started", {"turn": "t1"}, turn="t1"),
+    did(2, "check the parser", {"kind": "thought", "body": "sha256:thought"}),
+    call(3, "started", 'read {"path": "parser.py"}', "r1", body="sha256:input"),
+    call(4, "completed", "read completed", "r1", outcome="completed", body="sha256:output"),
+    call(5, "started", 'bash {"command": "pytest"}', "b1"),
+    call(6, "completed", "bash failed", "b1", outcome="failed"),
+    call(7, "started", 'mcp__ph__agent_spawn {"name": "w"}', "s1"),
+    event(
+        8, "agent/w", "agent.spawned", "w spawned as worker", {"parent": "agent:lead", "name": "w"},
+        agent=None, actor="agent:lead", native={"pi/toolCallId": "s1"}, turn="t1",
+    ),
+    call(9, "completed", "mcp__ph__agent_spawn completed", "s1", outcome="completed"),
+    did(10, "Fixed: the parser, and its tests pass.", {"kind": "message"}),
+    event(11, "turn/lead", "turn.ended", "turn ended: finished", {"reason": "finished"}, turn="t1"),
+]  # fmt: skip
+"""A turn of the lead's: it thinks, reads a file, runs a command that fails, spawns a worker, and says it is done."""
+BODIES = {
+    "sha256:thought": b"I will check the parser first.",
+    "sha256:input": b'{"path": "parser.py"}',
+    "sha256:output": b"def parse(text):\n    return text.split()\n",
+}
+FOLDED = [
+    "── turn",
+    "@lead",
+    "  ▸ 3 tool calls · ✗ 1 failed · 1 thought · 1 spawn",
+    "  Fixed: the parser, and its tests pass.",
+]
+
+
+async def test_a_turn_shows_what_its_agent_said_and_folds_all_else_it_did_into_one_line_that_counts_it():
+    """What the lead said stands; its calls, its thought, its spawn and its turn's end are one line that counts them
+    exactly, the call that failed among them, which opens one level on each, a call by its name and its input in short,
+    a thought dim, and the spawn under its call, and a call opens on its whole input and what it gave back."""
+    app = Alone()
+    async with app.run_test(size=(80, 30)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN, bodies=BODIES), 11)  # type: ignore[arg-type]
+        folded = shown(transcript)
+        fold = next(block for block, _ in transcript._rows if isinstance(block, Fold))
+        transcript.toggle(fold)
+        opened = shown(transcript)
+        transcript.toggle(next(block for block in transcript.blocks if block.event.gist.startswith("read")))
+        await app.workers.wait_for_complete()
+        whole = shown(transcript)
+        transcript.toggle(fold)
+
+        assert folded == FOLDED
+        assert opened == [
+            "── turn",
+            "@lead",
+            "  ▾ 3 tool calls · ✗ 1 failed · 1 thought · 1 spawn",
+            "    ▸ ∴ check the parser",
+            "    ▸ read  parser.py",
+            "    ▸ bash  pytest  ✗ failed",
+            "    ▸ agent_spawn  w",
+            "      ↳ w spawned as worker",
+            "  Fixed: the parser, and its tests pass.",
+            "",
+            "    ■ turn finished",
+        ]
+        assert whole[4:12] == [
+            "    ▾ read  parser.py",
+            "      input",
+            "      {",
+            '        "path": "parser.py"',
+            "      }",
+            "",
+            "      output",
+            "      def parse(text):",
+        ]
+        assert shown(transcript) == FOLDED and transcript.chosen is fold
+
+
+async def test_a_turn_under_way_shows_its_latest_step_and_rests_folded_once_it_ends():
+    """While a runtime holds the session and the turn has no end, the fold says what is running and its latest step
+    shows under it; once the turn ends it rests folded, and a call that never ended is said to have ended unknown, as
+    no end of it is known."""
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        transcript.held(True)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN[:7]), 7)  # type: ignore[arg-type]
+        under_way = shown(transcript)
+        transcript.take([event(12, "turn/lead", "turn.lost", "turn lost", {}, turn="t1")])
+
+        assert under_way == [
+            "── turn",
+            "@lead",
+            "  ▸ 3 tool calls · ✗ 1 failed · 1 running · 1 thought",
+            "    ▸ agent_spawn  w  running",
+        ]
+        assert shown(transcript)[2:] == [
+            "  ▸ 3 tool calls · ✗ 1 failed · ? 1 ended unknown · 1 thought",
+            "",
+            "■ turn lost: the runtime went in the middle of it",
+        ]
+
+
+async def test_a_session_that_is_history_has_no_turn_under_way():
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN[:7]), 7)  # type: ignore[arg-type]
+
+        assert shown(transcript) == [
+            "── turn",
+            "@lead",
+            "  ▸ 3 tool calls · ✗ 1 failed · ? 1 ended unknown · 1 thought",
+        ]
+
+
+async def test_enter_and_right_open_a_line_one_level_and_left_and_esc_close_it_one_level(monkeypatch):
+    """On the fold, Right opens it and Right again goes into it; Left on a step goes out to the fold's line, and Left
+    or Esc closes that; Esc with nothing open goes back to the composer, as it does from any other part."""
+    backs = []
+    app = Alone()
+    async with app.run_test(size=(80, 30)) as pilot:
+        transcript = app.query_one(Transcript)
+        monkeypatch.setattr(app.screen, "action_back", lambda: backs.append(True), raising=False)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN, bodies=BODIES), 11)  # type: ignore[arg-type]
+        fold = transcript._folds["t1"]
+        transcript.focus()
+        await pilot.press("up")
+        chose = transcript.chosen
+        await pilot.press("right")
+        opened = fold.open
+        await pilot.press("right")
+        into = transcript.chosen
+        await pilot.press("enter")
+        step_open = into.open if into else None
+        await pilot.press("left")
+        await pilot.press("left")
+        out = transcript.chosen
+        await pilot.press("escape")
+        closed = not fold.open
+        await pilot.press("escape")
+
+    assert chose is fold and opened and into is not None and into.fold is fold and step_open
+    assert out is fold and closed and backs == [True]
+
+
+async def test_one_key_opens_every_fold_of_the_focus_and_each_that_comes_and_again_closes_them_all():
+    second = [
+        event(20, "turn/lead", "turn.started", "turn t2 started", {"turn": "t2"}, turn="t2"),
+        event(
+            21, "turn/lead", "item.recorded", "ls", {"kind": "tool", "phase": "started", "native_id": "x"}, turn="t2"
+        ),
+    ]
+    app = Alone()
+    async with app.run_test(size=(80, 40)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN), 11)  # type: ignore[arg-type]
+        transcript.unfold()
+        transcript.take(second)
+        opened = [block.open for block in transcript._folds.values()]
+        transcript.unfold()
+
+        assert opened == [True, True]
+        assert shown(transcript) == [*FOLDED, "", "── turn", "@lead", "  ▸ 1 tool call · ? 1 ended unknown"]
+
+
+async def test_a_click_on_a_line_s_open_mark_opens_or_closes_it_and_on_its_words_chooses_it():
+    app = Alone()
+    async with app.run_test(size=(80, 20)) as pilot:
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN), 11)  # type: ignore[arg-type]
+        fold = transcript._folds["t1"]
+        await pilot.click(Transcript, offset=(GUTTER + 6, 2))
+        chosen, still = transcript.chosen, fold.open
+        await pilot.click(Transcript, offset=(GUTTER + 2, 2))
+        opened = fold.open
+        await pilot.click(Transcript, offset=(GUTTER + 2, 2))
+
+    assert chosen is fold and not still and opened and not fold.open
+
+
+async def test_find_opens_the_fold_of_a_step_it_finds():
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN), 11)  # type: ignore[arg-type]
+        transcript.find("pytest")
+        await app.workers.wait_for_complete()
+
+        assert transcript._folds["t1"].open
+        assert transcript.chosen is not None and transcript.chosen.event.gist == "bash failed"
+        assert "    ▸ bash  pytest  ✗ failed" in shown(transcript)
+
+
+async def test_a_folded_line_copies_what_it_shows_and_a_line_wrapped_is_selected_as_one_line():
+    long = "the parser is fixed, " * 8
+    app = Alone()
+    async with app.run_test(size=(60, 20)) as pilot:
+        transcript = app.query_one(Transcript)
+        journal = Journal([*A_TURN, did(12, long.strip(), {"kind": "message"})])
+        await transcript.show(Focus.of_agent("lead"), journal, 12)  # type: ignore[arg-type]
+        copied = transcript.copied(transcript._folds["t1"])
+        rows = [row for row, (block, line) in enumerate(transcript._rows) if block.event.seq == 12 and line >= 0]
+        await pilot.mouse_down(Transcript, offset=(0, rows[0]))
+        await pilot.hover(Transcript, offset=(59, rows[-1]))
+        await pilot.mouse_up(Transcript, offset=(59, rows[-1]))
+
+        assert len(rows) > 1, "a long line of what is said wraps"
+        assert copied == "@lead  3 tool calls · ✗ 1 failed · 1 thought · 1 spawn"
+        assert app.screen.get_selected_text() == long.strip()
+
+
+async def test_a_turn_whose_start_the_window_lets_go_says_more_came_before():
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(A_TURN), 11)  # type: ignore[arg-type]
+        transcript._before = 3
+        transcript._began.clear()
+        transcript._forget(transcript._folds["t1"])
+
+        assert "more before, not read yet" in shown(transcript)[2]
+
+
+def test_a_tool_is_named_only_where_its_input_follows_its_name_as_json():
+    """As a model's call is reported; a command a harness ran, such as Codex's, names no tool, and is its words."""
+    assert tool_named('mcp__ph__board_get {"board": "notes"}') == ("board_get", '{"board": "notes"}')
+    assert tool_named("/bin/bash -lc 'ls -la'") == (None, "/bin/bash -lc 'ls -la'")
+    assert tool_named("pytest") == (None, "pytest")
+    assert summary('{"agents": ["@w", "@v"], "timeout": 600, "why": "to  see"}') == "@w, @v  600  to see"
+    assert summary('{"cut": "short') == '{"cut": "short'
+
+
+def test_markdown_in_a_line_shows_no_control_an_entity_or_an_escape_decodes_to():
+    """Markdown decodes an entity to the character it names, a bidi control among them, which is made safe after, as a
+    control in the text is, so neither reaches the screen or the clipboard."""
+    said = inline("**bold** &#x202e;exe.gnp and \x1b[2J and `\x07` and &#x2066;").plain
+
+    assert said == "bold \\u202eexe.gnp and \\x1b[2J and \\x07 and \\u2066"
+
+
+async def test_a_body_read_to_learn_whether_it_is_blank_opens_said_cut_where_it_was_cut():
+    long = b"x" * transcript_module.BODY_LIMIT
+    journal = Bodies([body_of(1, " ", "sha256:long")], bodies={"sha256:long": long})
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), journal, 1)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+
+        assert transcript.blocks[0].text is not None and transcript.blocks[0].text.endswith("(cut at 256 KiB)")

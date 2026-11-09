@@ -49,15 +49,17 @@ def picked(words: str, lead: int, span: tuple[int, int]) -> str:
     return words[max(start - lead, 0) :] if end == -1 else words[max(start - lead, 0) : max(end - lead, 0)]
 
 
-def selected(selection: Selection, count: int, words: Callable[[int], tuple[str, int]]) -> str:
-    """The text a selection takes of `count` rows, a line each, each row's words and lead as `words` gives them."""
+def selected(selection: Selection, count: int, words: Callable[[int], tuple[str, int, bool]]) -> str:
+    """The text a selection takes of `count` rows, a line each but a row that goes on from the one above as one line
+    wrapped, each row's words, lead and whether it goes on as `words` gives them."""
     first = 0 if selection.start is None else selection.start.y
     last = count - 1 if selection.end is None else min(selection.end.y, count - 1)
-    taken = []
+    taken = ""
     for y in range(first, last + 1):
         if (span := selection.get_span(y)) is not None:
-            taken.append(picked(*words(y), span).rstrip())
-    return "\n".join(taken)
+            said, lead, goes_on = words(y)
+            taken += (" " if goes_on else "\n") * (y > first) + picked(said, lead, span).rstrip()
+    return taken
 
 
 def highlighted(strip: Strip, span: tuple[int, int] | None, style: Style) -> Strip:
@@ -186,9 +188,9 @@ class Rows(ScrollView, can_focus=True):
     def get_selection(self, selection: Selection) -> tuple[str, str] | None:
         """The words of the rows selected, without what decorates them."""
 
-        def words(y: int) -> tuple[str, int]:
+        def words(y: int) -> tuple[str, int, bool]:
             row = self.rows[y]
-            return row.line.plain[row.lead :], row.lead
+            return row.line.plain[row.lead :], row.lead, False
 
         return selected(selection, len(self.rows), words), "\n"
 

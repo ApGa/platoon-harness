@@ -41,7 +41,7 @@ from .review import Review
 from .rows import Row, Rows
 from .safe import SafeText, note
 from .tasks import Tasks
-from .transcript import Focus, Transcript, inline, page_of, replying_to, text_of
+from .transcript import Focus, Fold, Transcript, inline, page_of, replying_to
 
 STATES = {
     "needs_you": ("◉", "$warning"),
@@ -305,6 +305,7 @@ class Workspace(Screen[None]):
         assert live is not None
         transcript = self.query_one(Transcript)
         focus = self.focus_on
+        transcript.held(live.runtime == "live")
         added = transcript.take(events)
         for screen in self.app.screen_stack:
             if isinstance(screen, Tasks):
@@ -638,7 +639,7 @@ class Workspace(Screen[None]):
                 indent + "  ",
                 SafeText(f"{_said(state)} · {_harness(row)}", style),
                 (" · " if doing else "", "dim"),
-                inline(SafeText(doing).plain).stylize("dim"),
+                inline(doing).stylize("dim"),
             )
             spins = state == "working"
             rows += [Row(named, key, lead=len(indent) + 2, spins=spins), Row(how, key, lead=len(indent) + 2)]
@@ -1105,6 +1106,9 @@ class Workspace(Screen[None]):
     def action_open_line(self) -> None:
         self.query_one(Transcript).toggle()
 
+    def action_folds(self) -> None:
+        self.query_one(Transcript).unfold()
+
     def copy_line(self) -> None:
         """Send the chosen line's text to the terminal as OSC 52, each control shown as its escape, so pasting it acts
         on no terminal. Whether it reaches the clipboard is the terminal's."""
@@ -1113,7 +1117,7 @@ class Workspace(Screen[None]):
             said = "No line is chosen, so nothing is copied: choose a line of the transcript, which Tab reaches."
             note(self, said, severity="warning")
             return
-        text = text_of(chosen)
+        text = self.query_one(Transcript).copied(chosen)
         self.app.copy_to_clipboard(text)
         said = (
             f"Sent the chosen line's {len(text):,} characters as OSC 52: whether they reach your clipboard is your "
@@ -1260,6 +1264,13 @@ class Workspace(Screen[None]):
             )
             note(self, said, severity="warning")
             return
+        if isinstance(chosen, Fold):
+            said = (
+                "This line counts what an agent did in its turn, and is no event: open it, with Enter, and choose "
+                "one of the lines it opens on, each of which is."
+            )
+            note(self, said, severity="warning")
+            return
         self.app.push_screen(Provenance(live.session, shows(chosen.event)))
 
     @work(group="act")
@@ -1272,7 +1283,7 @@ class Workspace(Screen[None]):
             return
         chosen = self.query_one(Transcript).chosen
         about = SafeText("ref: an event's ref, `stream@version`, the chosen line's unless you give another.")
-        asked = [("ref", about, "" if chosen is None else shows(chosen.event))]
+        asked = [("ref", about, "" if chosen is None or isinstance(chosen, Fold) else shows(chosen.event))]
         answer = await self.app.push_screen_wait(Form(SafeText("Provenance", "bold"), asked))
         if answer is None:
             return
