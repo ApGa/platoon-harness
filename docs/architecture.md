@@ -1810,7 +1810,13 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   queue's or a board's focus, lists its tasks or its entries with every version, in the words of `channels.py`, read from
   `task.list` or `board.query` again only for a frame that holds an event on one of their streams, or for a queue an agent's
   end, which gives back each task it held, so no timer of the client's decides anything, and each act opens its op's form
-  filled in with what its line knows. [tui.md](how-to/tui.md) is its guide.
+  filled in with what its line knows. `e` on the sessions screen opens the team editor on the project's team file, drawn
+  from the fields `team_editor.py` makes, a row each, each problem the loader and `team check` find under its field, beside
+  `team show`'s sentences and the diff a save makes, in the words the page's editor says; each change is checked as it is
+  made, a save asks first what only trust may take, in the page's question, and Start saves first, then opens the screen's
+  own start. A field typed in whose value holds a control a terminal would act on is not changed there, saying why, as its
+  form would draw that control itself ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md),
+  a draft). [tui.md](how-to/tui.md) is its guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
   control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
   the journal one way into `swarmchat.sqlite`, a function of the events and the bodies they cite, so a rebuild gives every id again
@@ -1840,7 +1846,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   page asks before a resume, which can spend money, and a stop, and the server, which alone can tell, before a start whose
   team needs trust, naming each value as the team holds it, with trust carrying the digest of what was shown, or would run several
   agents on one plan login. Its team editor draws the project's team file where `web` runs as the fields `team_editor.py`
-  makes from the team's schema, which the terminal's is to draw too, each problem the loader and `team check` find at its
+  makes from the team's schema, which the terminal's draws too, each problem the loader and `team check` find at its
   field, `team show`'s sentences and the diff a save makes, and saves the file in place, asking once before it writes what
   only trust may take ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md),
   a draft). [web.md](how-to/web.md) is its guide, and

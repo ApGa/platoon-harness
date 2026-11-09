@@ -7,7 +7,7 @@
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`config.py`](../../packages/sdk/src/platoon_harness/config.py), [`team.py`](../../packages/sdk/src/platoon_harness/team.py), [`team_file.py`](../../packages/cli/src/platoon_harness_cli/team_file.py), [`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py), [`teams.py`](../../packages/cli/src/platoon_harness_cli/teams.py), [`web/sessions.py`](../../packages/cli/src/platoon_harness_cli/web/sessions.py), [architecture sections 12 and 17](../architecture.md#12-clients), [RFC 0017](0017-config-and-entry-points.md), [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md), [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) and [RFC 0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) |
 | Discussion | The owner's request of 2026-11-09: "it'd be great if we can configure the team from within the team, harnesses, topology, models, efforts, etc. from within the tui/web ui instead of forcing us to write a config file a priori". The owner's rulings of the same day, in summary, as their words were not kept: the editor edits the project's `platoon-harness.toml`; a start from the editor saves first; and switching a running session's model or effort comes later. The rest, which keys a person sets among it, is this design's. The request accepts no design: this one waits for the owner's acceptance |
-| Implementation | `docs: Add RFC 0079 on editing the project's team from a client`; `feat: Edit the project's team file in place from fields made from its schema`; `feat: Edit the project's team from the browser's sessions page`; and the fixes the review asked for |
+| Implementation | `docs: Add RFC 0079 on editing the project's team from a client`; `feat: Edit the project's team file in place from fields made from its schema`; `feat: Edit the project's team from the browser's sessions page`; and the fixes the review asked for. The terminal's: `refactor: Keep the words both team editors say in the shared module`; `feat: Let a click on a key in the footer or a dialog do what the key does`; `feat: Edit the project's team from the terminal's sessions screen` |
 
 ## Summary
 
@@ -22,8 +22,8 @@ format-preserving TOML library, so comments, order and layout survive; it is loa
 checked by `team check`, every problem shown at its field, with `team show`'s sentences of it and the diff a save makes. A
 save writes the whole file through a file beside it, never through a link, refuses a file found changed since it was read,
 and asks once before it writes what would run as the person or a credential to pass on. The browser's sessions page
-([RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md)) gains the editor first; the terminal's, on the same
-module, follows the terminal's redesign.
+([RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md)) gained the editor first, and the terminal's
+sessions screen draws it too, on the same module, in the same words.
 
 ## Motivation
 
@@ -168,10 +168,25 @@ waited for, while there is nothing to save, and while the draft cannot be saved.
 editor's changes first, and is disabled, saying why, where Team file names another file while the editor holds changes.
 Everything the server says is put in as text.
 
-### 8. The terminal next
+### 8. The terminal's sessions screen
 
-The terminal's editor is the next stage, after its redesign lands, on the same module: its fields, its words, its placing
-of problems and its save are this module's, so the terminal draws them as the page does, and the two cannot disagree.
+The terminal's editor is drawn from the same module: its fields, its placing of problems, its checks and its save are
+this module's, and so are the words both clients say of a draft and its save, beside the module's problems and blocks:
+the headings of `team show`'s sentences and the diff, what stands for either where there is none, why a save waits for a
+check, that changes are not saved yet, that nothing was saved, what Read again asks, a problem as a client says it, and
+what a save says it did. The page keeps its own copy of each, as its script is not Python, and a test holds the two
+alike.
+
+`e` on the sessions screen opens a screen of its own on the project's team where the terminal runs. Each field is a row
+under its table and section, its key and its value, or what stands where it is left empty, each problem under it, and
+the words of the chosen row below; `team show`'s sentences and the diff stand in a panel beside the fields from 100
+columns and below them under that, scrolled to the diff's first change while the panel has no focus. Enter, or a click,
+opens a field's form, made from its kind: a line of text, several lines, or a list of its choices, the one the file holds
+marked; the same form names an entry to add and takes its first field. Each change is checked as it is made, and only the
+newest check is drawn. `s` saves, asking the module's question first; `n` saves, then goes back to the sessions screen,
+which opens its own start form on the project's team; `r` reads again and Esc goes back, each asking first where it
+drops changes. An act that cannot be taken is dim in the footer, and pressing it says why. Every act has a click: a row, a
+choice, the form's keys, the footer's keys and a question's.
 
 ## The hard parts
 
@@ -189,6 +204,11 @@ of problems and its save are this module's, so the terminal draws them as the pa
 - **A slow check.** `team check` asks each role's driver what it is, which runs its harness's status command, a second or two
   for some harnesses. The page checks as a field is left, not as a key is pressed, and draws only the newest answer.
 
+- **A control character in the terminal.** A text field holds what the file holds, and a control character the terminal
+  would act on, which every other part of the terminal shows as its escape, would reach the terminal itself from an input
+  that shows it raw. A field whose text holds one is drawn as its escapes and cannot be changed in the terminal, saying
+  so, and the person edits it in the file; a choice is drawn safe and is chosen as ever. The page has no such limit.
+
 ## Alternatives
 
 | Alternative | Why not |
@@ -203,6 +223,8 @@ of problems and its save are this module's, so the terminal draws them as the pa
 | Every key of the schema a field | Keys that run code as the person would be set unseen in a form. The owner asked for harnesses, topology, models and efforts; this design adds the budget, labels, auth profiles and test command, and leaves the rest to the file |
 | A model chosen from a list | No driver lists the models its harness takes: a list made here would be invented |
 | Saving without asking about trust, as writing runs nothing | The page acts as the person, and what it writes runs at the next start: never trusting silently means asking where it writes such a value |
+| The words both clients say sent by the page's server with each answer | A second way to carry words a static page already holds: the page keeps its copy, and a test holds it to the module's |
+| The terminal's fields typed in where they stand on screen | Every other form of the terminal is a dialog of its own, and a row a field keeps the whole team readable at 52 columns, its problems under each |
 
 ### The new dependency
 
@@ -213,8 +235,8 @@ SDK keeps reading TOML with `tomllib` alone, and the read back with `tomllib` ch
 
 ## Consequences
 
-- A person sets a team's roles, topology, budget, labels and test command in the browser, and what they set is the project
-  file, which the command line and the terminal read as they read any.
+- A person sets a team's roles, topology, budget, labels and test command in the terminal or the browser, and what they set
+  is the project file, which the command line and both clients read as they read any.
 - The session's record keeps the exact team it ran, as the manifest already does: a start from the editor saves first, then
   loads the file, so the manifest's sanitized resolved team is what was saved.
 - The command line's package depends on `tomlkit`.
@@ -222,14 +244,17 @@ SDK keeps reading TOML with `tomllib` alone, and the read back with `tomllib` ch
   editable.
 - Changing a running session's settings, such as an agent's model mid-session, is not here: the terminal's Alt+M stays as it
   is, and a later stage takes it up.
-- Nothing here has run in WebKit, on macOS or on a real model.
+- A value holding a control character a terminal would act on is changed in the file, or in the browser, and not in the
+  terminal, which says so.
+- Nothing here has run in WebKit, on macOS, in a real terminal or on a real model: the terminal's editor has run under
+  Textual's pilot alone.
 
 ## Rollout plan
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
 | M1 The shared part and the browser's editor | `team_editor.py`; `/x/team`, `/x/check` and `/x/save` on the sessions page; the page's team editor | `tests/unit/cli/test_team_editor.py`; `tests/unit/web/test_sessions.py`, `test_the_team_editor_reads_checks_and_saves_the_project_s_team_and_a_start_runs_what_it_saved`, `test_a_save_of_a_file_changed_since_it_was_read_is_refused_and_one_that_writes_a_test_command_asks_once`; `tests/e2e/test_team_editor.py`, in Chromium and Firefox | `feat: Edit the project's team file in place from fields made from its schema`; `feat: Edit the project's team from the browser's sessions page` |
-| M2 The terminal's editor | The same module drawn by the terminal, after its redesign | Tests named for the same promises in the terminal | |
+| M2 The terminal's editor | The same module drawn by the terminal's sessions screen, and the words both clients say kept in it | `tests/unit/tui/test_editor.py`, a test per promise; `tests/unit/tui/test_snapshots.py`, `test_the_team_editor_draws_each_problem_under_its_field_beside_the_preview`, at 120 and 52 columns; `tests/integration/test_tui.py`, `test_a_session_started_from_the_team_editor_runs_the_team_it_saved_first`; `tests/unit/cli/test_team_editor.py`, `test_the_words_both_clients_say_of_a_draft_are_the_shared_module_s_and_the_page_says_each` | `refactor: Keep the words both team editors say in the shared module`; `feat: Let a click on a key in the footer or a dialog do what the key does`; `feat: Edit the project's team from the terminal's sessions screen` |
 
 ## Open questions
 
@@ -241,6 +266,10 @@ SDK keeps reading TOML with `tomllib` alone, and the read back with `tomllib` ch
    is the keys section 1 lists and no more.
 3. Whether the driver contract gains an optional list of the models a harness takes, which the model field would offer, is
    the owner's, and an RFC of its own. The default, pending the owner's ruling, is none, and a model is free text.
+4. Whether the terminal's start, from the editor and from `n` alike, asks for trust by the page's question naming each
+   value, rather than by its form's field that takes a typed yes, is the owner's. The default, pending the owner's ruling,
+   is the form as it stands, so the editor's Start saves, then hands the start to it; the other answer changes that form
+   and tears nothing of the editor out.
 
 ## Evidence
 

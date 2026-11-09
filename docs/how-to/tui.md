@@ -73,13 +73,30 @@ whose harness cannot start fails, as the workspace shows, and for a harness `doc
 says what `doctor` finds of it, run in this terminal, in its words: not on PATH, or its version, the kind of its login
 and what its checks found. The session's runtime has this terminal's environment, so PATH is the one the harness was
 looked for on, but an agent in an isolated workspace keeps its harness's state in a home of its own, so the login
-`doctor` names is this terminal's, not that harness's. `r` resumes a session whose runtime has gone, after saying that it can spend money. `s` stops one as its owner
+`doctor` names is this terminal's, not that harness's. `e` edits the project's team, as the next section says.
+`r` resumes a session whose runtime has gone, after saying that it can spend money. `s` stops one as its owner
 would, after one confirmation, and it stays resumable. Enter opens one: live as a guest, or as read-only history when no
 runtime holds it, with `/resume` offered to resume it. `/detach` comes back here from a session opened here, which runs
 on. `l` looks again, `t` chooses a theme, `c` copies what you selected, `?` shows every key, `p` opens the palette and
 `q` quits. In a form, Enter goes to the next field,
 and from the last sends it. A click on a key in the footer, or on a question's or a form's keys below it, does what the
 key does.
+
+### Edit the project's team
+
+![The terminal's team editor: the lead's and the worker's fields, a problem under the worker's count, and the preview beside them](../assets/tui-team-editor.svg)
+
+*The team editor at 120 columns by 32 rows, on a team of scripted harnesses, after the lead's model was set and the
+worker's count was given as `two`.*
+
+`e` opens the project's `platoon-harness.toml`, in the folder you started in, in the team editor, which the browser's
+sessions page draws too, from the same module and in the same words: each role, the topology, the budget, the labels,
+the auth profiles and the test command, a row for each key you may set, each problem under its field, and beside the
+fields, or below them under 100 columns, what the team allows in `team show`'s sentences and the diff a save makes.
+Enter, or a click, opens a field's form, or adds or removes the entry on its row; `s` saves, asking first where it writes
+what would run as you; `n` saves, then opens the sessions screen's start form on the project's team; `r` reads the file
+and this machine's harnesses again; Esc goes back. `r` and Esc ask first where they would drop your changes. A disabled
+act is dim in the footer and says why when pressed. [Edit a team](edit-a-team.md) is its guide.
 
 ## The workspace
 
@@ -498,6 +515,7 @@ before the session's. `^` is Ctrl.
 |---|---|
 | `Enter` | Open the session, live or as its history |
 | `n` | Start a session from the project's team or a team file |
+| `e` | Edit the project's team: its roles, harnesses, models, topology, budget, labels, auth profiles and test |
 | `r` | Resume a session whose runtime has gone, which can spend money |
 | `s` | Stop a session's runtime as its owner would, keeping it resumable |
 | `l` | Look again for sessions and how each stands |
@@ -506,6 +524,17 @@ before the session's. `^` is Ctrl.
 | `?` | Show every key and typed command |
 | `p` | Find a command, an op among them |
 | `q` | Quit: a session you are in runs on |
+
+### The team editor
+
+| Keys | Does |
+|---|---|
+| `Enter` | Change the chosen field, or add or remove the chosen entry |
+| `s` | Save the draft as its diff shows, asking first where it writes what would run as you |
+| `n` | Start a session from the project's team, saving changes first |
+| `r` | Read the team file and this machine's harnesses again, asking first where that drops your changes |
+| `?` | Show every key and typed command |
+| `Esc` | Go back to the sessions screen, asking first where that drops your changes |
 
 ### A session, unless the part that has focus takes the key
 

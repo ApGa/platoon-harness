@@ -96,7 +96,8 @@ profiles and test command, each problem under its field as `team check` says it,
 sentences, and the diff a save makes. Save writes the file in place, keeping its comments and layout, never through a
 link, refusing a file found changed since it was read, though a change made in the moment before its write is
 overwritten, and asking once first where it writes what would run as you or a credential to pass on. Start, with Team file
-left empty, saves the editor's changes first. [Edit a team in the browser](edit-a-team.md) is its guide.
+left empty, saves the editor's changes first. [Edit a team](edit-a-team.md) is its guide, and the terminal's
+sessions screen draws the same editor.
 
 ## Choose a link
 

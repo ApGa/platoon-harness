@@ -1,7 +1,7 @@
-"""The workspace's layout at each size the guide names, the sessions screen, the review and the provenance panel, as
-snapshots, on a session's history so nothing moves, with animation off, so a working agent's glyph is still: a session
-of scripted harnesses, and the mixed team's session as a live run of it recorded it. The docs show the recorded
-session's snapshots once there is one, and the scripted session's until then."""
+"""The workspace's layout at each size the guide names, the sessions screen, the team editor, the review and the
+provenance panel, as snapshots, on a session's history so nothing moves, with animation off, so a working agent's glyph
+is still: a session of scripted harnesses, and the mixed team's session as a live run of it recorded it. The docs show
+the recorded session's snapshots once there is one, and the scripted session's until then."""
 
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -18,6 +18,7 @@ from platoon_harness.drivers import AgentSpec
 from platoon_harness.kernel import Event
 from platoon_harness.primitives import Contributors, Interactions, Lineage, Uses
 from platoon_harness.testing import Do, Say, ScriptedDriver
+from platoon_harness_cli import team_editor
 from platoon_harness_cli.tui.app import CSS, INK, TerminalUI
 from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.provenance import Provenance
@@ -31,6 +32,7 @@ from ..cli.test_provenance import opened, reached
 from ..primitives.test_provenance import ask, scenario
 from ..runtime.gitting import commit, repository, working
 from ..runtime.support import in_state, of_type, until
+from . import test_editor
 from .support import drawn
 
 SIZES = {"wide": (120, 32), "medium": (90, 28), "narrow": (70, 24), "slim": (52, 20), "short": (100, 14)}
@@ -39,6 +41,7 @@ ASSETS = Path(__file__).parents[3] / "docs" / "assets"
 SCRIPTED_SNAPSHOTS = {
     **{f"tui-{size}.svg": f"test_the_workspace_s_layout_at_each_size[{size}].raw" for size in SIZES},
     "tui-sessions.svg": "test_the_sessions_screen_shows_the_logo_beside_the_wordmark.raw",
+    "tui-team-editor.svg": "test_the_team_editor_draws_each_problem_under_its_field_beside_the_preview[wide].raw",
     "tui-review.svg": "test_review_lists_what_changed.raw",
     "tui-patch.svg": "test_the_review_draws_a_patch.raw",
     "tui-provenance.svg": "test_the_provenance_panel_draws_each_link_with_how_it_is_known.raw",
@@ -141,6 +144,41 @@ def test_the_sessions_screen_shows_the_logo_beside_the_wordmark(snap_compare, hi
         await drawn(pilot, lambda text: "platoon-harness" in text and looked(pilot.app.screen))
 
     assert snap_compare(still(TerminalUI()), terminal_size=(100, 28), run_before=ready)
+
+
+EDITED = f"""\
+# A lead and a worker, on scripted harnesses.
+[roles.lead]
+harness = "{__name__}:scripted_lead"  # the lead
+may_spawn = ["worker"]
+
+[roles.worker]
+harness = "{__name__}:scripted_worker"
+count = 0
+"""
+"""The project's team the editor's snapshots draw, which names harnesses that are the same in every run."""
+
+
+@pytest.fixture
+def editing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A home of the test's own, which is where the terminal starts, holding the project's team, and this machine's
+    harnesses as the editor is told them."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(team_editor, "harnesses", lambda: test_editor.HARNESSES)
+    (tmp_path / PROJECT_FILE).write_text(EDITED)
+
+
+@pytest.mark.parametrize("size", ["wide", "slim"])
+def test_the_team_editor_draws_each_problem_under_its_field_beside_the_preview(snap_compare, editing, size):
+    async def edited(pilot) -> None:
+        await test_editor.opened(pilot)
+        await test_editor.setting(pilot, "roles.lead.model", *"m1")
+        await test_editor.setting(pilot, "roles.worker.count", *"two")
+
+    assert snap_compare(still(TerminalUI()), terminal_size=SIZES[size], run_before=edited)
 
 
 @pytest.fixture

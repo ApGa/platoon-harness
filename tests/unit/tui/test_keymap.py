@@ -17,6 +17,7 @@ from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.approvals import Approval
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.dialogs import Confirm, Form, Help
+from platoon_harness_cli.tui.editor import FieldForm, TeamEditor
 from platoon_harness_cli.tui.keymap import KEYMAP, TYPED, command, keys, reference, regenerate
 from platoon_harness_cli.tui.provenance import Provenance
 from platoon_harness_cli.tui.review import Patch, Review
@@ -33,6 +34,7 @@ GUIDE = Path(__file__).parents[3] / "docs" / "how-to" / "tui.md"
 PLACES = {
     TerminalUI: ("everywhere",),
     Sessions: ("sessions",),
+    TeamEditor: ("team",),
     Workspace: ("workspace", "parts"),
     Transcript: ("transcript", "panel"),
     Navigator: ("panel",),
@@ -45,6 +47,7 @@ PLACES = {
     Tasks: ("dialog",),
     Confirm: ("question",),
     Form: ("dialog",),
+    FieldForm: ("dialog",),
     Help: ("dialog",),
 }
 PLAIN = {"enter", "escape", "tab", "shift+tab", "up", "down", "backspace", "question_mark", "slash"}
@@ -97,8 +100,9 @@ def test_every_act_of_a_session_has_one_typed_command_that_runs_it():
 
 def test_every_act_is_reached_with_keys_every_terminal_delivers():
     """In a session, by its typed command, and between its parts and in each list, by plain keys. Where nothing is
-    typed, the sessions screen, a question, a form and the help, each act has a plain key, quitting included."""
-    for where in ("sessions", "parts", "panel", "dock", "list", "provenance", "question", "dialog"):
+    typed, the sessions screen, the team editor, a question, a form and the help, each act has a plain key, quitting
+    included."""
+    for where in ("sessions", "team", "parts", "panel", "dock", "list", "provenance", "question", "dialog"):
         for key in keys(where):
             assert plain(key.keys.split(",")[0]), key
     for key in keys("everywhere"):
@@ -275,4 +279,4 @@ async def test_a_click_on_a_key_in_the_footer_or_a_dialog_does_what_the_key_does
 
 
 def test_a_key_is_shown_as_it_is_typed():
-    assert [key.shown for key in keys("sessions")] == ["Enter", "n", "r", "s", "l", "t", "c", "?", "p", "q"]
+    assert [key.shown for key in keys("sessions")] == ["Enter", "n", "e", "r", "s", "l", "t", "c", "?", "p", "q"]

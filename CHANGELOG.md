@@ -13,6 +13,15 @@ named here is closed.
 
 ### New features
 
+- **The project's team, edited in the terminal.** `e` on the sessions screen opens the project's `platoon-harness.toml`
+  in a team editor drawn from the same module as the browser's, in the same words: a row for each key a person sets, by
+  section, each problem under its field, and beside the fields, or below them under 100 columns, `team show`'s sentences
+  and the diff a save makes. Enter, or a click, opens a field's form, a line of text, several lines or a list of its
+  choices, and adds or removes an entry. Each change is checked as it is made; `s` saves, asking first, in the page's
+  question, where it writes what would run as you; `n` saves, then opens the start form; `r` and Esc ask before they drop
+  changes; and a disabled act is dim and says why. A field whose value holds a control character a terminal would act on
+  is not changed in the terminal, which says to edit it in the file. Before, the terminal had no editor. This is RFC 0079's
+  second stage, a draft.
 - **A click on a key does what the key does.** In the terminal, a click on a key in the sessions screen's footer runs it,
   and so does a click on a question's `y` or `n` or on a form's keys below it. Before, only the keys did.
 - **The project's team, edited in the browser.** The sessions page of `platoon-harness web` gains a team editor: Edit reads
@@ -23,8 +32,7 @@ named here is closed.
   file in place, keeping its comments and layout, never through a link, refusing a file found changed since it was read,
   though a change made in the moment before its write is overwritten, and asks once before it writes what would run as you
   or a credential to pass on; Start saves the editor's changes first. The command line now requires `tomlkit`, which writes
-  the file's own text. Before, a team was a file written by hand or by `init`. This is RFC 0079, a draft; the terminal's
-  editor, on the same fields, is next.
+  the file's own text. Before, a team was a file written by hand or by `init`. This is RFC 0079, a draft.
 - **The labels of the work a span was done for.** `spans` gives each span the claims its agent held while its calls were made,
   each claim held from the call after the one that chose it through the one that completed, failed or released it, or to its
   lease's lapse or its agent's end, and `None`, unknown, where the record cannot place a claim or its end to say whether the span

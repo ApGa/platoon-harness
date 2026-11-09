@@ -1,9 +1,8 @@
-"""The team editor, which the browser's sessions page shows and the terminal's is to show, in the words both say:
-the keys of the project's team file a person may set from a client, as fields made from the team's schema; a draft,
-the file as it is with a person's edits, written as the file's own text, keeping its comments, order and layout; the
-draft checked by the loader and by `team check`, each problem at its field, with `team show`'s sentences of it and the
-diff saving it makes; and the save, refused over a file found changed since it was read, and never through a link
-(RFC 0079)."""
+"""The team editor, which the browser's sessions page and the terminal's both show, in the words both say: the keys of
+the project's team file a person may set from a client, as fields made from the team's schema; a draft, the file as it
+is with a person's edits, written as the file's own text, keeping its comments, order and layout; the draft checked by
+the loader and by `team check`, each problem at its field, with `team show`'s sentences of it and the diff saving it
+makes; and the save, refused over a file found changed since it was read, and never through a link (RFC 0079)."""
 
 import difflib
 import hashlib

@@ -1,5 +1,5 @@
 """The sessions screen: every session under the root and how each stands, and opening, starting, resuming or stopping
-one, and with no team here, writing one."""
+one, and with no team here, writing one, and editing the project's team."""
 
 import asyncio
 from functools import partial
@@ -22,6 +22,7 @@ from ..sessions import ask_to_stop
 from ..teams import Source
 from . import logo
 from .dialogs import Confirm, Form, Keys
+from .editor import TeamEditor, shortened
 from .keymap import bindings, footer, keys
 from .rows import Row, Rows
 from .safe import SafeText, note
@@ -59,9 +60,7 @@ class Sessions(Screen[None]):
     def _brand(self) -> None:
         """The logo's agents beside the wordmark and where the sessions are, each line cut at the edge rather than
         wrapped, so that the logo is never torn. It stands still, as this screen reads no agent's state."""
-        root = find_root()
-        home = Path.home()
-        shown = str(root) if not root.is_relative_to(home) else "~" if root == home else f"~/{root.relative_to(home)}"
+        shown = shortened(find_root())
         said = [
             Content.assemble(("platoon-harness", "bold"), (f" {__version__}", "dim")),
             Content.styled("the agent harnesses you already use, as one team", "dim"),
@@ -138,6 +137,13 @@ class Sessions(Screen[None]):
     def action_open(self) -> None:
         if (name := self._chosen()) is not None:
             self.app.push_screen(Workspace(name))
+
+    @work(group="act")
+    async def action_edit(self) -> None:
+        """Edit the project's team where the terminal runs, and start a session as `n` does once the editor says to,
+        having saved its changes."""
+        if await self.app.push_screen_wait(TeamEditor()):
+            self.action_new()
 
     @work(group="act")
     async def action_new(self) -> None:

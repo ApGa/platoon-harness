@@ -15,6 +15,7 @@ from platoon_harness.schema import nearest
 
 from . import motion
 from .dialogs import Help
+from .editor import TeamEditor
 from .keymap import bindings
 from .safe import note
 from .sessions import Sessions
@@ -66,6 +67,16 @@ Workspace.medium #inspector { layer: overlay; dock: right; height: 100%; backgro
 #brand { height: auto; padding: 1 2; }
 #sessions { height: 1fr; border: round $accent; border-title-color: $foreground; padding: 0 1; }
 #said { height: auto; padding: 0 2; }
+#editing { height: 1fr; }
+#fields, #preview { width: 1fr; border: round $panel; border-title-color: $foreground; padding: 0 1; }
+#fields { border-subtitle-color: $accent; }
+#fields:focus, #preview:focus { border: heavy $accent; }
+#about { height: 3; padding: 0 2; }
+#unsaved { height: auto; padding: 0 2; color: $warning; display: none; }
+#unsaved.-shown { display: block; }
+TeamEditor.stacked #editing { layout: vertical; }
+TeamEditor.stacked #fields { height: 3fr; }
+TeamEditor.stacked #preview { height: 2fr; }
 Workspace.inspector-shown #inspector { display: block; }
 Workspace.narrow #navigator, Workspace.narrow #edge { display: none; }
 Workspace.narrow.navigator-shown #navigator { display: block; layer: overlay; dock: left; height: 100%; }
@@ -77,9 +88,15 @@ Workspace.short #focus, Workspace.short #navigator, Workspace.short #inspector, 
 }
 Workspace.short #composer { max-height: 3; }
 Workspace.short #behind.-shown { display: block; }
-.dialog { width: 72; height: auto; max-height: 90%; border: round $accent; background: $surface; padding: 1 2; }
+.dialog {
+    width: 72; max-width: 100%; height: auto; max-height: 90%;
+    border: round $accent; background: $surface; padding: 1 2;
+}
 .dialog.wide { width: 96; max-width: 100%; height: 90%; }
 .dialog .about { margin-top: 1; color: $text-muted; }
+FieldForm .keys { margin-top: 1; }
+FieldForm Choices { height: auto; max-height: 12; }
+FieldForm Composer { height: auto; min-height: 3; max-height: 8; border: round $accent; }
 ModalScreen { align: center middle; }
 #help { height: 1fr; }
 #comment { height: auto; min-height: 3; max-height: 8; border: round $accent; }
@@ -190,6 +207,6 @@ class TerminalUI(App[str | None], inherit_bindings=False):
 
     def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
         """The palette: the keys of the screen it was opened on, then, in a session, the ops a person may run."""
-        if isinstance(screen, Workspace | Sessions):
+        if isinstance(screen, Workspace | Sessions | TeamEditor):
             for title, help, run in screen.commands():
                 yield SystemCommand(title, escape(help), run)

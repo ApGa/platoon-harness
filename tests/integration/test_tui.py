@@ -23,17 +23,18 @@ from platoon_harness import Session, Team
 from platoon_harness.config import PROJECT_FILE, Manifest
 from platoon_harness.kernel import is_held
 from platoon_harness.runtime.paths import read_running
-from platoon_harness_cli import machine
+from platoon_harness_cli import machine, team_editor
 from platoon_harness_cli.sessions import ask_to_stop
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
-from platoon_harness_cli.tui.dialogs import Confirm, Help
+from platoon_harness_cli.tui.dialogs import Confirm, Form, Help
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import Workspace
 
 from ..unit.runtime.support import in_state, of_type, until
 from ..unit.tui.support import at_once, drawn, workspace
+from ..unit.tui.test_editor import checked, choosing
 from .scripts import inside
 
 pytestmark = pytest.mark.timeout(90)
@@ -301,6 +302,30 @@ async def test_a_whole_session_takes_no_ctrl_alt_or_function_key(tmp_path):
     sent = [event.gist for event in await of_type(guest, "message.sent") if event.actor == "human:you"]
     assert sent == ["ship it"], "a typed command reached an agent"
     await guest.leave()
+
+
+async def test_a_session_started_from_the_team_editor_runs_the_team_it_saved_first(tmp_path, monkeypatch):
+    """Start in the editor saves its changes, then asks what the sessions screen's start asks, from the project's team,
+    and the session runs what was saved, which its manifest keeps."""
+    team = f'# The lead.\n[roles.lead]\nharness = "{inside("saying")}"\n'
+    (tmp_path / PROJECT_FILE).write_text(team)
+    monkeypatch.setattr(team_editor, "harnesses", lambda: ())
+    app = TerminalUI()
+    async with app.run_test(size=(120, 30)) as pilot:
+        await drawn(pilot, lambda text: "No sessions yet" in text)
+        await pilot.press("e")
+        await drawn(pilot, lambda _: checked(app))
+        await choosing(pilot, "roles.lead.approvals", "allow")
+        await pilot.press("n")
+        await drawn(pilot, lambda _: isinstance(app.screen, Form))
+        saved = (tmp_path / PROJECT_FILE).read_text()
+        await pilot.press("enter", *"crew", "enter", *"yes", "enter")
+        await drawn(pilot, lambda text: "@lead" in text and " live " in text)
+        await pilot.press("ctrl+q")
+
+    manifest = Manifest.model_validate_json((tmp_path / "sessions" / "crew" / "manifest.json").read_bytes())
+    assert saved == f'{team}approvals = "allow"\n'
+    assert Team.loads(manifest.team).roles["lead"].approvals == "allow"
 
 
 async def test_several_agents_on_a_plan_login_are_asked_about_once_and_the_answer_is_plan_login(tmp_path):
