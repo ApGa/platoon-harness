@@ -11,11 +11,14 @@ from textual.binding import Binding, BindingType
 from textual.content import Content
 from textual.style import Style
 
+from ..replay import CONTROLS
+
 Where = Literal[
     "everywhere",
     "sessions",
     "team",
     "workspace",
+    "replay",
     "parts",
     "panel",
     "transcript",
@@ -34,6 +37,7 @@ WHERE: dict[Where, str] = {
     "sessions": "The sessions screen",
     "team": "The team editor",
     "workspace": "A session, unless the part that has focus takes the key",
+    "replay": "A replay, once the transcript, the dock or the navigator has focus",
     "parts": "Between a session's parts",
     "panel": "The transcript, the dock or the navigator, once one has focus",
     "transcript": "The transcript, once it has focus",
@@ -47,8 +51,9 @@ WHERE: dict[Where, str] = {
     "dialog": "A form, the help, an approval's ask, or tasks or entries",
 }
 
-TYPED: tuple[Where, ...] = ("everywhere", "workspace")
-"""Where the acts of a session are, each of which is typed in its composer as `/` and its name."""
+TYPED: tuple[Where, ...] = ("everywhere", "workspace", "replay")
+"""Where the acts of a session and the controls of a replay are, each of which is typed in its composer as `/` and its
+name."""
 
 
 @dataclass(frozen=True)
@@ -99,6 +104,10 @@ _NAMES = {
     "right": "→",
     "slash": "/",
     "question_mark": "?",
+    "full_stop": ".",
+    "comma": ",",
+    "left_square_bracket": "[",
+    "right_square_bracket": "]",
 }
 
 
@@ -144,6 +153,14 @@ KEYMAP: tuple[Key, ...] = (
         "stop",
         "stop",
         "Stop a session's runtime as its owner would, keeping it resumable",
+        "sessions",
+        footer=True,
+    ),
+    Key(
+        "R",
+        "replay",
+        "replay",
+        "Replay a session from its start: a copy of its record, which acts on nothing",
         "sessions",
         footer=True,
     ),
@@ -291,6 +308,18 @@ KEYMAP: tuple[Key, ...] = (
         "workspace",
         footer=True,
         priority=False,
+    ),
+    *(
+        Key(keys, action, CONTROLS[name].name, CONTROLS[name].does, "replay", footer=True, priority=False)
+        for keys, action, name in (
+            ("space", "play", "play"),
+            ("s", "speed", "speed"),
+            ("full_stop", "step", "step"),
+            ("comma", "step_back", "back"),
+            ("right_square_bracket", "turn", "turn"),
+            ("left_square_bracket", "turn_back", "turn-back"),
+            ("j", "jump", "jump"),
+        )
     ),
     Key(
         "tab",

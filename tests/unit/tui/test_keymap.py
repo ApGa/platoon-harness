@@ -35,7 +35,7 @@ PLACES = {
     TerminalUI: ("everywhere",),
     Sessions: ("sessions",),
     TeamEditor: ("team",),
-    Workspace: ("workspace", "parts"),
+    Workspace: ("workspace", "replay", "parts"),
     Transcript: ("transcript", "panel"),
     Navigator: ("panel",),
     Dock: ("panel",),
@@ -279,4 +279,4 @@ async def test_a_click_on_a_key_in_the_footer_or_a_dialog_does_what_the_key_does
 
 
 def test_a_key_is_shown_as_it_is_typed():
-    assert [key.shown for key in keys("sessions")] == ["Enter", "n", "e", "r", "s", "l", "t", "c", "?", "p", "q"]
+    assert [key.shown for key in keys("sessions")] == ["Enter", "n", "e", "r", "s", "R", "l", "t", "c", "?", "p", "q"]

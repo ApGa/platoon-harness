@@ -83,6 +83,7 @@ Workspace.narrow.navigator-shown #navigator { display: block; layer: overlay; do
 Workspace.navigator-hidden #navigator, Workspace.navigator-hidden #edge { display: none; }
 Workspace.narrow #strip { display: block; }
 Workspace.short #dock, Workspace.short #banner, Workspace.short #strip { display: none; }
+Workspace.short.replaying #banner.-shown { display: block; max-height: 1; }
 Workspace.short #focus, Workspace.short #navigator, Workspace.short #inspector, Workspace.short #composer {
     border: none;
 }
@@ -109,15 +110,17 @@ def settings(environ: Mapping[str, str] = os.environ) -> Path:
 
 
 class TerminalUI(App[str | None], inherit_bindings=False):
-    """`platoon-harness` on a terminal. It returns the name of the session it left running, if any."""
+    """`platoon-harness` on a terminal, on the sessions screen or one session, or with `replay` a replay of it. It
+    returns the name of the session it left running, if any."""
 
     CSS = CSS
     BINDINGS = bindings("everywhere")
     TITLE = "platoon-harness"
 
-    def __init__(self, session: str | None = None) -> None:
+    def __init__(self, session: str | None = None, *, replay: bool = False) -> None:
         super().__init__()
         self._session = session
+        self._replay = replay
         self._choosing = False
         self.motion = True
         """Whether the agents move, which `motion = false` in `tui.toml` turns off, as Textual's animation level can."""
@@ -125,7 +128,7 @@ class TerminalUI(App[str | None], inherit_bindings=False):
         self.theme = INK.name
 
     def on_mount(self) -> None:
-        self.push_screen(Workspace(self._session) if self._session else Sessions())
+        self.push_screen(Workspace(self._session, replay=self._replay) if self._session else Sessions())
         self._take_settings()
 
     def _take_settings(self) -> None:

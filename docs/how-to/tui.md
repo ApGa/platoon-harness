@@ -75,7 +75,7 @@ and what its checks found. The session's runtime has this terminal's environment
 looked for on, but an agent in an isolated workspace keeps its harness's state in a home of its own, so the login
 `doctor` names is this terminal's, not that harness's. `e` edits the project's team, as the next section says.
 `r` resumes a session whose runtime has gone, after saying that it can spend money. `s` stops one as its owner
-would, after one confirmation, and it stays resumable. Enter opens one: live as a guest, or as read-only history when no
+would, after one confirmation, and it stays resumable. `R` replays one, as the section on replays says. Enter opens one: live as a guest, or as read-only history when no
 runtime holds it, with `/resume` offered to resume it. `/detach` comes back here from a session opened here, which runs
 on. `l` looks again, `t` chooses a theme, `c` copies what you selected, `?` shows every key, `p` opens the palette and
 `q` quits. In a form, Enter goes to the next field,
@@ -468,6 +468,20 @@ the part that has it, which gives focus back to the composer. The snapshot tests
 [120 by 32](../assets/tui-wide.svg), [90 by 28](../assets/tui-medium.svg), [70 by 24](../assets/tui-narrow.svg),
 [52 by 20](../assets/tui-slim.svg) and [100 by 14](../assets/tui-short.svg), in columns by rows.
 
+### Replay a session
+
+`platoon-harness attach fix-auth --replay`, or `R` on the sessions screen, opens a replay of a session in the workspace:
+a read-only copy of its record, from before its first event, drawn as the session is and moving as it plays, under a
+banner that always says it is a replay, of which session, at which event of how many and when. The header says `replay`
+where it says `live` or `history`. The transcript has focus, as nothing is typed to send, and the replay's controls are
+plain keys there: Space plays or pauses, `s` goes to the next speed of 1x, 4x, 16x and idle skipped, `.` and `,` step an
+event on and back, `]` and `[` go to where the next turn ends and where the one before ended, and `j` jumps to an event
+or a time into the session; in the composer each is a typed command, `/play` to `/jump`. Going back draws the session
+anew from that point, keeping the agent or channel in view where it was there then, and how far you had read, which a
+replay keeps here alone. Every act and form of the session's says why it does nothing, as a replay acts on nothing, and
+an estimate in an event's provenance says when it was written. Leaving the replay takes its copies back.
+[Replay a session](replay.md) is its guide.
+
 ### Reconnecting
 
 A runtime that stops, is resumed or is killed while you are attached shows as what it is, as a banner over its history,
@@ -518,6 +532,7 @@ before the session's. `^` is Ctrl.
 | `e` | Edit the project's team: its roles, harnesses, models, topology, budget, labels, auth profiles and test |
 | `r` | Resume a session whose runtime has gone, which can spend money |
 | `s` | Stop a session's runtime as its owner would, keeping it resumable |
+| `R` | Replay a session from its start: a copy of its record, which acts on nothing |
 | `l` | Look again for sessions and how each stands |
 | `t` | Choose a colour theme for this run |
 | `c` | Copy the text selected with the mouse, as OSC 52 |
@@ -570,6 +585,18 @@ before the session's. `^` is Ctrl.
 | `Alt+M` | `/model` | Switch the model of the agent in view. Not built yet: switching an agent's model is planned |
 | `Alt+T` | `/takeover` | Drive the agent in view in its own terminal. Not built yet: driving an agent's own terminal is planned: `agent hold` holds its deliveries and no more |
 | `^D` | `/detach` | Detach on an empty composer: the session runs on |
+
+### A replay, once the transcript, the dock or the navigator has focus
+
+| Keys | Typed | Does |
+|---|---|---|
+| `Space` | `/play` | Play the replay from where it stands, at its speed, or pause it |
+| `s` | `/speed` | Play at the next speed: 1x, 4x, 16x, idle skipped, then 1x again |
+| `.` | `/step` | Step one event on |
+| `,` | `/back` | Step one event back |
+| `]` | `/turn` | Go on to where the next turn ends, of any agent |
+| `[` | `/turn-back` | Go back to where the turn before ended, of any agent |
+| `j` | `/jump` | Jump to an event, by its number, or to a time into the session, as m:ss or h:mm:ss |
 
 ### Between a session's parts
 

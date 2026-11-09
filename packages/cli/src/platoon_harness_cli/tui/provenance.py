@@ -12,6 +12,7 @@ from textual.widgets import Static
 from platoon_harness import Refused, Session
 
 from ..provenance import Line, no_interactions, no_provenance, read, who_reached_whom
+from ..replay import Player
 from .keymap import bindings
 from .rows import Row, Rows
 from .safe import SafeText
@@ -45,14 +46,17 @@ class Provenance(ModalScreen[None]):
     """The provenance of the event `ref`, opened `from_text` where a text named it, or with no ref who reached whom in
     the session, then of each event a link of it is followed into: Enter on a link follows it, and Esc goes back one
     hop, and from the first leaves. Each hop is read again when it is shown, at the head then, and `lines` is what it
-    says."""
+    says. In a `replay`, each estimate says when it was written against the event the replay stands at then."""
 
     BINDINGS = bindings("provenance")
 
-    def __init__(self, session: Session, ref: str | None, *, from_text: bool = False) -> None:
+    def __init__(
+        self, session: Session, ref: str | None, *, from_text: bool = False, replay: Player | None = None
+    ) -> None:
         super().__init__()
         self._session = session
         self._from_text = from_text
+        self._replay = replay
         self._trail: list[tuple[str | None, str | None]] = [(ref, None)]
         self.lines: list[Line] = []
         self._refs: dict[str, str] = {}
@@ -79,7 +83,8 @@ class Provenance(ModalScreen[None]):
             if ref is None:
                 self.lines = await who_reached_whom(self._session)
             else:
-                self.lines = (await read(self._session, ref, from_text=from_text)).lines
+                replayed_to = None if self._replay is None else self._replay.time_of(self._replay.at)
+                self.lines = (await read(self._session, ref, from_text=from_text, replayed_to=replayed_to)).lines
         except Refused as refused:
             said = no_interactions(refused) if ref is None else no_provenance(ref, refused, from_text=from_text)
             self.lines = [Line("", said, warn=True)]

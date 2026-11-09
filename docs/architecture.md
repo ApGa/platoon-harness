@@ -1824,7 +1824,22 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   made, a save asks first what only trust may take, in the page's question, and Start saves first, then opens the screen's
   own start. A field typed in whose value holds a control a terminal would act on is not changed there, saying why, as its
   form would draw that control itself ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md),
-  a draft). [tui.md](how-to/tui.md) is its guide.
+  a draft). `attach SESSION --replay`, or `R` on the sessions screen, opens a replay of a session, drawn as the session
+  is, under a banner saying it is one, with its controls on plain keys where nothing is typed and as typed commands, as
+  Replays below says. [tui.md](how-to/tui.md) is its guide.
+- **Replays.** `Replay`, in the SDK, is a read-only copy of a session, whose journal is the original's through a
+  playhead, made by `Kernel.copy` under the root in `replays/`, never in the session's folder, with what estimators had
+  said and the manifest beside it; its `session` reads as the runtime does, every event and view, and refuses every
+  write. A live session's replay replays its record as it stood when it opened. `seek` goes on in the copy it has, or
+  starts a copy anew from the nearest checkpoint of the views at or below where it goes, which are closed copies, at most
+  eight and at least 1,024 events apart, made on a copy of their own as it opens. `replay.py`, in the command line,
+  plays one for both clients alike: the recorded gaps between events at 1x, 4x or 16x, or with every gap past a second
+  cut to one, a step of an event or to where a turn ends either way, a jump to an event or a time, the banner's words,
+  and why nothing in a replay acts, which every act and form says before it opens or sends anything. A client draws the
+  copy as it draws a session, its agents moving, and draws a copy started anew as a session joined anew. An estimate in
+  an event's provenance says when it was written, and whether that was after the event the replay stands at
+  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md), a draft).
+  [replay.md](how-to/replay.md) is its guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
   control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
   the journal one way into `swarmchat.sqlite`, a function of the events and the bodies they cite, so a rebuild gives every id again

@@ -20,7 +20,7 @@ from textual.timer import Timer
 from textual.widget import Widget
 from textual.widgets import Static
 
-from platoon_harness import Refused, Session
+from platoon_harness import ConfigError, Refused, Session
 from platoon_harness.config import Manifest
 from platoon_harness.kernel import Event, is_held
 from platoon_harness.runtime.paths import MANIFEST
@@ -29,6 +29,7 @@ from .. import ops
 from ..channels import Act
 from ..ops import CONFIRMED, Flag, cut, forms
 from ..provenance import shows
+from ..replay import JUMP, Player, nothing_acts
 from ..review import snapshots_of
 from ..roster import GROUPS, detail_of, why_said
 from . import logo
@@ -251,13 +252,20 @@ def _meter(spent: float, limit: float) -> Content:
 
 
 class Workspace(Screen[None]):
-    """One session: who is working, on what, what is blocked, what changed, and where you must act."""
+    """One session: who is working, on what, what is blocked, what changed, and where you must act. With `replay`, a
+    replay of it, drawn as the session is from a copy of its record that grows as it plays, in which nothing acts: its
+    banner says so, and every act and form says why it does nothing. A copy started anew from a checkpoint is drawn as a
+    session joined anew, keeping what is in view and how far you have read."""
 
-    BINDINGS = [*bindings("workspace"), *bindings("parts")]
+    BINDINGS = [*bindings("workspace"), *bindings("replay"), *bindings("parts")]
 
-    def __init__(self, name: str, session: Session | None = None) -> None:
+    def __init__(self, name: str, session: Session | None = None, *, replay: bool = False) -> None:
         super().__init__()
         self.session_name = name
+        self.replaying = replay
+        self.player: Player | None = None
+        self._kept: str | None = None
+        self._defaulted = False
         self.live: Live | None = None
         self.focus_on: Focus | None = None
         self.target: str | None = None
@@ -295,9 +303,11 @@ class Workspace(Screen[None]):
     async def on_mount(self) -> None:
         composer = self.query_one(Composer)
         composer.known = self._known
-        composer.focus()
+        (self.query_one(Transcript) if self.replaying else composer).focus()
+        self.set_class(self.replaying, "replaying")
         self._lay_out(self.size.width, self.size.height)
-        self.query_one("#header", Static).update(SafeText(f"{self.session_name}  attaching…", "bold"))
+        opening = "opening a replay of it" if self.replaying else "attaching"
+        self.query_one("#header", Static).update(SafeText(f"{self.session_name}  {opening}…", "bold"))
         self.query_one("#inspector").border_title = Content("inspector")
         self.app.theme_changed_signal.subscribe(self, lambda _: self._redraw())
         self._join()
@@ -305,32 +315,66 @@ class Workspace(Screen[None]):
     @work(exclusive=True, group="attach")
     async def _join(self) -> None:
         try:
-            session = self._given or await Session.attach(self.session_name)
+            if self.replaying:
+                self.player = await Player.open(self.session_name)
+                self.player.changed = self._played
+                session = self.player.replay.session
+            else:
+                session = self._given or await Session.attach(self.session_name)
             self.human = Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).principal
             through = await session.head()
-            self.forms = forms(await session.ops())
-        except Refused as refused:
-            self.query_one("#header", Static).update(SafeText(f"{self.session_name}: {refused}", "$error"))
+            self.forms = [] if self.replaying else forms(await session.ops())
+        except (Refused, ConfigError) as refusal:
+            self.query_one("#header", Static).update(SafeText(f"{self.session_name}: {refusal}", "$error"))
             return
         try:
             self.marks = await session.marks()
         except Refused as refused:
             self._lose_marks(refused)
         self.query_one(Transcript).through = through
-        self.live = Live(session, self._draw, partial(self.run_worker, group="live"))
+        self.live = Live(session, self._draw, partial(self.run_worker, group="live"), replay=self.replaying)
+        self.live.start(through)
+
+    def _played(self) -> None:
+        """The replay moved, or how it plays changed: its banner is drawn again, and a copy started anew is joined."""
+        live, player = self.live, self.player
+        if live is None or player is None or not self.is_mounted:
+            return
+        if player.replay.session is not live.session:
+            self.run_worker(self._rejoin(), group="rejoin")
+        else:
+            self._redraw()
+
+    async def _rejoin(self) -> None:
+        """Draw the replay's copy as it now stands as a session joined anew, as a copy started from a checkpoint
+        holds none of what was drawn of the one before: the same agent or channel in view where it holds one, and how
+        far you have read, which a replay keeps here alone."""
+        live, player = self.live, self.player
+        if live is None or player is None or (session := player.replay.session) is live.session:
+            return
+        live.stop()
+        if self.focus_on is not None:
+            self._kept = None if self._defaulted else self.focus_on.key
+        self.focus_on, self.unread, self._needing, self._queued, self._inspected = None, {}, None, None, None
+        through = await session.head()
+        self.query_one(Transcript).through = through
+        self.live = Live(session, self._draw, partial(self.run_worker, group="live"), replay=True)
         self.live.start(through)
 
     async def on_unmount(self) -> None:
         """Leave as a guest leaves: the session, and its runtime, run on. Taking the screen down cancels its workers, so
-        each mark still being written is written first, and what you read stays read."""
+        each mark still being written is written first, and what you read stays read. A replay closes, which takes its
+        copies back."""
         if self.live is not None:
             self.live.stop()
             for stream, seq in list(self._unwritten.items()):
                 await self._mark_one(self.live.session, stream, seq)
             await self.live.session.leave()
+        if self.player is not None:
+            await self.player.close()
 
     def left(self) -> str | None:
-        """The session that runs on once you leave it, or None when no runtime holds it."""
+        """The session that runs on once you leave it, or None when no runtime holds it, or in a replay."""
         return self.session_name if self.live is not None and self.live.runtime == "live" else None
 
     def on_descendant_focus(self) -> None:
@@ -361,7 +405,7 @@ class Workspace(Screen[None]):
         assert live is not None
         transcript = self.query_one(Transcript)
         focus = self.focus_on
-        transcript.held(live.runtime == "live")
+        transcript.held(live.runtime != "history")
         added = transcript.take(events)
         for screen in self.app.screen_stack:
             if isinstance(screen, Tasks):
@@ -370,8 +414,9 @@ class Workspace(Screen[None]):
         if said and not events:  # Live text alone moves nothing but the transcript.
             return
         await self._count(events, live, transcript.through)
-        if focus is None and (live.roster or live.frames == 0):
+        if (focus is None and (live.roster or live.frames == 0)) or self._first_agent_came(live):
             await self.show(self._first_focus(live))
+            self._defaulted = True
         elif focus is not None and (added or transcript.following):
             self._mark(transcript)
         await self._read_queue(live)
@@ -379,7 +424,7 @@ class Workspace(Screen[None]):
         self._toast(live)
         states = {row["agent"]: _state(row) for row in live.roster}
         settled = bool(live.status.get("settled"))
-        self.query_one(Navigator).follow(states, live=live.runtime == "live", settled=settled)
+        self.query_one(Navigator).follow(states, live=live.runtime != "history", settled=settled)
         self._redraw()
 
     def _toast(self, live: Live) -> None:
@@ -394,8 +439,19 @@ class Workspace(Screen[None]):
             goes = f"{reach('next_place')} goes to each place you must act, in turn"
             note(self, f"@{agent} needs you{why}. {goes}.", severity="warning")
 
+    def _first_agent_came(self, live: Live) -> bool:
+        """Whether a replay that showed what was sent to you, as it held no agent, now holds the one the session
+        started first, while you have chosen nothing to show."""
+        focus = self.focus_on
+        unchosen = self.replaying and self._defaulted and focus is not None and focus.agent is None
+        return unchosen and any(row["parent"] is None for row in live.roster)
+
     def _first_focus(self, live: Live) -> Focus:
-        """The agent the session started first, or what was sent to you when it started none."""
+        """The agent the session started first, or what was sent to you when it started none. In a replay drawn anew,
+        what was in view before, where the copy holds it."""
+        kept = self._kept
+        if kept is not None and (self._row(kept.removeprefix("@")) or any(f.key == kept for f in self._foci(live))):
+            return self._focus_of(kept)
         roots = [row["agent"] for row in live.roster if row["parent"] is None]
         return self._agent(roots[0]) if roots else Focus.of_person(self.human)
 
@@ -444,7 +500,10 @@ class Workspace(Screen[None]):
         self.unread[focus.key] = 0
 
     def _write_mark(self, session: Session, stream: str, seq: int) -> None:
-        """Write a mark off the screen's loop, as a worker; until it is written, leaving writes it."""
+        """Write a mark off the screen's loop, as a worker; until it is written, leaving writes it. A replay writes
+        none, as nothing in it is the session's: it keeps its marks here."""
+        if self.replaying:
+            return
         self._unwritten[stream] = seq
         self.run_worker(self._mark_one(session, stream, seq), group="marks")
 
@@ -535,7 +594,9 @@ class Workspace(Screen[None]):
         if self.size.width < 60:
             glyphs = [Content.styled(f"{glyph} {counts[state]}", style) for state, glyph, style in stuck]
             return Content("  ").join([name, working, needing, *glyphs])
-        runtime = ("live", "$success") if live.runtime == "live" else ("history", "$warning")
+        runtime = {"live": ("live", "$success"), "history": ("history", "$warning")}.get(
+            live.runtime, ("replay", "$accent")
+        )
         standing = "waiting for you" if live.status.get("stalled") else "settled" if live.status.get("settled") else ""
         state = " · ".join(said for said in (live.status.get("state", ""), standing) if said)
         segments: list[Content] = [
@@ -593,7 +654,10 @@ class Workspace(Screen[None]):
 
     def _banner(self, live: Live) -> Content:
         """Why this is history, from the session's state: its runtime stopped as its owner asked, went without its
-        shutdown, or the session has ended."""
+        shutdown, or the session has ended. In a replay, that it is one, of which session, where it stands and how it
+        plays, and why it could not move, where it could not."""
+        if self.player is not None:
+            return SafeText(self.player.banner(), "bold $accent")
         state = live.status.get("state")
         resume = f" {reach('resume')} resumes it, which can spend money."
         if state in ("closed", "cancelled"):
@@ -832,6 +896,8 @@ class Workspace(Screen[None]):
 
     def _unsendable(self, live: Live) -> str | None:
         """Why the composer cannot send now, or None when it can."""
+        if live.runtime == "replay":
+            return nothing_acts(self.session_name)
         if live.runtime != "live":
             return f"history: {reach('resume')} resumes it to send"
         if self.target is None and self.focus_on is not None and self.focus_on.thread is not None:
@@ -863,14 +929,17 @@ class Workspace(Screen[None]):
     def _footer(self, live: Live) -> Content:
         """How to reach the typed commands, which every terminal delivers, then the footer's keys, each named by what it
         runs from the part with focus, which may take it for its own, and dim while the runtime refuses that for the
-        agent in view, then how many places need you."""
+        agent in view, then how many places need you. In a replay, its controls and the keys that work everywhere, and
+        no act of the session's, as none does anything there."""
         agent = self.focus_on.agent if self.focus_on else None
         active = self.active_bindings
         parts: list[Any] = [("/", "bold $accent"), (" commands", "dim"), "  "]
-        for key in (*keys("everywhere"), *keys("workspace")):
-            if not key.footer:
+        shown = (*keys("replay"), *keys("everywhere")) if self.replaying else (*keys("everywhere"), *keys("workspace"))
+        for key in shown:
+            pressed = key.keys.split(",")[0]
+            if not key.footer or (pressed not in active and key.where != "replay"):
                 continue
-            runs = active[key.keys.split(",")[0]].binding.action
+            runs = active[pressed].binding.action if pressed in active else key.runs
             now = next((other for other in KEYMAP if other.runs == runs), key)
             off = (now.action, agent or "") in self._refused
             label = "" if self.size.width < 60 else f" {now.name}"
@@ -894,7 +963,7 @@ class Workspace(Screen[None]):
         live = self.live
         if live is None:
             return
-        self.focus_on = focus
+        self.focus_on, self._defaulted = focus, False
         live.follow_tail(focus.agent)
         transcript = self.query_one(Transcript)
         transcript.tail = live.tail
@@ -1032,6 +1101,8 @@ class Workspace(Screen[None]):
     async def _interrupt(self, *, below: bool) -> None:
         live, focus = self.live, self.focus_on
         action = "stop_below" if below else "interrupt"
+        if self._refused_in_replay(action):
+            return
         if live is None or focus is None or focus.agent is None:
             note(self, f"{_named(action)} needs an agent in view", severity="warning")
             return
@@ -1076,6 +1147,8 @@ class Workspace(Screen[None]):
         from, or open its op's form filled in with what it fixes, where it leaves the rest to the form."""
         live = self.live
         place = live.attention.get(chosen or "") if live else None
+        if self._refused_in_replay("first_action" if index == 0 else "second_action"):
+            return
         if live is None or place is None or index >= len(place["actions"]):
             how = CHOOSE if self.query_one(Dock).has_focus else f"{reach('next_place')} goes to where you must act"
             note(self, f"Nothing here takes that action: {how}.", severity="warning")
@@ -1206,6 +1279,8 @@ class Workspace(Screen[None]):
 
     @work(group="act")
     async def action_attach_file(self) -> None:
+        if self._refused_in_replay("attach_file"):
+            return
         about = SafeText("A file to send as the message's body. The message's text is its gist.")
         given = await self.app.push_screen_wait(Form(Content.styled("Attach a file", "bold"), [("path", about, "")]))
         if not given or "path" not in given:
@@ -1221,6 +1296,8 @@ class Workspace(Screen[None]):
     @work(group="act")
     async def action_resume(self) -> None:
         live = self.live
+        if self._refused_in_replay("resume"):
+            return
         if live is None or live.runtime == "live" or is_held(live.session.folder):
             note(self, "A runtime holds this session already.")
             return
@@ -1274,9 +1351,11 @@ class Workspace(Screen[None]):
         self.app.push_screen(Tasks(live.session, channel, person, self._open, self._cannot))
 
     def _cannot(self, op: str) -> str | None:
-        """Why the person cannot run `op` now, or None when they can: on history, and where their grants hold no `op`,
-        as the page's acts say."""
+        """Why the person cannot run `op` now, or None when they can: in a replay, on history, and where their grants
+        hold no `op`, as the page's acts say."""
         live = self.live
+        if self.replaying:
+            return nothing_acts(self.session_name)
         if live is None or live.runtime != "live":
             return f"history: {reach('resume')} resumes it to act"
         if all(form.op != op for form in self.forms):
@@ -1291,6 +1370,8 @@ class Workspace(Screen[None]):
     async def _test(self, action: dict[str, Any]) -> None:
         """Test a commit, once the person says yes, since it runs that commit's code as them, unconfined."""
         live = self.live
+        if self._refused_in_replay("test"):
+            return
         if live is None or not await self.app.push_screen_wait(Confirm(SafeText(f"{action['label']}. Run it?"))):
             return
         outcome = await live.session.submit(action["op"], **action["args"])
@@ -1320,7 +1401,7 @@ class Workspace(Screen[None]):
             )
             note(self, said, severity="warning")
             return
-        self.app.push_screen(Provenance(live.session, shows(chosen.event)))
+        self.app.push_screen(Provenance(live.session, shows(chosen.event), replay=self.player))
 
     @work(group="act")
     async def action_provenance_of(self) -> None:
@@ -1344,7 +1425,7 @@ class Workspace(Screen[None]):
             )
             note(self, said, severity="warning")
             return
-        self.app.push_screen(Provenance(live.session, answer["ref"]))
+        self.app.push_screen(Provenance(live.session, answer["ref"], replay=self.player))
 
     async def action_thread(self) -> None:
         """Show the thread of the chosen line's message in the focus pane, where the composer replies to it."""
@@ -1368,7 +1449,69 @@ class Workspace(Screen[None]):
     def on_transcript_named(self, named: Transcript.Named) -> None:
         """Show the provenance of a ref a line's text names, saying it was opened from text, which records no link."""
         if (live := self.live) is not None:
-            self.app.push_screen(Provenance(live.session, named.ref, from_text=True))
+            self.app.push_screen(Provenance(live.session, named.ref, from_text=True, replay=self.player))
+
+    def _refused_in_replay(self, act: str) -> bool:
+        """Say, in a replay, that `act`, an act's name or a form's title, does nothing there, and why."""
+        if self.replaying:
+            named = next((key.name for key in KEYMAP if key.action == act), act)
+            note(self, f"{named}: {nothing_acts(self.session_name)}", severity="warning")
+        return self.replaying
+
+    def _playing(self) -> Player | None:
+        """The replay's player, or None, saying what replays a session, in a session's workspace or before the replay
+        has opened."""
+        if self.player is None:
+            said = (
+                f"This is no replay, so nothing here plays: `platoon-harness attach {self.session_name} --replay` "
+                "replays the session"
+                if not self.replaying
+                else "The replay is still opening."
+            )
+            note(self, said, severity="warning")
+        return self.player
+
+    def action_play(self) -> None:
+        if (player := self._playing()) is not None:
+            player.play()
+
+    def action_speed(self) -> None:
+        if (player := self._playing()) is not None:
+            player.faster()
+
+    @work(group="replay")
+    async def action_step(self) -> None:
+        if (player := self._playing()) is not None:
+            await player.step(1)
+
+    @work(group="replay")
+    async def action_step_back(self) -> None:
+        if (player := self._playing()) is not None:
+            await player.step(-1)
+
+    @work(group="replay")
+    async def action_turn(self) -> None:
+        if (player := self._playing()) is not None:
+            await player.turn(1)
+
+    @work(group="replay")
+    async def action_turn_back(self) -> None:
+        if (player := self._playing()) is not None:
+            await player.turn(-1)
+
+    @work(group="replay")
+    async def action_jump(self) -> None:
+        """Jump to an event or a time through a form, which decides nothing until it is sent."""
+        if (player := self._playing()) is None:
+            return
+        about = SafeText(f"where: {JUMP}, from 0 to {player.total:,}.")
+        answer = await self.app.push_screen_wait(Form(SafeText("Jump", "bold"), [("where", about, "")]))
+        if not answer or "where" not in answer:
+            return
+        try:
+            await player.jump(answer["where"])
+        except ValueError as error:
+            note(self, str(error), severity="warning")
 
     def action_planned(self, action: str) -> None:
         key = next(key for key in KEYMAP if key.action == action and key.planned)
@@ -1391,7 +1534,7 @@ class Workspace(Screen[None]):
     # form, worded as the command line words them.
 
     def commands(self) -> list[tuple[str, str, Any]]:
-        acts = (*keys("everywhere"), *keys("workspace"))
+        acts = (*keys("everywhere"), *keys("workspace"), *keys("replay"))
         found: list[tuple[str, str, Any]] = [(key.typed, key.said, partial(self.run_action, key.runs)) for key in acts]
         for form in self.forms:
             found.append((form.title, form.summary, partial(self._run_op, form)))
@@ -1401,7 +1544,7 @@ class Workspace(Screen[None]):
     async def _run_op(self, form: ops.Form, fixed: Mapping[str, Any] | None = None) -> None:
         """Run an op through its form, filled in from where you are, and with what a place's action fixes."""
         live = self.live
-        if live is None:
+        if live is None or self._refused_in_replay(form.title):
             return
         given = {
             "agent": f"@{self.focus_on.agent}" if self.focus_on and self.focus_on.agent else "",

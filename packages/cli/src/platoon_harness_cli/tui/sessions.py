@@ -1,5 +1,5 @@
-"""The sessions screen: every session under the root and how each stands, and opening, starting, resuming or stopping
-one, and with no team here, writing one, and editing the project's team."""
+"""The sessions screen: every session under the root and how each stands, and opening, starting, resuming, stopping or
+replaying one, and with no team here, writing one, and editing the project's team."""
 
 import asyncio
 from functools import partial
@@ -235,6 +235,10 @@ class Sessions(Screen[None]):
             note(self, str(refused), severity="error")
             return
         self.app.push_screen(Workspace(name, session))
+
+    def action_replay(self) -> None:
+        if (name := self._chosen()) is not None:
+            self.app.push_screen(Workspace(name, replay=True))
 
     @work(group="act")
     async def action_stop(self) -> None:

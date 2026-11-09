@@ -40,6 +40,8 @@ feature requests.
   session's journal.
 - [Edit a team in the terminal or the browser](how-to/edit-a-team.md): the project's team as fields, each problem at its
   field, its diff, then saved in place and started.
+- [Replay a session](how-to/replay.md): a session's record played back in the terminal, at its pace or faster, forward
+  and back, acting on nothing.
 - [Headless quickstart](how-to/headless.md): from a terminal or CI, with harnesses you already use and their own logins.
 - [Topologies](how-to/topologies.md): teams and topologies, with a worked example per preset.
 - [Workspaces](how-to/workspaces.md): where each agent works, a worktree of its own among them, and what becomes of it.

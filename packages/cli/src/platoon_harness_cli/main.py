@@ -61,28 +61,36 @@ def _terminal() -> bool:
     return sys.stdin is not None and sys.stdin.isatty() and sys.stdout.isatty()
 
 
-def attach(session: str, /) -> int:
+def attach(session: str, /, *, replay: bool = False) -> int:
     """Open a session in the terminal UI: live, as a guest of its runtime, or as its history when no runtime holds it.
 
     Attaching changes nothing in the session, and reading it moves only your own marks of how far you have read:
     only `/resume`, which resumes a session with no runtime, can spend money. `/detach` detaches, and the session runs
     on. It needs a terminal: `events --follow` follows a session as text.
 
+    With --replay it opens a replay of the session instead: a read-only copy of its record as it stands now, drawn as
+    the session is, from its start, which plays its events at their recorded pace, at a speed you choose, and goes
+    forward and back an event or a turn at a time or to an event or a time. Nothing in a replay acts on the session,
+    and its copies, under the root and never in the session's folder, go when you leave it.
+
     For example:
 
         platoon-harness attach fix-auth
+        platoon-harness attach fix-auth --replay
 
     Parameters
     ----------
     session
         A session, by name. `platoon-harness session list` shows them.
+    replay
+        Open a replay of the session, which acts on nothing, rather than the session itself.
     """
     if not _terminal():
         raise Usage(f"attach draws on a terminal, and none is here: `platoon-harness events {session} --follow`")
     session_folder(find_root(), session)
     from .tui import run as tui
 
-    return tui(session)
+    return tui(session, replay=replay)
 
 
 async def web(

@@ -414,7 +414,7 @@ async def test_the_palette_offers_each_write_op_the_person_holds_as_ops_list_giv
     agent's deliveries as the command line's does; and each runs through its form."""
     async with attached(team(), root) as (owner, app, pilot):
         held = await owner.ops()
-        acts = {key.typed for key in (*keys("everywhere"), *keys("workspace"))}
+        acts = {key.typed for key in (*keys("everywhere"), *keys("workspace"), *keys("replay"))}
         commands = {title: said for title, said, _ in workspace(app).commands() if title not in acts}
         writes = [entry["name"] for entry in held if not (entry["query"] or entry["exposes"] or _waits(entry))]
 

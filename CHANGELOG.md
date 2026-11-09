@@ -13,6 +13,14 @@ named here is closed.
 
 ### New features
 
+- **Replay a session in the terminal.** `attach SESSION --replay`, or `R` on the sessions screen, opens a replay in the
+  workspace, from before the session's first event: the session drawn as it stood at each point, its agents moving as it
+  plays, under a banner that always says it is a replay, where it stands and how it plays. Space plays or pauses, `s`
+  goes through 1x, 4x, 16x and idle skipped, `.` and `,` step an event, `]` and `[` go to where a turn ends either way,
+  and `j` jumps to an event or a time into the session, each also a typed command, `/play` to `/jump`. Going back keeps
+  the agent in view; every act and form says why it does nothing; and an estimate in a provenance panel says when it was
+  written, and whether that was after the point the replay stands at. Leaving takes its copies back. Before, a session
+  showed only as it is now. This is RFC 0080, a draft.
 - **Replays in the SDK.** `Replay.open(name)` gives a read-only copy of a session through a playhead, under the root in
   `replays/` and never in the session's folder, whose `session` reads as the session read then and refuses every write;
   `seek` moves it either way, from the nearest of eight checkpoints of its views, so a seek on 10,000 events took under a

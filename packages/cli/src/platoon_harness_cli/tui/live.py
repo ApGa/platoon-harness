@@ -25,7 +25,8 @@ class Live:
     `tail`, and what the views say, each frame. Frames come at most 15 a second, and one that would come sooner is
     dropped; an event never is: a reader with too many waiting waits for the next frame, so a slow screen holds up only
     its own reading. It decides nothing: what it shows comes from the views, and `runtime` says only whether a runtime
-    holds the session, which is the kernel's own check. Its two timers decide nothing either: one paces frames, and one
+    holds the session, which is the kernel's own check, or that it is a `replay`, a copy whose record grows as it plays
+    and which no runtime holds or says anything of. Its two timers decide nothing either: one paces frames, and one
     looks for a runtime to attach to. Each loop runs as a worker of the screen, so one that fails ends the app loudly,
     rather than leaving a screen that no longer moves."""
 
@@ -34,6 +35,8 @@ class Live:
         session: Session,
         draw: Callable[[list[Event], bool], Awaitable[None]],
         run: Callable[[Coroutine[Any, Any, None]], Worker[None]],
+        *,
+        replay: bool = False,
     ) -> None:
         self.session = session
         self.roster: list[dict[str, Any]] = []
@@ -43,7 +46,7 @@ class Live:
         self.changes: dict[str, dict[str, Any]] = {}
         self.ending: Ending | None = None
         self.channels: list[dict[str, Any]] = []
-        self.runtime: Literal["live", "history"] = "live"
+        self.runtime: Literal["live", "history", "replay"] = "replay" if replay else "live"
         self.tail = Tail()
         self.frames = 0
         self._draw = draw
@@ -63,7 +66,8 @@ class Live:
     def start(self, through: int) -> None:
         """Follow from `through`, which the screen has drawn already."""
         self._read_through = through
-        self.runtime = "live" if is_held(self.session.folder) else "history"
+        if self.runtime != "replay":
+            self.runtime = "live" if is_held(self.session.folder) else "history"
         self._workers = [self._run(self._read()), self._run(self._frames())]
         self._dirty.set()
 
@@ -97,6 +101,8 @@ class Live:
                     if len(self._pending) >= PENDING:
                         self._room.clear()
                         await self._room.wait()
+            if self.runtime == "replay":
+                return
             if not is_held(self.session.folder):
                 await self._gone()
             while not is_held(self.session.folder):  # noqa: ASYNC110  Nothing says when a runtime takes it up.
