@@ -21,6 +21,7 @@ from platoon_harness_cli.provenance import (
     read,
     who_reached_whom,
 )
+from platoon_harness_cli.replay import Playhead
 
 from ..kernel.support import grant, result_of
 from ..primitives.support import ROLES, channel, confirm, end_turn, of_type, report, send, spawn, start_turn
@@ -258,21 +259,34 @@ async def test_an_estimate_is_shown_by_its_producer_and_version_beside_another_a
 
 async def test_in_a_replay_each_estimate_says_when_it_was_written_and_whether_that_was_after_where_it_stands(kernel):
     """An estimator writes beside the journal, after the session as often as not, so a replay standing at an earlier
-    point shows each estimate with when it was written, and one written after that point as not known there."""
+    point shows each estimate with when it was written, and one written after that point, or of a trace past it, however
+    its clock ran, as not known there."""
     refs = await scenario(kernel)
     estimates = [
         {**ESTIMATE, "producer": "even-split", "value": 0.5, "wall_time": 1_000.0},
         {**ESTIMATE, "producer": "judge", "value": 1.0, "wall_time": 5_000.0},
+        {**ESTIMATE, "producer": "skewed", "value": 0.0, "wall_time": 1_500.0, "head_seq": 60},
     ]
     answers = [ask(kernel, query, ref=refs["message"]) for query in ("lineage", "uses", "contributors")]
 
-    said = part(lines_of("s", *answers, estimates, replayed_to=2_000.0), "Credit and rewards")
+    said = part(lines_of("s", *answers, estimates, playhead=Playhead(49, 2_000.0)), "Credit and rewards")
 
     written = "of the trace at head 49, written 1970-01-01 00:16:40 UTC, by this point of the replay"
-    later = "written 1970-01-01 01:23:20 UTC, after this point of the replay, so it was not known here"
+    later = "after this point of the replay, so it was not known here"
     assert said[1:] == [
         Line("credit", f"0.5 by even-split, version 0, params 44136fa3, team, {written}"),
-        Line("credit", f"1 by judge, version 0, params 44136fa3, team, of the trace at head 49, {later}", warn=True),
+        Line(
+            "credit",
+            f"1 by judge, version 0, params 44136fa3, team, of the trace at head 49, written 1970-01-01 01:23:20 UTC, "
+            f"{later}",
+            warn=True,
+        ),
+        Line(
+            "credit",
+            f"0 by skewed, version 0, params 44136fa3, team, of the trace at head 60, written 1970-01-01 00:25:00 UTC, "
+            f"{later}",
+            warn=True,
+        ),
     ]
     assert part(lines(kernel, refs["message"], estimates), "Credit and rewards")[1].text.endswith("at head 49")
 

@@ -13,7 +13,7 @@ from typing import Any
 from platoon_harness import Refused, Session
 from platoon_harness.kernel import Event
 
-from .replay import moment
+from .replay import Playhead, moment
 
 Answer = Mapping[str, Any]
 """A query's answer, or an annotation, as JSON."""
@@ -66,18 +66,18 @@ def shows(event: Event) -> str:
     return carried or f"{event.stream}@{event.version}"
 
 
-async def read(session: Session, ref: str, *, from_text: bool = False, replayed_to: float | None = None) -> Panel:
+async def read(session: Session, ref: str, *, from_text: bool = False, playhead: Playhead | None = None) -> Panel:
     """What a panel shows of one event, asked of `session` now, each answer at a head of its own, and for a model call
     the spans of the turn it was reported in; opened `from_text`, saying first that this records no link. In a replay,
-    `replayed_to` is the wall time of the event it stands at, against which each estimate says when it was written. A
-    ref that names no event is refused as the queries refuse it, which `no_provenance` words."""
+    `playhead` is where it stands, against which each estimate says when it was written. A ref that names no event is
+    refused as the queries refuse it, which `no_provenance` words."""
     lineage = (await session.lineage(ref)).model_dump(mode="json")
     asked = lineage["event"]["ref"]
     uses, contributors = await session.uses(asked), await session.contributors(asked)
     said = [annotation.model_dump(mode="json") for annotation in await session.annotations(asked)]
     answers = (answer.model_dump(mode="json") for answer in (uses, contributors))
     spans = await _spans_of(session, lineage["made"]) if lineage["event"]["type"] == "model.called" else None
-    lines = lines_of(session.name, lineage, *answers, said, spans, replayed_to=replayed_to)
+    lines = lines_of(session.name, lineage, *answers, said, spans, playhead=playhead)
     if from_text:
         lines.insert(1, Line("", FROM_TEXT))
     return Panel(lineage["event"], lines)
@@ -125,11 +125,11 @@ def lines_of(
     estimates: Sequence[Answer],
     spans: Sequence[Answer] | None = None,
     *,
-    replayed_to: float | None = None,
+    playhead: Playhead | None = None,
 ) -> list[Line]:
     """The lines of one event's panel: the event, then its sources, its uses, its contributors and what estimators
     said of it. For a model call `spans` are the spans of the turn it was reported in, which say the span it lies in,
-    and for any other event None. In a replay, `replayed_to` is the wall time of the event it stands at."""
+    and for any other event None. In a replay, `playhead` is where it stands."""
     event = lineage["event"]
     asked = event["ref"]
     return [
@@ -137,7 +137,7 @@ def lines_of(
         *_sources(session, lineage),
         *_uses(session, asked, uses),
         *_contributors(session, asked, contributors),
-        *_estimates(estimates, [] if spans is None else _span(lineage, spans), replayed_to),
+        *_estimates(estimates, [] if spans is None else _span(lineage, spans), playhead),
     ]
 
 
@@ -471,10 +471,11 @@ def _whole(who: str, writes: Sequence[str]) -> str:
     )
 
 
-def _estimates(estimates: Sequence[Answer], span: list[Line], replayed_to: float | None) -> list[Line]:
+def _estimates(estimates: Sequence[Answer], span: list[Line], playhead: Playhead | None) -> list[Line]:
     """What estimators said of the event, each its producer's at its version and params, never a fact, and never
-    summed, after what a row on a model call is about. In a replay each says when it was written, and whether that was
-    after the event the replay stands at, whose wall time is `replayed_to`, so none passes for known then."""
+    summed, after what a row on a model call is about. In a replay each says when it was written, and whether it was
+    known at the `playhead`: one written after its event's wall time, or of a trace past it, was not, so none passes
+    for known then."""
     lines = [
         Line("heading", "Credit and rewards"),
         Line("", "what estimators said of it, beside the record: each an estimate by its producer at its version"),
@@ -484,10 +485,10 @@ def _estimates(estimates: Sequence[Answer], span: list[Line], replayed_to: float
         by = f"by {said['producer']}, version {said['producer_version']}, params {said['params_hash'][:8]}"
         value = f"{said['value']:g} {by}" if said["status"] == "scored" else f"no value, {said['status']}, {by}"
         text = f"{value}, {said['scope']}, of the trace at head {said['head_seq']:,}"
-        if replayed_to is None:
+        if playhead is None:
             lines.append(Line(said["kind"], text))
             continue
-        later = said["wall_time"] > replayed_to
+        later = said["wall_time"] > playhead.wall_time or said["head_seq"] > playhead.at
         when = "after this point of the replay, so it was not known here" if later else "by this point of the replay"
         lines.append(Line(said["kind"], f"{text}, written {moment(said['wall_time'])}, {when}", warn=later))
     if not estimates:

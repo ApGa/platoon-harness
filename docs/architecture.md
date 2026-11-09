@@ -1835,14 +1835,17 @@ that keeps failing say in their gist what settles them; and a failure of no agen
 - **Replays.** `Replay`, in the SDK, is a read-only copy of a session, whose journal is the original's through a
   playhead, made by `Kernel.copy` under the root in `replays/`, never in the session's folder, with what estimators had
   said and the manifest beside it; its `session` reads as the runtime does, every event and view, and refuses every
-  write. A live session's replay replays its record as it stood when it opened. `seek` goes on in the copy it has, or
-  starts a copy anew from the nearest checkpoint of the views at or below where it goes, which are closed copies, at most
-  eight and at least 1,024 events apart, made on a copy of their own as it opens. `replay.py`, in the command line,
-  plays one for both clients alike: the recorded gaps between events at 1x, 4x or 16x, or with every gap past a second
-  cut to one, a step of an event or to where a turn ends either way, a jump to an event or a time, the banner's words,
-  and why nothing in a replay acts, which every act and form says before it opens or sends anything. A client draws the
-  copy as it draws a session, its agents moving, and draws a copy started anew as a session joined anew. An estimate in
-  an event's provenance says when it was written, and whether that was after the event the replay stands at
+  write. A live session's replay replays its record as it stood when it opened. A replay works out what was due, spent
+  or stalled at the playhead's time, not today's. `seek` goes on in the copy it has, unless it goes back, or the nearest
+  checkpoint of the views at or below where it goes lies more than 1,024 events past the playhead, from which it starts
+  a copy anew; checkpoints are closed copies, at most eight and at least 1,024 events apart, made one after another on a
+  copy of their own once it opens, so a seek before they are made copies from the start. `replay.py`, in the command
+  line, plays one for both clients alike: the recorded gaps between events at 1x, 4x or 16x, or with every gap past a
+  second cut to one, a step of an event or to where a turn ends either way, a jump to an event or a time, the banner's
+  words, and why nothing in a replay acts, which every act and form says before it opens or sends anything. A client
+  draws the copy as it draws a session, its agents moving, and draws a copy started anew as a session joined anew, its
+  banner naming where what it draws stands, never where the replay went before that is drawn. An estimate in an event's
+  provenance says when it was written, and whether that was after the event the replay stands at, or of a trace past it
   ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md), a draft).
   [replay.md](how-to/replay.md) is its guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
@@ -1879,8 +1882,11 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   only trust may take ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md),
   a draft). `web SESSION --replay`, or the sessions page's Replay, serves the page over a replay, its banner and
   controls under the top bar, which `/x/replay` takes from a control link alone, every act of the session's disabled,
-  saying why, and a copy started anew folded into a projection of its own, whose `feed_id`, hashing its folder, the page
-  hears as a reset; as its links act on nothing, it is served past loopback whatever login its agents ran on.
+  saying why. A copy started anew is folded on into the page's projection, which it holds all of, and where the replay
+  went back the page's projection is started anew from the nearest copy of it the page kept, one each checkpoint's
+  spacing, folded to where the replay went before the page hears a reset, as its `feed_id`, hashing its folder, changes;
+  the banner names where the page's projection stands. As its links act on nothing, it is served past loopback whatever
+  login its agents ran on, by the RFC's default, pending the owner's ruling (§15).
   [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
   [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)

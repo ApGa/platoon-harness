@@ -11,6 +11,7 @@ its Provenance follows. The feed also tells the page that what a queue's or a bo
 naming its chat, so the page reads that view again.
 """
 
+import contextlib
 import hashlib
 import json
 import os
@@ -20,8 +21,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from platoon_harness import Refused, Session
 from platoon_harness.kernel import Event, Refusal
 from platoon_harness.primitives import IN_A_RESULT
+from platoon_harness.runtime.control import BODY_LIMIT
 
 from ..channels import moves
 from ..provenance import shows
@@ -174,12 +177,24 @@ def shown(gist: str, body: bytes | Refusal | None) -> tuple[str, dict[str, Any] 
     return f"{cut}\n[Cut here: a message shows {SHOWN:,} characters, and the whole is attached.]", file
 
 
-def _created(path: Path) -> sqlite3.Connection:
-    """A projection file of this user's alone, 0600, with its schema."""
+def _created(path: Path, *, schema: bool = True) -> sqlite3.Connection:
+    """A projection file of this user's alone, 0600, with its schema, or empty for a copy of another."""
     os.close(os.open(path, os.O_CREAT | os.O_WRONLY | os.O_EXCL, 0o600))
     db = sqlite3.connect(path)
-    db.executescript(_SCHEMA)
+    if schema:
+        db.executescript(_SCHEMA)
     return db
+
+
+async def bodies(session: Session, event: Event) -> dict[str, bytes | Refusal]:
+    """What the fold of `event` shows of the bodies it cites: their bytes, or why they could not be read."""
+    found: dict[str, bytes | Refusal] = {}
+    for ref in Projection.cited(event):
+        try:
+            found[ref] = await session.get_body(ref, limit=BODY_LIMIT)
+        except Refused as refused:
+            found[ref] = refused.refusal
+    return found
 
 
 class Projection:
@@ -187,7 +202,7 @@ class Projection:
     `person` is the human the session started for, whose direct chats every agent has from its start."""
 
     def __init__(self, folder: Path, session: str, person: str) -> None:
-        self.session, self.person = session, person
+        self.session, self.person, self.folder = session, person, folder
         path = folder / FILE
         mine = {"version": str(VERSION), "session": session, "person": person}
         self.db = sqlite3.connect(path) if path.exists() else _created(path)
@@ -570,3 +585,40 @@ class Projection:
     def entries(self, after: int, limit: int) -> Iterator[sqlite3.Row]:
         """The feed past `after`, oldest first."""
         yield from self.db.execute("SELECT * FROM feed WHERE n > ? ORDER BY n LIMIT ?", (after, limit))
+
+
+class Kept:
+    """A replay's projections, each in a folder of its own under `folder`, and a copy of one each `spacing` events it
+    folds through, as the replay keeps checkpoints of its views, so a projection started anew where the replay went
+    back folds on from the nearest copy at or below there rather than from nothing."""
+
+    def __init__(self, folder: Path, spacing: int) -> None:
+        self.folder, self.spacing = folder, spacing
+        self._made = 0
+        self._kept: dict[int, Path] = {}
+
+    def keep(self, projection: Projection) -> None:
+        """Keep a copy of `projection` where it stands, if that is a multiple of `spacing` and none is kept there."""
+        at = projection.through
+        if at % self.spacing or at in self._kept:
+            return
+        (self.folder / "kept").mkdir(mode=0o700, parents=True, exist_ok=True)
+        path = self.folder / "kept" / f"{at}.sqlite"
+        with contextlib.closing(_created(path, schema=False)) as copy:
+            projection.db.backup(copy)
+        self._kept[at] = path
+
+    def nearest(self, seq: int) -> int:
+        """Where the nearest copy kept at or below `seq` stands, or 0 where none is."""
+        return max((at for at in self._kept if at <= seq), default=0)
+
+    def anew(self, seq: int, session: str, person: str) -> Projection:
+        """A projection in a folder of its own, a copy of the nearest kept at or below `seq`, or folded from nothing."""
+        self._made += 1
+        folder = self.folder / str(self._made)
+        folder.mkdir(mode=0o700, parents=True)
+        if at := self.nearest(seq):
+            kept, copy = sqlite3.connect(self._kept[at]), _created(folder / FILE, schema=False)
+            with contextlib.closing(kept), contextlib.closing(copy):
+                kept.backup(copy)
+        return Projection(folder, session, person)

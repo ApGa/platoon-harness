@@ -60,6 +60,11 @@ def nothing_acts(name: str) -> str:
     return f"A replay acts on nothing, as it is a read-only copy of {name}'s record: open the session itself to act."
 
 
+def reads_no_diff(name: str) -> str:
+    """Why a replay opens no diff, which both clients say before anything opens."""
+    return f"A replay reads no diff, as asking for one is an act. {nothing_acts(name)}"
+
+
 def elapsed(seconds: float) -> str:
     """A time into a session, as `h:mm:ss`."""
     whole = max(int(seconds), 0)
@@ -69,6 +74,13 @@ def elapsed(seconds: float) -> str:
 def moment(wall_time: float) -> str:
     """A wall time as both clients write one: in UTC, to the second."""
     return datetime.fromtimestamp(wall_time, UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+class Playhead(NamedTuple):
+    """Where a replay stands: the newest event its copy holds, and that event's wall time."""
+
+    at: int
+    wall_time: float
 
 
 class Record(NamedTuple):
@@ -130,15 +142,18 @@ class Player:
     def total(self) -> int:
         return self.replay.total
 
-    def time_of(self, seq: int) -> float | None:
-        """The wall time of the event at `seq`, or None before the first."""
-        return self._times[seq - 1] if seq > 0 else None
+    @property
+    def playhead(self) -> Playhead | None:
+        """Where the replay stands, or None before its first event."""
+        return Playhead(self.at, self._times[self.at - 1]) if self.at > 0 else None
 
-    def banner(self) -> str:
+    def banner(self, at: int | None = None) -> str:
         """What a replay's banner says: that it is a replay, of which session, the event it stands at of how many, the
         time into the session and the wall time of that event, how it plays, and why it could not move, where it
-        could not."""
-        name, at, total = self.replay.name, self.at, self.total
+        could not. A client that has not yet drawn where the replay stands names `at`, the event it has drawn
+        through, so its banner never names a point before what it shows."""
+        name, total = self.replay.name, self.total
+        at = self.at if at is None else at
         how = f"playing at {SPEEDS[self.speed]}" if self.playing else "paused"
         if at == 0:
             where = f"before its first event, of {total:,}"
@@ -243,6 +258,8 @@ class Player:
         if found is None:
             raise ValueError(f"{where!r} is no place in the replay: {JUMP[0].lower()}{JUMP[1:]}.")
         hours, minutes, seconds = (int(part or 0) for part in found.groups())
+        if seconds >= 60 or (found[1] is not None and minutes >= 60):
+            raise ValueError(f"{where!r} is no time into the session: {JUMP[0].lower()}{JUMP[1:]}.")
         if not self._times:
             await self.go(0)
             return

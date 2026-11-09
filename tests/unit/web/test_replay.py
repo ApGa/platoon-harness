@@ -11,10 +11,11 @@ from urllib.parse import urlsplit
 import pytest
 
 from platoon_harness import Session
+from platoon_harness import session as session_module
 from platoon_harness.kernel import ManualClock
-from platoon_harness_cli.replay import nothing_acts
+from platoon_harness_cli.replay import nothing_acts, reads_no_diff
 from platoon_harness_cli.web import serve
-from platoon_harness_cli.web.server import REPLAYED, WATCHES, Web
+from platoon_harness_cli.web.server import HOLD, REPLAYED, WATCHES, Web
 from platoon_harness_cli.web.sessions import Sessions
 
 from ...integration.test_web import call, opened
@@ -89,7 +90,7 @@ async def test_a_replay_s_page_says_it_is_one_and_refuses_every_act_saying_why(w
     ]  # fmt: skip
     assert refused == {**refused, "code": "unsupported", "detail": why}
     assert stored["refusal"]["detail"] == why
-    assert diff.status == 403 and why in diff.json()["error"]
+    assert diff.status == 403 and diff.json()["error"] == reads_no_diff("s")
     assert saying == {"version": 0, "text": "", "about": REPLAYED, "over": True}
     async with Session.attach("s", root=root) as history:
         assert await history.head() == head
@@ -133,12 +134,49 @@ async def test_a_replay_moved_on_folds_its_copy_and_one_started_anew_is_heard_as
     assert then["server"]["feed_id"] != whole["server"]["feed_id"] and then["feed"] < whole["feed"]
 
 
+async def test_a_page_folds_on_across_a_copy_from_a_checkpoint_and_goes_back_from_the_nearest_copy_it_kept(
+    head, monkeypatch
+):
+    """With checkpoints at least 8 events apart, a jump far on from the start starts the replay's copy anew from a
+    checkpoint, which the page folds on into the projection it has, hearing no reset. A jump back starts the page's
+    projection anew from the nearest copy of it kept as it folded, folded to where the replay went before the page hears
+    the reset, and the page is served what one folded from nothing would hold, the banner naming where it stands."""
+    monkeypatch.setattr(session_module, "CHECKPOINT_EVENTS", 8)
+    async with replayed() as web:
+        assert web.player is not None and web.player.replay._building is not None
+        replay = web.player.replay
+        await replay._building
+        browser = await Browser(web).opened("control")
+        start = await browser.view("view_snapshot")
+        copy, projection, feed_id = replay.session, web.projection, start["server"]["feed_id"]
+        went = replay.spacing + 2
+
+        on = await control(browser, "jump", str(head))
+        fed = await browser.view("view_feed", {"after": start["feed"], "feed_id": feed_id, "timeout": 0})
+        assert replay.session is not copy and web.projection is projection and not fed.get("reset")
+        back = await control(browser, "jump", str(went))
+        reset = await browser.view("view_feed", {"after": fed["feed"], "feed_id": feed_id, "timeout": 0})
+        then = await browser.view("view_snapshot")
+        kept = sorted(path.name for path in (replay.folder / "page" / "kept").iterdir())
+    async with replayed() as fresh:
+        browser = await Browser(fresh).opened("control")
+        await control(browser, "jump", str(went))
+        anew = await browser.view("view_snapshot")
+
+    assert on["at"] == head and back["at"] == went and f"at event {went} of" in back["banner"]
+    assert reset["reset"] is True and reset["x"]["replay"]["at"] == then["x"]["replay"]["at"] == went
+    assert f"{went - 2}.sqlite" in kept and then["server"]["feed_id"] != feed_id
+    assert (then["chats"], then["users"], then["feed"]) == (anew["chats"], anew["users"], anew["feed"])
+
+
 async def test_a_page_waiting_for_news_hears_the_replay_move_and_how_it_plays(web):
     browser = await Browser(web).opened("control")
     snapshot = await browser.view("view_snapshot")
     after, feed_id = snapshot["feed"], snapshot["server"]["feed_id"]
+    clock = web.clock
+    assert isinstance(clock, ManualClock)
     waiting = asyncio.ensure_future(browser.view("view_feed", {"after": after, "feed_id": feed_id}))
-    await asyncio.sleep(0)
+    await clock.slept_until(clock.now() + HOLD)
 
     await control(browser, "speed")
     heard = await waiting

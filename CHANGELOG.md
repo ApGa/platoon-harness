@@ -17,17 +17,23 @@ named here is closed.
   replay of the session, drawn as the session is from a copy of its record that grows as it plays, under a banner that
   always says it is a replay, of which session, at which event of how many and when. Its controls under the top bar play
   it at the recorded pace or faster and move it an event or a turn at a time or to an event or a time; a control link
-  moves it and a view link watches it. Every act of the session's is disabled, saying a replay acts on nothing, and a
-  copy started anew is drawn anew from a snapshot. As its links act on nothing, it is served past loopback whatever login
-  its agents ran on. Before, the page showed a session only as it stands now. This is RFC 0080, a draft.
+  moves it and a view link watches it. Every act of the session's is disabled, saying a replay acts on nothing, a diff
+  among them. The page keeps its own fold of the record and a copy of it each checkpoint's spacing, so going back draws
+  the page anew from a snapshot of the nearest it kept, folded to where the replay went first, and the banner names
+  where what the page shows stands, never where the replay went before the page holds it. A seek took 16 to 270 ms on
+  10,000 events here, once the page had folded that far; its first jump far on folds every event up to there, 2.8 s to
+  the end of 10,000. As its links act on nothing, it is served past loopback whatever login its agents ran on, a link
+  holder reading what the runtime reads of the record, the one exception to a plan login's loopback, by a default that
+  waits for the owner's ruling. Before, the page showed a session only as it stands now. This is RFC 0080, a draft.
 - **Replay a session in the terminal.** `attach SESSION --replay`, or `R` on the sessions screen, opens a replay in the
   workspace, from before the session's first event: the session drawn as it stood at each point, its agents moving as it
   plays, under a banner that always says it is a replay, where it stands and how it plays. Space plays or pauses, `s`
   goes through 1x, 4x, 16x and idle skipped, `.` and `,` step an event, `]` and `[` go to where a turn ends either way,
   and `j` jumps to an event or a time into the session, each also a typed command, `/play` to `/jump`. Going back keeps
-  the agent in view; every act and form says why it does nothing; and an estimate in a provenance panel says when it was
-  written, and whether that was after the point the replay stands at. Leaving takes its copies back. Before, a session
-  showed only as it is now. This is RFC 0080, a draft.
+  the agent in view, and the banner names where what is on screen stands until the copy it went to is drawn; every act
+  and form says why it does nothing, a diff before its screen opens; and an estimate in a provenance panel says when it
+  was written, and whether it was known at the point the replay stands at, not where it was written after it or read a
+  trace past it. Leaving takes its copies back. Before, a session showed only as it is now. This is RFC 0080, a draft.
 - **Replays in the SDK.** `Replay.open(name)` gives a read-only copy of a session through a playhead, under the root in
   `replays/` and never in the session's folder, whose `session` reads as the session read then, what was due, spent or
   stalled at that time among it, and refuses every write. `seek` moves it either way: on in the copy it has, through a

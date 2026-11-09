@@ -1,8 +1,10 @@
 """The page's server: SwarmChat's gate and `view_*` replies over the projection, and our own routes under `/x/`.
 
-A replay's page is served by the same server over the replay's copy, which a new projection stands for whenever the
-replay starts a copy anew, and which the page hears as a reset; its controls are `/x/replay`, which a control link
-alone moves, and every act of the session's is refused, saying why.
+A replay's page is served by the same server over the replay's copy, whose projection folds on across a copy started
+anew that holds all it has folded, and is started anew where the replay went back, from the nearest it kept, which the
+page hears as a reset once it holds where the replay went; what the page says of the replay is where that projection
+stands. Its controls are `/x/replay`, which a control link alone moves, and every act of the session's is refused,
+saying why.
 
 Every request is bounded before it is believed, by the SDK's HTTP: its head, then `Host` against the authority served,
 which defeats DNS rebinding, and on a POST `Origin` against the page's own origin, then its bearer, and only then a body
@@ -17,7 +19,8 @@ import contextlib
 import itertools
 import json
 import re
-from collections.abc import Awaitable, Callable, Mapping
+import shutil
+from collections.abc import Mapping
 from dataclasses import asdict
 from typing import Any, Literal, NamedTuple
 
@@ -25,17 +28,18 @@ from platoon_harness import Refused, Session
 from platoon_harness.http import Head, Rejected, Server, bearer, check_site, response
 from platoon_harness.kernel import Clock, Delta, Outcome, Refusal, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
+from platoon_harness.session import CHECKPOINT_EVENTS
 
 from .. import __version__, approvals, calls, channels, review
 from ..ops import CONFIRMED, Form, body_ref, cut, forms
 from ..provenance import REF_IN_TEXT, no_interactions, no_provenance, read, who_reached_whom
-from ..replay import CONTROLS, SPEEDS, Player, nothing_acts
+from ..replay import CONTROLS, SPEEDS, Player, nothing_acts, reads_no_diff
 from ..review import changes_of, snapshots_of
 from ..roster import status_of
 from . import replies
 from .credentials import Class, Credentials, Held
 from .page import Page
-from .projection import SHOWN, Projection
+from .projection import SHOWN, Kept, Projection, bodies
 
 JSON_LIMIT = 1024 * 1024
 HOLD = 25.0
@@ -132,10 +136,14 @@ class Web(Server[Request]):
         does."""
         return self.player is None and is_held(self.session.folder)
 
-    async def replaying(self, follow: Callable[[Session, Projection], Awaitable[None]]) -> None:
-        """Fold the replay's copy as it grows, through `follow`, and a copy started anew into a projection of its own,
-        whose feed the page hears as a reset. The projection before is closed once the next is made, so a request that
-        read it as the copy changed reads it whole."""
+    async def replaying(self, kept: Kept) -> None:
+        """Fold the replay's copy as it grows, keeping copies of the projection in `kept`. A copy started anew is folded
+        on into the projection, which it holds all of, as the replay goes on in its copy: unless the replay went back,
+        or the nearest copy `kept` holds at or below where it went lies more than `CHECKPOINT_EVENTS` past the
+        projection. Then a projection is started anew from that copy, and folded to where the replay stands before the
+        page is served it and hears a reset, so the page never draws the copy left behind under a banner naming where
+        the replay went. The projection before is closed once the next is made, so a request that read it as the copy
+        changed reads it whole."""
         player = self.player
         assert player is not None
         anew = asyncio.Event()
@@ -149,15 +157,29 @@ class Web(Server[Request]):
 
         player.changed = changed
         while True:
-            await first(follow(self.session, self.projection), anew.wait())
+            await first(self._fold(self.session, self.projection, kept, following=True), anew.wait())
             anew.clear()
-            session = player.replay.session
-            if self._projected is not None:
-                self._projected.close()
-            self._projected = self.projection
-            self.projection = Projection(session.folder, self.projection.session, self.projection.person)
+            session, through = player.replay.session, self.projection.through
+            if not kept.nearest(player.at) - CHECKPOINT_EVENTS <= through <= player.at:
+                projection = kept.anew(player.at, self.projection.session, self.projection.person)
+                await self._fold(session, projection, kept, following=False)
+                if self._projected is not None:
+                    self._projected.close()
+                    await asyncio.to_thread(shutil.rmtree, self._projected.folder, True)
+                self._projected, self.projection = self.projection, projection
             self.session = session
             await self._tell()
+
+    async def _fold(self, session: Session, projection: Projection, kept: Kept, *, following: bool) -> None:
+        """Fold a replay's copy into `projection` from where it stands, through the copy's head, or `following` it as it
+        grows, telling the pages waiting for news of each event the page's own projection folds. A copy the replay
+        has left and closed ends this."""
+        with contextlib.suppress(Refused):
+            async for event in session.events(projection.through, follow=following):
+                projection.fold(event, await bodies(session, event))
+                kept.keep(projection)
+                if projection is self.projection:
+                    await self._tell()
 
     async def _tell(self) -> None:
         """Wake every page that waits for news, as the replay moved or changed how it plays."""
@@ -247,7 +269,8 @@ class Web(Server[Request]):
                     return json_answer(await self._info(held))
                 case "view_snapshot":
                     statuses = await self._roster()
-                    return json_answer(replies.snapshot(projection, self._server_info(), statuses, self.clock.now()))
+                    snapshot = replies.snapshot(projection, self._server_info(), statuses, self.clock.now())
+                    return json_answer(snapshot | self._fed(held, projection))
                 case "view_feed":
                     return json_answer(await self._feed(params, held))
                 case "view_messages":
@@ -311,21 +334,22 @@ class Web(Server[Request]):
             "body_limit": BODY_LIMIT,
             "refs": REF_IN_TEXT.pattern,
             "cannot": cannot,
-            "replay": self._replay_state(held),
+            "replay": self._replay_state(held, self.projection),
         }
         return self._server_info() | {"x": x}
 
-    def _replay_state(self, held: Held) -> dict[str, Any] | None:
-        """How the replay stands, for its banner and its controls, or None for a session: what the banner says, whether
-        it plays and at which speed, where it stands of how many events, each control by its name and what it does,
-        and why the link cannot move it, when it cannot."""
+    def _replay_state(self, held: Held, projection: Projection) -> dict[str, Any] | None:
+        """How the replay stands as `projection` has folded it, which is what the page draws, for its banner and its
+        controls, or None for a session: what the banner says, whether it plays and at which speed, where it stands of
+        how many events, each control by its name and what it does, and why the link cannot move it, when it
+        cannot."""
         player = self.player
         if player is None:
             return None
-        moves = None if held.kind == "control" else WATCHES
+        at, moves = projection.through, None if held.kind == "control" else WATCHES
         controls = [{"name": control.name, "does": control.does} for control in CONTROLS.values()]
-        state = {"banner": player.banner(), "playing": player.playing, "speed": SPEEDS[player.speed]}
-        return state | {"at": player.at, "total": player.total, "controls": controls, "cannot": moves}
+        state = {"banner": player.banner(at), "playing": player.playing, "speed": SPEEDS[player.speed]}
+        return state | {"at": at, "total": player.total, "controls": controls, "cannot": moves}
 
     async def _roster(self) -> dict[str, str]:
         """Each agent's status, as the roster says it, read again once the projection has moved."""
@@ -345,7 +369,7 @@ class Web(Server[Request]):
         except (TypeError, ValueError, OverflowError):
             raise Rejected(400, why="after is a feed number and timeout is in seconds") from None
         if params.get("feed_id") not in (None, projection.feed_id) or after > projection.count:
-            return {"feed": projection.count, "events": [], "reset": True} | self._fed(held)
+            return {"feed": projection.count, "events": [], "reset": True} | self._fed(held, projection)
         if projection.count <= after and timeout > 0:
             if self._holding >= HOLDING:
                 raise Rejected(503, why="too many pages are waiting for news: try again shortly")
@@ -355,12 +379,14 @@ class Web(Server[Request]):
             finally:
                 self._holding -= 1
         if self.projection is not projection:
-            return {"feed": self.projection.count, "events": [], "reset": True} | self._fed(held)
-        return replies.feed(projection, after, await self._roster()) | self._fed(held)
+            return {"feed": self.projection.count, "events": [], "reset": True} | self._fed(held, self.projection)
+        statuses = await self._roster()
+        return replies.feed(projection, after, statuses) | self._fed(held, projection)
 
-    def _fed(self, held: Held) -> dict[str, Any]:
-        """What the feed says of ours: whether a runtime holds the session, and how a replay stands."""
-        return {"x": {"live": self.live(), "replay": self._replay_state(held)}}
+    def _fed(self, held: Held, projection: Projection) -> dict[str, Any]:
+        """What the feed and a snapshot say of ours: whether a runtime holds the session, and how a replay stands as
+        `projection`, which they read, has folded it."""
+        return {"x": {"live": self.live(), "replay": self._replay_state(held, projection)}}
 
     async def _past(self, after: int, projection: Projection) -> None:
         """Return once the feed holds more than `after`, or the replay moved, or changed how it plays."""
@@ -408,9 +434,7 @@ class Web(Server[Request]):
                 return await self._changes()
             case "diff":
                 if self.player is not None:
-                    raise replies.Error(
-                        403, f"a replay reads no diff: asking for one is an act. {nothing_acts(self.session.name)}"
-                    )
+                    raise replies.Error(403, reads_no_diff(self.session.name))
                 if held.kind == "view":
                     raise replies.Error(
                         403, "a view link reads no diff: asking for one is an act, and it acts on nothing"
@@ -657,9 +681,9 @@ class Web(Server[Request]):
         if opened not in (None, "text"):
             raise replies.Error(400, "from is `text`, for a ref opened from text, or left out")
         from_text = opened == "text"
-        replayed_to = None if self.player is None else self.player.time_of(self.player.at)
+        playhead = None if self.player is None else self.player.playhead
         try:
-            panel = await read(self.session, ref, from_text=from_text, replayed_to=replayed_to)
+            panel = await read(self.session, ref, from_text=from_text, playhead=playhead)
         except Refused as refused:
             status = 404 if refused.refusal.code == "not_found" else 400
             raise replies.Error(status, no_provenance(ref, refused, from_text=from_text)) from None
@@ -747,7 +771,17 @@ class Web(Server[Request]):
                     await player.jump(where if isinstance(where, str) else "")
                 except ValueError as error:
                     said = str(error)
-        return {**(self._replay_state(held) or {}), "said": said}
+        await first(self._drawn(), self.clock.sleep(HOLD))
+        return {**(self._replay_state(held, self.projection) or {}), "said": said}
+
+    async def _drawn(self) -> None:
+        """Return once the page's projection holds the replay's copy through where it stands."""
+        player = self.player
+        assert player is not None
+        async with self.moved:
+            await self.moved.wait_for(
+                lambda: self.session is player.replay.session and self.projection.through >= player.at
+            )
 
 
 def _message(op: str, args: dict[str, Any], params: Mapping[str, Any]) -> dict[str, Any]:

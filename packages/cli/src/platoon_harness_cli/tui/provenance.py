@@ -83,8 +83,8 @@ class Provenance(ModalScreen[None]):
             if ref is None:
                 self.lines = await who_reached_whom(self._session)
             else:
-                replayed_to = None if self._replay is None else self._replay.time_of(self._replay.at)
-                self.lines = (await read(self._session, ref, from_text=from_text, replayed_to=replayed_to)).lines
+                playhead = None if self._replay is None else self._replay.playhead
+                self.lines = (await read(self._session, ref, from_text=from_text, playhead=playhead)).lines
         except Refused as refused:
             said = no_interactions(refused) if ref is None else no_provenance(ref, refused, from_text=from_text)
             self.lines = [Line("", said, warn=True)]

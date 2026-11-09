@@ -29,7 +29,7 @@ from .. import ops
 from ..channels import Act
 from ..ops import CONFIRMED, Flag, cut, forms
 from ..provenance import shows
-from ..replay import JUMP, Player, nothing_acts
+from ..replay import JUMP, Player, nothing_acts, reads_no_diff
 from ..review import snapshots_of
 from ..roster import GROUPS, detail_of, why_said
 from . import logo
@@ -266,6 +266,9 @@ class Workspace(Screen[None]):
         self.player: Player | None = None
         self._kept: str | None = None
         self._defaulted = False
+        self._drawn_at = 0
+        """In a replay, the event its screen has drawn through, which its banner names: a copy started anew is drawn
+        only once it is joined."""
         self.live: Live | None = None
         self.focus_on: Focus | None = None
         self.target: str | None = None
@@ -341,8 +344,10 @@ class Workspace(Screen[None]):
         if live is None or player is None or not self.is_mounted:
             return
         if player.replay.session is not live.session:
+            live.stop()  # Its frames would draw the copy left behind under a banner naming where the replay went.
             self.run_worker(self._rejoin(), group="rejoin")
         else:
+            self._drawn_at = player.at
             self._redraw()
 
     async def _rejoin(self) -> None:
@@ -425,6 +430,8 @@ class Workspace(Screen[None]):
         states = {row["agent"]: _state(row) for row in live.roster}
         settled = bool(live.status.get("settled"))
         self.query_one(Navigator).follow(states, live=live.runtime != "history", settled=settled)
+        if self.player is not None and live.session is self.player.replay.session:
+            self._drawn_at = self.player.at
         self._redraw()
 
     def _toast(self, live: Live) -> None:
@@ -657,7 +664,7 @@ class Workspace(Screen[None]):
         shutdown, or the session has ended. In a replay, that it is one, of which session, where it stands and how it
         plays, and why it could not move, where it could not."""
         if self.player is not None:
-            return SafeText(self.player.banner(), "bold $accent")
+            return SafeText(self.player.banner(self._drawn_at), "bold $accent")
         state = live.status.get("state")
         resume = f" {reach('resume')} resumes it, which can spend money."
         if state in ("closed", "cancelled"):
@@ -1329,8 +1336,9 @@ class Workspace(Screen[None]):
             self.marks[stream] = seq
             self._write_mark(live.session, stream, seq)
 
-        mark = self.marks.get(stream, 0)
-        self.app.push_screen(Review(live.session, live.changes, mark, read, self._test, snapshots_of(live.roster)))
+        mark, snapshots = self.marks.get(stream, 0), snapshots_of(live.roster)
+        no_diff = reads_no_diff(self.session_name) if self.replaying else None
+        self.app.push_screen(Review(live.session, live.changes, mark, read, self._test, snapshots, no_diff=no_diff))
 
     def action_tasks(self) -> None:
         """Show the tasks of the queue in view, or the entries of the board in view, read again as it moves, each act

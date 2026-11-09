@@ -1,6 +1,7 @@
 """A replay in the terminal: drawn as its session is, from a copy of its record that grows as it plays, under a banner
 saying it is one, with its controls on keys where nothing is typed and as typed commands, and nothing in it acting."""
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -10,17 +11,20 @@ from platoon_harness.config import PROJECT_FILE
 from platoon_harness.kernel import ManualClock
 from platoon_harness.testing import Say
 from platoon_harness_cli import replay as replay_module
-from platoon_harness_cli.replay import nothing_acts
+from platoon_harness_cli.replay import nothing_acts, reads_no_diff
 from platoon_harness_cli.tui.app import TerminalUI
 from platoon_harness_cli.tui.composer import Composer
 from platoon_harness_cli.tui.dialogs import Form
 from platoon_harness_cli.tui.provenance import Provenance
+from platoon_harness_cli.tui.review import Review
+from platoon_harness_cli.tui.rows import Rows
 from platoon_harness_cli.tui.sessions import Sessions
 from platoon_harness_cli.tui.transcript import Transcript
 from platoon_harness_cli.tui.workspace import Workspace
 
+from ...recorded import RECORDED, restored
 from ..runtime.support import in_state, of_type, solo, until
-from .support import drawn, workspace
+from .support import drawn, screen_text, workspace
 
 pytestmark = pytest.mark.timeout(90)
 
@@ -144,6 +148,25 @@ async def test_nothing_in_a_replay_acts_and_each_act_says_why(root):
         assert await history.head() == head
 
 
+async def test_a_diff_in_a_replay_says_why_it_opens_nothing_before_anything_opens(root):
+    name = restored(RECORDED, root)
+    app = TerminalUI(name, replay=True)
+    async with app.run_test(size=(160, 40)) as pilot:
+        await drawn(pilot, lambda text: "before its first event" in text)
+        await jump(pilot, "999999")
+        await drawn(pilot, lambda text: "at event 345 of 345" in text)
+        await pilot.press("alt+d")
+        await drawn(pilot, lambda text: isinstance(app.screen, Review) and "tally/money.py" in text)
+        rows = app.screen.query_one(Rows)
+        rows.focus()
+        rows.move_to("path/shared/tally/money.py")
+        await pilot.press("enter")
+        await drawn(pilot, lambda _: told(app, reads_no_diff(name)) == 1)
+
+        assert isinstance(app.screen, Review)
+        assert reads_no_diff(name).startswith("A replay reads no diff, as asking for one is an act. A replay acts")
+
+
 async def test_going_back_draws_the_copy_anew_keeping_the_agent_in_view(root):
     head = await recorded(root)
     app = TerminalUI("s", replay=True)
@@ -161,6 +184,37 @@ async def test_going_back_draws_the_copy_anew_keeping_the_agent_in_view(root):
         assert app.screen is screen and workspace(app).live is not before
         assert workspace(app).focus_on is not None and workspace(app).focus_on.key == "@bob"
         assert "@bob · bob on" in text
+
+
+async def test_going_back_never_draws_the_copy_left_behind_under_a_banner_naming_where_the_replay_went(
+    root, monkeypatch
+):
+    """Until the copy started anew is drawn, the screen goes on naming where the copy it shows stands, though it is
+    drawn again meanwhile."""
+    head = await recorded(root)
+    joined, rejoin = asyncio.Event(), Workspace._rejoin
+
+    async def held(self: Workspace) -> None:
+        await joined.wait()
+        await rejoin(self)
+
+    monkeypatch.setattr(Workspace, "_rejoin", held)
+    app = TerminalUI("s", replay=True)
+    async with app.run_test(size=(120, 32)) as pilot:
+        await drawn(pilot, lambda text: "before its first event" in text)
+        await jump(pilot, str(head))
+        await drawn(pilot, lambda text: f"at event {head:,} of" in text and "shipped" in text)
+        screen = workspace(app)
+        assert screen.player is not None
+
+        await screen.player.go(1)
+        screen._redraw()
+        await pilot.pause()
+        text = screen_text(app)
+        assert "shipped" in text and f"at event {head:,} of" in text and "at event 1 of" not in text
+
+        joined.set()
+        await drawn(pilot, lambda text: "at event 1 of" in text and "shipped" not in text)
 
 
 async def test_an_estimate_shown_in_a_replay_says_when_it_was_written(root):

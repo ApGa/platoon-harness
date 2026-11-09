@@ -121,6 +121,9 @@ async def test_a_jump_goes_to_an_event_by_its_number_or_to_the_last_by_a_time_in
     assert player.at == 20
     with pytest.raises(ValueError, match=r"is no place in the replay: an event's number"):
         await player.jump("soon")
+    for no_time in ("9:99", "1:75:00", "0:60"):
+        with pytest.raises(ValueError, match=r"is no time into the session: an event's number"):
+            await player.jump(no_time)
     assert player.at == 20
     assert JUMP.startswith("An event's number")
 
@@ -136,6 +139,9 @@ async def test_the_banner_says_it_is_a_replay_of_which_session_at_what_time_and_
     player.faster()
     at = f"at event 25 of {total}, {elapsed(20)} into it, {moment(START + 20)}"
     assert player.banner() == f"Replay of s, {at}: playing at 4x. {nothing}"
+    drawn = f"at event 5 of {total}, {elapsed(0)} into it, {moment(START)}"
+    assert player.banner(5) == f"Replay of s, {drawn}: playing at 4x. {nothing}"
+    assert player.playhead == (25, START + 20)
     assert moment(START) == "1970-01-12 13:46:40 UTC" and elapsed(3725) == "1:02:05"
     await player.close()
 

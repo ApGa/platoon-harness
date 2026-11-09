@@ -110,6 +110,42 @@ async def test_a_replay_s_page_draws_what_the_record_held_where_it_stands_and_mo
     assert errors == []
 
 
+async def test_a_jump_back_never_draws_what_came_after_under_a_banner_naming_where_it_went(
+    browser: Browser, root: Path, head: int
+):
+    """Each change the page makes to itself is looked at as it makes it: none shows the message asked of the lead, sent
+    at an event past where the replay jumped back to, under a banner naming that event."""
+    async with Session.attach("s", root=root) as history:
+        asked = next(event for event in await of_type(history, "message.sent") if event.actor == "human:you")
+    went = f"at event {asked.seq - 1:,} of"
+    async with replayed() as web:
+        page, errors = await opened(browser, web.link("control"))
+        await jump(page, str(head))
+        await expect(page.locator(BANNER)).to_contain_text(f"at event {head:,} of {head:,}", timeout=SECONDS)
+        await chat(page, "lead & you")
+        await expect(said(page, "Fix the flaky test")).to_have_count(1, timeout=SECONDS)
+        await page.evaluate(
+            """() => {
+              window.seen = [];
+              const look = () => window.seen.push([
+                document.querySelector('#x-replay .x-banner').textContent,
+                document.querySelector('#main').textContent.includes('Fix the flaky test'),
+              ]);
+              new MutationObserver(look).observe(document.body, {childList: true, subtree: true, characterData: true});
+            }"""
+        )
+
+        await jump(page, str(asked.seq - 1))
+        await expect(said(page, "Fix the flaky test")).to_have_count(0, timeout=SECONDS)
+        await expect(page.locator(BANNER)).to_contain_text(went, timeout=SECONDS)
+        seen = await page.evaluate("window.seen")
+        await page.context.close()
+
+    assert any(went in banner for banner, _ in seen)
+    assert [banner for banner, late in seen if late and went in banner] == []
+    assert errors == []
+
+
 async def test_a_view_link_watches_a_replay_whose_controls_say_why_they_are_disabled(
     browser: Browser, root: Path, head: int
 ):

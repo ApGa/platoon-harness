@@ -106,10 +106,13 @@ sessions screen draws the same editor.
 read-only copy of its record, from before its first event, drawn as the session is and moving as it plays. A banner under
 the top bar always says it is a replay, of which session, at which event of how many and when, and beside it are its
 controls: Play or Pause, Speed, Step, Back, Next turn, Turn back and Jump, to an event or a time into the session. A
-control link moves the replay, and a view link watches it, each of its controls disabled, saying so. Going back starts a
-copy anew, which the page draws anew from a snapshot. Every act of the session's is disabled, saying that a replay acts on
-nothing, and an estimate in an event's provenance says when it was written. As its links act on nothing, not even as you,
-a replay is served past loopback whatever login its session's agents ran on. Stopping `web` takes its copies back.
+control link moves the replay, and a view link watches it, each of its controls disabled, saying so. Going back draws
+the page anew from a snapshot, from the nearest copy of its own record the page kept as it went; the banner names where
+what the page draws stands, so it names where the replay went once the page has drawn it. Every act of the session's is
+disabled, saying that a replay acts on nothing, a diff among them, and an estimate in an event's provenance says when it
+was written. As its links act on nothing, not even as you, a replay is served past loopback whatever login its
+session's agents ran on, by a default that waits for the owner's ruling, as [Security](#security) says. Stopping `web`
+takes its copies back.
 [Replay a session](replay.md) is its guide.
 
 ## Choose a link

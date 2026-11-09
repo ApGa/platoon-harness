@@ -149,25 +149,34 @@ them. Its `CONTROLS` are the same in both clients:
 | `turn`, `turn-back` | To where the next turn ends, or where the one before ended, of any agent |
 | `jump` | To an event by its number, or to the last event by a time into the session, `m:ss` or `h:mm:ss` |
 
-**Pacing.** Playing waits the recorded gap before each event, divided by the speed, or with idle skipped at most a second,
-and takes every event within a frame, a fifteenth of a second, at once, as no client draws faster. A step, a turn or a
-jump pauses it; a jump while playing plays on from where it lands. Time decides only when the next events are copied:
-nothing a replay draws comes from its clock.
+**Pacing.** Playing waits the recorded gap before each event, divided by the speed, or with idle skipped at most a
+second, and takes every event within a frame, a fifteenth of a second, at once, as no client draws faster. A step or a
+turn pauses it; a jump while playing plays on from where it lands. A time is `m:ss` or `h:mm:ss`, its seconds, and its
+minutes after hours, under 60, so `9:99` is refused, saying what a jump takes. The player's clock decides only when the
+next events are copied: nothing a replay draws comes from it, and what depends on the time is the copy's, as of its
+newest event (section 1).
 
 **The banner** says, always: `Replay of fix-auth, at event 120 of 10,482, 0:12:30 into it, 2026-11-09 10:42:07 UTC:
 playing at 4x. Nothing here acts on the session.`, and why it could not move, where the replay refused a move, as one
-whose original was written to since it opened can be, which pauses it and ends nothing.
+whose original was written to since it opened can be, which pauses it and ends nothing. It names the event the client
+has drawn through, which a client names to `Player.banner`, so it never names a point before what is on screen: going
+back, a client goes on naming where the copy it shows stands until it has drawn the new one.
 
 **Nothing acts.** Every act and form of the session's says, in both clients, `A replay acts on nothing, as it is a
 read-only copy of fix-auth's record: open the session itself to act.`, before it opens a form or sends anything, and a
-replay offers no op's form: the terminal's palette lists none, and the page's Commands is disabled, saying so.
+replay offers no op's form: the terminal's palette lists none, and the page's Commands is disabled, saying so. A diff is
+one such act, as asking for one is an act, and both clients say first, in `replay.py`'s words, `A replay reads no diff,
+as asking for one is an act.` and then why nothing acts
+(`test_a_diff_in_a_replay_says_why_it_opens_nothing_before_anything_opens`).
 
 ### 4. Estimates are labelled with when they were written
 
 A panel shows an event's provenance only for an event drawn, so an estimate about an event shows once the playhead has
-reached it. In a replay each says when it was written, and whether that was by the point the replay stands at, the
-wall time of its newest event, or after it: `0.5 by even-split, version 1, params 44136fa3, local, of the trace at head
-10,482, written 2026-11-10 09:00:00 UTC, after this point of the replay, so it was not known here`, drawn as a warning.
+reached it. In a replay each says when it was written, and whether it was known at the point the replay stands at: it
+was not where it was written after the wall time of the replay's newest event, or where the trace it read reached past
+that event, whatever the clock of the process that wrote it said, as wall times across processes are not ordered as seqs
+are: `0.5 by even-split, version 1, params 44136fa3, local, of the trace at head 10,482, written 2026-11-10 09:00:00
+UTC, after this point of the replay, so it was not known here`, drawn as a warning.
 
 ### 5. The terminal
 
@@ -177,7 +186,10 @@ shows always. The transcript has focus, as nothing is typed to send, and the con
 `s`, `.`, `,`, `]`, `[` and `j`, and typed commands in the composer, `/play` to `/jump`, which the keymap table holds
 and the footer, the help and the palette show. The agents move, as the replay's state moves. A copy started anew is
 joined in place, keeping the agent or channel in view where it holds it, and how far you have read, which a replay keeps
-in the terminal alone and writes nowhere. Leaving the replay closes it.
+in the terminal alone and writes nowhere. The workspace stops drawing the copy left behind as soon as the replay leaves
+it, and its banner names the event it has drawn through until the new copy is drawn
+(`test_going_back_never_draws_the_copy_left_behind_under_a_banner_naming_where_the_replay_went`). Leaving the replay
+closes it.
 
 ### 6. The browser
 
@@ -186,9 +198,23 @@ of its own, as Open opens a session. A banner under the top bar says it is a rep
 titled with what it does; a control link moves the replay, and a view link watches it, each control disabled, saying
 `A view link watches the replay: a control link moves it.` `/x/replay` takes a control and answers how the replay stands.
 Every act of the session's is disabled, saying why, as `x.cannot` says it for a replay, and `/x/command`, `/x/body` and a
-diff are refused. The projection folds the copy as it grows; a copy started anew gets a projection of its own, whose
-`feed_id`, which now hashes the folder too, the page hears as a reset, so it draws the session anew from a snapshot. As a
-replay's links act on nothing, not even as you, it is served past loopback whatever login its agents ran on.
+diff are refused. As a replay's links act on nothing, not even as you, it is served past loopback whatever login its
+agents ran on, by question 3's default.
+
+The page's projection is its own fold of the record, in a folder of its own in the replay's folder, never a copy's. It
+folds the copy as it grows, and folds on into the same projection across a copy started anew that holds all it has
+folded, as one started on from a checkpoint does, so playing on, or jumping far on, never resets the page. As it folds
+past each `spacing` events it keeps a copy of itself, through SQLite's backup, so where the replay goes back, or a kept
+copy lies more than `CHECKPOINT_EVENTS` past it, a projection is started anew from the nearest copy kept at or below
+where the replay went, in a folder of its own, whose `feed_id`, which now hashes the folder too, the page hears as a
+reset. That projection is folded to where the replay went before the page is served it, so the page draws the session
+anew from a snapshot that holds where the replay went
+(`test_a_page_folds_on_across_a_copy_from_a_checkpoint_and_goes_back_from_the_nearest_copy_it_kept`). What the page is
+told of the replay, in the feed, a snapshot and `/x/replay`'s answer, is where the projection it reads stands, and the
+page draws the banner from the feed and the snapshot alone, holding it across a reset until it has drawn the snapshot,
+so it never draws what came after under a banner naming an earlier point
+(`test_a_jump_back_never_draws_what_came_after_under_a_banner_naming_where_it_went`). `/x/replay` answers once the
+projection holds where the replay went.
 
 ## The hard parts
 
@@ -196,9 +222,23 @@ replay's links act on nothing, not even as you, it is served past loopback whate
   Going back is a new copy, and the clients, which follow a journal that only grows, draw it anew: the terminal joins it
   in place and the page hears a reset.
 - **A long record.** A copy from nothing folds about 20,000 events a second here, so a checkpoint every 1,024 events at
-  least keeps a seek under a tenth of a second at 10,000 events. Checkpoints cost disk: at most eight copies of the
-  journal at growing lengths, about four times its size, 49 MB with the copy itself at 10,000 events, which a replay
-  takes back as it closes.
+  least keeps a seek under a tenth of a second at 10,000 events, once the checkpoints are made; the seeks timed were
+  timed after that. Until then a seek copies from the start, which took 1.5 s to the end of 10,008 events here as they
+  were being made. Checkpoints cost disk: at most eight copies of the journal at growing lengths, about four times its
+  size, 49 MB with the copy itself at 10,000 events, which a replay takes back as it closes, or the next to open takes
+  back where it was killed first.
+- **The page's own fold.** The page draws from a fold of its own, which folds about 5,000 events a second here, a
+  quarter of the kernel's pace, so it keeps copies of itself as checkpoints are kept, and a seek in the page took 16 to
+  270 ms at 10,008 events, once the page had folded that far
+  (`test_a_seek_in_the_page_of_a_10000_event_replay_restores_what_the_page_folded_within_its_budget`). Its first jump
+  far on folds every event up to there, which took 2.8 s to the end of 10,008 events here: it keeps no copy of what it
+  has not yet folded, as making them ahead would fold the whole record in the background, from the original's events and
+  bodies, which nothing reads for it.
+- **Time.** A query works out what is due, spent or stalled from the time, so a copy's takes its newest event's, and a
+  timer, a budget or a stall reads as it stood then, never as now.
+- **What is on screen.** A client follows a copy that only grows, so a copy started anew is a moment where what it shows
+  is the copy left behind while the replay already stands elsewhere. Each client names where what it shows stands, never
+  where the replay went, until it has drawn the new copy.
 - **A body redacted after the playhead.** Its bytes are gone from the original, so the copy has none, and a client reads
   it as not found rather than tombstoned until the playhead reaches its tombstone.
 - **Extensions' views.** A copy folds the SDK's primitives, as a session's history does, so an installed extension's
@@ -256,12 +296,17 @@ Each is taken at the default below, pending the owner's ruling, and none is buil
 
 - `tests/unit/kernel/test_copy.py`: a copy holds its source's rows and folds to its views, carries the bodies its events
   name and no other, takes no command, stays one when opened again, only grows, and refuses another session's journal.
-- `tests/unit/runtime/test_replay.py`: a replay reads as the session read at its playhead, refuses every write, keeps its
-  copies under the root and takes them back, seeks either way from the nearest checkpoint, replays a live session's
+- `tests/unit/runtime/test_replay.py`: a replay reads as the session read at its playhead, works out what was due, spent
+  or stalled at its time on the recorded mixed team's session at events 45 and 200, refuses every write, keeps its
+  copies under the root and takes them back, a killed one's by the next to open, seeks either way from the nearest
+  checkpoint, goes on in its copy through a checkpoint, says a checkpoint it cannot make, replays a live session's
   record up to its opening, and keeps what estimators said as it stood then.
-- `tests/integration/test_replay.py`, slow: on this node, a seek on 10,008 events took 1 to 91 ms, a median of 43 ms,
-  against 477 ms for a copy from nothing to the end.
-- `tests/unit/cli/test_replay.py` and `tests/unit/cli/test_provenance.py`: pacing at each speed, steps, turns, jumps, the
-  banner, and estimates labelled with when they were written.
+- `tests/integration/test_replay.py`, slow: on this node, a seek on 10,008 events took 1 to 92 ms once the checkpoints
+  were made, against 474 ms for a copy from nothing to the end, and 1.5 s before they were made; a seek in the page took
+  16 to 270 ms once the page had folded that far, and its first jump to the end 2.8 s.
+- `tests/unit/cli/test_replay.py` and `tests/unit/cli/test_provenance.py`: pacing at each speed, steps, turns, jumps, a
+  time that is no time refused, the banner at the place a client has drawn, and estimates labelled with when they were
+  written, one of a trace past the playhead as not known there.
 - `tests/unit/tui/test_replay.py`, `tests/unit/web/test_replay.py` and `tests/e2e/test_replay.py`, run here in Chromium and
-  Firefox, and WebKit on CI alone.
+  Firefox, and WebKit on CI alone, the last with a MutationObserver that looks at each change the page makes to itself
+  across a jump back.

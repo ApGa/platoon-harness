@@ -73,8 +73,9 @@ def patch_rows(diff: Diff, shown: int, width: int, chosen: tuple[int, int] | Non
 
 class Review(ModalScreen[None]):
     """What changed, as `rows_of` lists it. Reading to its end moves the person's mark on `repo/<name>`, through
-    `read`. Choosing a commit opens its patch, and a workspace or one of its paths what it holds uncommitted. The key
-    that tests takes the chosen commit's act, through `act`, or says why it is disabled."""
+    `read`. Choosing a commit opens its patch, and a workspace or one of its paths what it holds uncommitted, or where
+    asking for one would do nothing, as in a replay, says `no_diff`, why. The key that tests takes the chosen commit's
+    act, through `act`, or says why it is disabled."""
 
     BINDINGS = [*bindings("dialog"), *bindings("review")]
 
@@ -86,9 +87,12 @@ class Review(ModalScreen[None]):
         read: Callable[[int], object],
         act: Callable[[Mapping[str, Any]], object],
         snapshots: Collection[str] = (),
+        *,
+        no_diff: str | None = None,
     ) -> None:
         super().__init__()
         self._session = session
+        self._no_diff = no_diff
         self._changes = changes
         self._lines = {change.key: change for change in changes_of(changes, mark, snapshots) if change.key}
         self._rows = rows_of(changes, mark, snapshots)
@@ -125,7 +129,11 @@ class Review(ModalScreen[None]):
 
     def on_rows_chosen(self, chosen: Rows.Chosen) -> None:
         change = self._lines.get(chosen.key)
-        if change is not None and change.of is not None:
+        if change is None or change.of is None:
+            return
+        if self._no_diff is not None:
+            note(self, self._no_diff, severity="warning")
+        else:
             self.app.push_screen(Patch(self._session, change.of))
 
     def action_test(self) -> None:

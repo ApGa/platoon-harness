@@ -478,8 +478,9 @@ plain keys there: Space plays or pauses, `s` goes to the next speed of 1x, 4x, 1
 event on and back, `]` and `[` go to where the next turn ends and where the one before ended, and `j` jumps to an event
 or a time into the session; in the composer each is a typed command, `/play` to `/jump`. Going back draws the session
 anew from that point, keeping the agent or channel in view where it was there then, and how far you had read, which a
-replay keeps here alone. Every act and form of the session's says why it does nothing, as a replay acts on nothing, and
-an estimate in an event's provenance says when it was written. Leaving the replay takes its copies back.
+replay keeps here alone; until it is drawn, the banner names where what is on screen stands. Every act and form of the
+session's says why it does nothing, as a replay acts on nothing, a diff among them, before anything opens, and an
+estimate in an event's provenance says when it was written. Leaving the replay takes its copies back.
 [Replay a session](replay.md) is its guide.
 
 ### Reconnecting

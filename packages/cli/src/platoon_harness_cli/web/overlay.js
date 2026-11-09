@@ -214,11 +214,18 @@ $('#login p').textContent = 'This page opens from a link that platoon-harness we
   'made. Each link opens once, so ask for a new one.';
 $('#login input').placeholder = 'Session token';
 
+// A replay's banner names where the page's own record stands: each feed says so with what it brings, and a reset holds
+// it until the snapshot it says to take is drawn, so the page never draws a copy left behind under a banner naming where
+// the replay went.
 const baseApi = api;
 api = async (name, params) => {
   const r = await baseApi(name, params);
   if (name === 'view_feed' && r.x && X.caps && r.x.live !== X.caps.live) X.refresh();
-  if (name === 'view_feed' && r.x && r.x.replay) X.drawReplay(r.x.replay);
+  if (name === 'view_feed' && r.x && r.x.replay) {
+    if (r.reset) X.redrawing = true;
+    else if (!X.redrawing) X.drawReplay(r.x.replay);
+  }
+  if (name === 'view_snapshot' && r.x) X.snapshotReplay = r.x.replay;
   return r;
 };
 
@@ -1621,7 +1628,8 @@ body.x-replaying #app { grid-template-rows: auto auto minmax(0, 1fr); grid-templ
 
 X.LABELS = {play: 'Play', speed: 'Speed', step: 'Step', back: 'Back', turn: 'Next turn', 'turn-back': 'Turn back'};
 
-// Draw how the replay stands: the banner, and each control, disabled where the link cannot move it.
+// Draw how the replay stands: the banner, unless `state` holds none, and each control, disabled where the link cannot move
+// it.
 X.drawReplay = state => {
   document.body.classList.toggle('x-replaying', !!state);
   X.disable($('[data-x-commands]'), state ? X.caps.cannot : null);
@@ -1636,13 +1644,14 @@ X.drawReplay = state => {
   const buttons = state.controls.filter(c => c.name !== 'jump').map(c => html`<button class="btn" data-x-replay="${c.name}"${about(c.does)}>${labels[c.name]}</button>`);
   const jump = state.controls.find(c => c.name === 'jump');
   const banner = $('.x-banner', bar);
+  const text = state.banner == null ? (banner ? banner.textContent : '') : state.banner;
   if (banner && $('.x-acts', bar).dataset.xFor === `${state.playing}|${state.speed}|${state.cannot || ''}`) {
-    banner.textContent = state.banner;
+    banner.textContent = text;
     return;
   }
   const typed = $('.x-jump input', bar), was = typed ? typed.value : '', focused = document.activeElement;
   const had = focused && bar.contains(focused) ? focused.dataset.xReplay || 'jump' : null;
-  bar.innerHTML = html`<p class="x-banner">${state.banner}</p><div class="x-acts" data-x-for="${state.playing}|${state.speed}|${state.cannot || ''}">${buttons}</div><form class="x-jump"><input aria-label="Jump to" placeholder="${X.REPLAY_JUMP}" value="${was}"${about(jump.does)}><button class="btn"${about(jump.does)}>Jump</button></form><p class="x-said" aria-live="polite"></p>`.s;
+  bar.innerHTML = html`<p class="x-banner">${text}</p><div class="x-acts" data-x-for="${state.playing}|${state.speed}|${state.cannot || ''}">${buttons}</div><form class="x-jump"><input aria-label="Jump to" placeholder="${X.REPLAY_JUMP}" value="${was}"${about(jump.does)}><button class="btn"${about(jump.does)}>Jump</button></form><p class="x-said" aria-live="polite"></p>`.s;
   if (had) {
     const back = had === 'jump' ? $('.x-jump input', bar) : $(`[data-x-replay="${had}"]`, bar);
     if (back) back.focus();
@@ -1650,7 +1659,18 @@ X.drawReplay = state => {
 };
 X.REPLAY_JUMP = 'An event, or a time as m:ss';
 
-// Take one control of the replay, and draw how it stands then, saying why a jump went nowhere.
+// The banner a reset held is drawn once the page has drawn the snapshot the reset said to take, every route drawn.
+const routing = route;
+route = async function () {
+  await routing();
+  if (X.redrawing) {
+    X.redrawing = false;
+    X.drawReplay(X.snapshotReplay);
+  }
+};
+
+// Take one control of the replay, and draw how it plays then, saying why a jump went nowhere. Where it stands is the
+// banner's, which the feed draws with what the page has of the record there.
 X.control = async (control, where) => {
   const said = $('#x-replay .x-said');
   try {
@@ -1659,7 +1679,7 @@ X.control = async (control, where) => {
     const p = await r.json().catch(() => ({error: `web answered ${r.status}`}));
     if (r.status === 401) return login(p.error);
     if (!r.ok) { if (said) said.textContent = p.error; return; }
-    X.drawReplay(p);
+    X.drawReplay({...p, banner: null});
     $('#x-replay .x-said').textContent = p.said || '';
   } catch (_) {
     if (said) said.textContent = 'web could not be reached, so the replay did not move.';

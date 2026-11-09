@@ -23,8 +23,7 @@ from pathlib import Path
 from platoon_harness import ConfigError, Refused, Session, Team
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import DriverError
-from platoon_harness.kernel import Clock, Event, Refusal, SystemClock, first, is_held
-from platoon_harness.runtime.control import BODY_LIMIT
+from platoon_harness.kernel import Clock, SystemClock, first, is_held
 from platoon_harness.runtime.opening import make_driver
 from platoon_harness.runtime.paths import MANIFEST
 from platoon_harness.schema import Problem
@@ -33,7 +32,7 @@ from ..exits import Usage
 from ..output import note
 from ..replay import Player
 from .page import Page, load
-from .projection import Projection, name_of
+from .projection import Kept, Projection, bodies, name_of
 from .server import Web
 
 LOOK = 1.0
@@ -115,17 +114,6 @@ def plan_roles(manifest: Manifest) -> list[str]:
     return found
 
 
-async def bodies(session: Session, event: Event) -> dict[str, bytes | Refusal]:
-    """What the fold of `event` shows of the bodies it cites: their bytes, or why they could not be read."""
-    found: dict[str, bytes | Refusal] = {}
-    for ref in Projection.cited(event):
-        try:
-            found[ref] = await session.get_body(ref, limit=BODY_LIMIT)
-        except Refused as refused:
-            found[ref] = refused.refusal
-    return found
-
-
 async def follow(
     session: Session, projection: Projection, moved: asyncio.Condition, clock: Clock, *, on_loopback: bool = True
 ) -> None:
@@ -157,12 +145,13 @@ async def _replay(
     opened: asyncio.Future[Web] | None,
 ) -> None:
     """Serve a replay of a session's page as `serve` serves the session's, until `stop` is set, and close the replay,
-    which takes its copies back."""
+    which takes its copies back, and the page's projections, which it keeps in the replay's folder."""
     player = await Player.open(name, clock=clock)
     try:
-        session = player.replay.session
+        session, replay = player.replay.session, player.replay
         person = name_of(Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).principal)
-        projection = Projection(session.folder, name, person)
+        kept = Kept(replay.folder / "page", replay.spacing)
+        projection = kept.anew(0, name, person)
         web = Web(session, projection, page, clock, host=host, scheme="https" if tls else "http", player=player)
         try:
             await web.listen(host, port, tls=tls)
@@ -178,10 +167,7 @@ async def _replay(
             if tls is None:
                 forward(host, web.port)
 
-            async def folding(followed: Session, projected: Projection) -> None:
-                await follow(followed, projected, web.moved, clock)
-
-            await first(web.replaying(folding), stop.wait())
+            await first(web.replaying(kept), stop.wait())
         finally:
             await web.stop()
             web.projection.close()
