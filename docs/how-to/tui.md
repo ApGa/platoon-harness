@@ -150,16 +150,19 @@ nothing else:
 
 - While agents work, the logo's agents step in turn, faster as more work, one step a second for one, and a working
   agent's `●` stirs.
-- While every agent that has not ended rests, they blink now and then, one at a time every six seconds, and a resting
-  agent's `○` breathes while the session is live.
-- On an event, a flourish under a second: the front agent waves as an agent finishes or the session settles, their eyes
-  look up at you in amber as one comes to need you, and they stir as more start working.
+- While every agent that has not ended rests, the logo's agents blink now and then, one at a time every six seconds.
+- A resting agent's `○` breathes out, to `◦`, for a second every six seconds while the session is live, whether others
+  work or not.
+- On an event, a flourish of a second at most: the front agent waves as an agent finishes or the session settles, their
+  eyes look up at you in amber as one comes to need you, and they stir as more start working.
 
 A session that is history, which no runtime holds, never moves, and an agent whose state is unknown shows no motion that
-would say it works or rests, nor does the logo blink while one is unknown. The sessions screen's logo stands still, as that
-screen reads no agent's state. Only the logo's rows and the glyphs that move are drawn again, and only when their frame
-changes: a live session at rest took 0.6% of a core, measured. `motion = false` in `tui.toml` turns it off, and so does
-Textual's animation level below full, as `TEXTUAL_ANIMATIONS=basic` or `none` sets it. Its timer decides nothing.
+would say it works or rests, nor does the logo blink while one is unknown. The sessions screen's logo stands still, as
+that screen reads no agent's state. Only the logo's rows and the glyphs that move are drawn again, and only when their
+frame changes: motion in a live session at rest, its frames and the rows they draw again, took 0.6% of a core, measured.
+`motion = false` in `tui.toml` turns it off, and so does Textual's animation level below full, as
+`TEXTUAL_ANIMATIONS=basic` or `none` sets it. Its timer decides nothing. Its paces and flourishes are the defaults
+pending the owner's ruling.
 
 The mouse does what a key does, and each key still does it: a click on a row of the navigator, or a tab of the strip under
 80 columns, shows that agent or channel, as Alt+↓ goes to it; a click on a line chooses it, as the arrows do, and a click

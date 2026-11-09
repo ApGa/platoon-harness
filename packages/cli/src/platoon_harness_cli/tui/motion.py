@@ -1,10 +1,10 @@
 """Motion: the small sprite's agents and the navigator's glyphs moving a little, from the record's state alone, a few
 frames a second. While agents of a live session work, the sprite's agents step in turn, faster as more work, and a
 working agent's dot stirs; while each agent of a live session that has not ended rests, they blink now and then; and a
-resting agent's ring breathes while the session is live. An event gets a flourish under a second: a wave when an agent
-finishes or the session settles, eyes that look up at you when one comes to need you, and a stir when more start
-working. A session that is history never moves, nor does an agent whose state is unknown, and nothing moves where
-motion is off."""
+resting agent's ring breathes out for a second every six while the session is live, whether others work or not. An
+event gets a flourish of a second at most: a wave when an agent finishes or the session settles, eyes that look up at
+you when one comes to need you, and a stir when more start working. A session that is history never moves, nor does an
+agent whose state is unknown, and nothing moves where motion is off."""
 
 from collections.abc import Mapping
 
@@ -24,8 +24,9 @@ BLINK = 24
 GLYPHS = {"working": ("●", "•"), "idle": ("○", "◦")}
 """The frames of an agent's glyph that moves: a working agent's dot, which stirs, and a resting agent's ring, which
 breathes."""
-PACES = {"working": 2, "idle": 8}
-"""How many frames each glyph's frame lasts."""
+PACES = {"working": (2, 2), "idle": (BLINK - FPS, FPS)}
+"""How many frames each of a glyph's two frames lasts: a working agent's dot stirs twice a second, and a resting
+agent's ring breathes out for a second every six, as the logo blinks."""
 _STRIDE = (*logo.AGENT[:5], "x...x")
 _BLINK = (logo.AGENT[0], "xxxxx", *logo.AGENT[2:])
 _WAVES = (
@@ -112,5 +113,6 @@ class Motion:
         """The glyph of an agent in `state` this frame, where it moves: a working agent's and a resting agent's of a
         live session. None where it stands still, as an agent's in any other state does."""
         if (state == "working" and self.working) or (state == "idle" and self.idle):
-            return GLYPHS[state][(self.frame // PACES[state]) % 2]
+            held, out = PACES[state]
+            return GLYPHS[state][int(self.frame % (held + out) >= held)]
         return None

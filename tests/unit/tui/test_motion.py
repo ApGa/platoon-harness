@@ -43,14 +43,17 @@ def test_a_live_session_at_rest_blinks_now_and_then_and_its_resting_agents_breat
     motion = Motion()
     motion.follow({"lead": "idle", "w": "done"}, live=True, settled=True)
     seen = frames(motion, 2 * BLINK)
-    glyphs = set()
-    for _ in range(4 * FPS):
-        glyphs.add(motion.glyph("idle"))
+    rings = []
+    for _ in range(BLINK):
+        rings.append(motion.glyph("idle"))
         motion.advance()
 
     assert motion.resting and motion.moving
     assert [at for at, pixels in enumerate(seen) if pixels != logo.SMALL] == [0, BLINK], "a blink every six seconds"
-    assert glyphs == set(GLYPHS["idle"]) and motion.glyph("done") is None
+    assert rings.count(GLYPHS["idle"][1]) == FPS and rings.count(GLYPHS["idle"][0]) == BLINK - FPS, (
+        "a breath out of a second every six"
+    )
+    assert motion.glyph("done") is None
 
 
 def test_history_and_an_agent_whose_state_is_unknown_never_move():
@@ -66,7 +69,7 @@ def test_history_and_an_agent_whose_state_is_unknown_never_move():
     assert all(pixels == logo.SMALL for pixels in frames(motion, 2 * BLINK))
 
 
-def test_an_event_plays_a_flourish_under_a_second_and_the_first_state_seen_plays_none():
+def test_an_event_plays_a_flourish_of_a_second_at_most_and_the_first_state_seen_plays_none():
     """A wave as an agent finishes or the session settles, eyes that look up as one comes to need you, a stir as more
     start working; none for the state the screen first draws, and none for a state a session that is history leaves."""
     played = []
@@ -84,7 +87,7 @@ def test_an_event_plays_a_flourish_under_a_second_and_the_first_state_seen_plays
         while motion.flourish is not None:
             motion.advance()
             lasted += 1
-        assert lasted <= FPS, "a flourish takes under a second"
+        assert lasted <= FPS, "a flourish takes a second at most"
     motion.follow({}, live=False, settled=False)
     motion.follow({"lead": "needs_you"}, live=True, settled=False)
 
