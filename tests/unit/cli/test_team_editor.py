@@ -225,7 +225,8 @@ usd = 0.5
 
 
 def test_a_file_written_with_dotted_keys_inline_tables_or_a_table_in_parts_is_edited_in_its_own_form(here):
-    """Each edit means what it says once read back, whatever form the file takes."""
+    """Each edit means what it says once read back, whatever form the file takes. A new key goes after a dotted key as
+    after any other, and one added within braces before the space that closes them."""
     written(
         here,
         'roles.lead.harness = "claude"  # one line each\n'
@@ -233,6 +234,8 @@ def test_a_file_written_with_dotted_keys_inline_tables_or_a_table_in_parts_is_ed
         'topology = { until = "role:lead" }\n',
     )
     dotted = drafted(here, setting("roles.lead.model", "sonnet"), setting("topology.limits.max_hops", "3"))
+    written(here, '[roles.lead]\nharness = "claude"\nbudget.turns = 40\n\n[topology]\nlimits = { max_live = 8 }\n')
+    keyed = drafted(here, setting("roles.lead.effort", "high"), setting("topology.limits.max_hops", "5"))
     written(
         here,
         '[roles.lead]\nharness = "claude"\n\n[budget]\nturns = 3\n\n# The critic.\n[roles.critic]\nharness = "codex"\n',
@@ -242,7 +245,11 @@ def test_a_file_written_with_dotted_keys_inline_tables_or_a_table_in_parts_is_ed
     assert dotted.text == (
         'roles.lead.harness = "claude"  # one line each\n'
         'roles.lead.model = "sonnet"\n'
-        'topology = { until = "role:lead", limits = {max_hops = 3}}\n'
+        'topology = { until = "role:lead", limits = {max_hops = 3} }\n'
+    )
+    assert keyed.text == (
+        '[roles.lead]\nharness = "claude"\nbudget.turns = 40\neffort = "high"\n\n'
+        "[topology]\nlimits = { max_live = 8, max_hops = 5 }\n"
     )
     assert tomllib.loads(parts.text) == {
         "roles": {"new": {"harness": "claude"}, "critic": {"harness": "codex"}},
@@ -272,6 +279,53 @@ def test_clearing_a_field_leaves_its_key_out_and_a_table_it_empties_goes_with_it
 
     assert found.text == STARTER + "\n[roles.critic]\n"
     assert problems(found)["roles.critic.harness"] == ["roles.critic.harness: Field required"]
+
+
+def test_removing_the_only_entry_of_a_table_takes_the_table_it_empties_with_it(here):
+    """The only channel, the only auth profile, a preset added in the same draft, a file's only preset where
+    `[topology]` holds nothing else, and the only role: each goes, and leaves no empty table the file would not mean."""
+    written(
+        here,
+        '[roles.lead]\nharness = "claude"\n\n[topology]\n\n# Notes.\n[topology.channels.notes]\nkind = "topic"\n'
+        'writers = "all"\nreaders = "all"\n\n[auth.work]\nenv = ["WORK_KEY"]\n',
+    )
+    found = drafted(
+        here,
+        Edit("add", ("topology", "star"), ""),
+        Edit("remove", ("topology", "star")),
+        Edit("remove", ("topology", "channels", "notes")),
+        Edit("remove", ("auth", "work")),
+    )
+    written(here, '[roles.lead]\nharness = "claude"\n\n[topology.star]\nhub = "lead"\n')
+    preset = drafted(here, Edit("remove", ("topology", "star")))
+    role = drafted(here, Edit("remove", ("roles", "lead")))
+
+    assert found.unmade == () and found.text == '[roles.lead]\nharness = "claude"\n' and found.blocked is None
+    assert preset.unmade == () and preset.text == '[roles.lead]\nharness = "claude"\n'
+    assert role.unmade == () and tomllib.loads(role.text) == {"topology": {"star": {"hub": "lead"}}}
+    assert problems(role)["top"] == ["roles: Field required"] and role.blocked is not None
+
+
+def test_a_change_taken_back_leaves_the_file_as_it_was(here):
+    """A field set then cleared, or an entry added then removed, gives the file back byte for byte, with nothing to
+    save, and a table removed from the end of the file leaves it ending as it did, with no blank line of the
+    editor's."""
+    written(here, '[roles.lead]\nharness = "claude"\n')
+    back = drafted(
+        here,
+        setting("topology.until", "settled"),
+        setting("topology.until", ""),
+        setting("budget.usd", "5"),
+        setting("budget.usd", ""),
+        Edit("add", ("roles", "worker"), "codex"),
+        Edit("remove", ("roles", "worker")),
+    )
+    written(here, '[roles.lead]\nharness = "claude"\n\n[budget]\nusd = 5\n')
+    ended = drafted(here, setting("budget.usd", ""), setting("roles.lead.model", "sonnet"))
+
+    assert back.text == '[roles.lead]\nharness = "claude"\n' and back.diff == "" and back.unmade == ()
+    assert back.blocked == "Nothing to save: the draft is the file as it stands."
+    assert ended.text == '[roles.lead]\nharness = "claude"\nmodel = "sonnet"\n'
 
 
 def test_every_problem_is_shown_at_its_field_or_else_its_table_or_else_at_the_top(here):

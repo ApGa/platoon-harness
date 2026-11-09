@@ -238,14 +238,15 @@ def draft(folder: Path, edits: Sequence[Edit], harnesses: Sequence[Harness]) -> 
     path = folder / PROJECT_FILE
     raw = _read(path)
     before = _text_of(raw)
-    document, data = _parsed(before)
+    document, read = _parsed(before)
+    data = read
     failed: dict[int, Problem] = {}
     for index, edit in enumerate(edits):
         try:
             document, data = _edited(document, data, edit, harnesses)
         except ValueError as error:
             failed[index] = Problem(".".join(edit.path), str(error))
-    text = document.as_string()
+    text = before if data == read else _ended(document.as_string(), before)
     team, needing, refused = _loaded(text)
     problems = [*failed.values(), *refused]
     shown = None
@@ -367,6 +368,15 @@ def _trusted_now(text: str) -> tuple[str, ...]:
     return trusted(needing, team)
 
 
+def _ended(text: str, before: str) -> str:
+    """`text` ending in as many line ends as the file did, or in one where there was none, so a table removed from the
+    end leaves no blank line of its own behind."""
+    if not text.strip():
+        return ""
+    ends = len(before) - len(before.rstrip("\n")) if before.strip() else 1
+    return text.rstrip("\n") + "\n" * ends
+
+
 def _blocked(before: str, text: str, team: Team | None, failed: bool) -> str | None:
     """Why a draft cannot be saved: it changes nothing, an edit could not be made, or the loader refuses it. A problem
     `team check` finds is said and does not stop a save, as a team may name a harness this machine lacks."""
@@ -440,10 +450,7 @@ def _edited(
             return document, data
         value = _value(field, edit.text)
         if value is None:
-            document = _drop(document, path, expected)
-            entries = removable - {("test",)}
-            while (path := path[:-1]) and path not in entries and _dig(expected, *path) == {}:
-                document = _drop(document, path, expected)
+            document = _emptied(_drop(document, path, expected), path[:-1], expected, removable - {("test",)})
         else:
             document = _put(document, path, value, expected)
     elif edit.verb == "add":
@@ -465,7 +472,7 @@ def _edited(
     else:
         if path not in removable:
             raise ValueError("is nothing a person removes from here: remove it in the file")
-        document = _drop(document, path, expected)
+        document = _emptied(_drop(document, path, expected), path[:-1], expected, removable)
     if tomllib.loads(document.as_string()) != expected:
         raise ValueError("the editor cannot make this change and keep this file's layout: make it in the file")
     return document, expected
@@ -512,6 +519,15 @@ def _dig(data: Any, *path: str) -> Any:
     return data
 
 
+def _emptied(document: TOMLDocument, path: Keys, data: dict[str, Any], entries: set[Keys]) -> TOMLDocument:
+    """Remove each table on `path`, deepest first, that a removal left empty, but an entry a person named, in `entries`,
+    which stays until it is removed."""
+    while path and path not in entries and _dig(data, *path) == {}:
+        document = _drop(document, path, data)
+        path = path[:-1]
+    return document
+
+
 def _holds(node: Any, key: str) -> bool:
     """Whether a table of the document holds `key`: text holds no key, whatever its letters."""
     return isinstance(node, Mapping) and key in node
@@ -525,12 +541,19 @@ def _trivia(entry: tuple[Any, Item]) -> bool:
     return entry[0] is None and isinstance(entry[1], Whitespace | Comment)
 
 
+def _headed(entry: tuple[Any, Item]) -> bool:
+    """Whether a body's entry is a table under a header, or one holding such tables, and not a key and its value, as a
+    dotted key and an inline table are."""
+    name, item = entry
+    return isinstance(item, AoT) or (isinstance(item, Table) and not (name is not None and name.is_dotted()))
+
+
 def _last(node: Any) -> Any:
     """The table rendered last within `node`, which may be `node`, under whose body what follows it is kept."""
     body = _body(node)
     if body and isinstance(body[-1][1], AoT) and body[-1][1].body:
         return _last(body[-1][1].body[-1])
-    if body and isinstance(body[-1][1], Table) and not isinstance(body[-1][1], InlineTable):
+    if body and isinstance(body[-1][1], Table) and _headed(body[-1]):
         return _last(body[-1][1])
     return node
 
@@ -561,8 +584,15 @@ def _put(document: TOMLDocument, path: Keys, value: Any, data: dict[str, Any]) -
         value = {key: value}
     key = path[depth]
     item = _item(value, inline=isinstance(node, InlineTable))
-    if _holds(node, key) or isinstance(node, InlineTable) or not isinstance(node, Container | Table):
-        node[key] = item  # In place, or within braces, or in a table the file writes in parts, which keeps its order.
+    if _holds(node, key) or not isinstance(node, Container | Table | InlineTable):
+        node[key] = item  # In place, or in a table the file writes in parts, which keeps its order.
+    elif isinstance(node, InlineTable):
+        body = _body(node)
+        closing = []  # The space before the closing brace, which stays there.
+        while body and body[-1][0] is None and isinstance(body[-1][1], Whitespace) and "," not in body[-1][1].s:
+            closing.insert(0, body.pop())
+        node.append(key, item)
+        body.extend(closing)
     elif isinstance(item, Table):
         last = _last(node)
         tail = _tail(last)
@@ -572,10 +602,7 @@ def _put(document: TOMLDocument, path: Keys, value: Any, data: dict[str, Any]) -
         _body(_last(item)).extend(tail)
     else:
         body = _body(node)
-        at = max(
-            (index + 1 for index, (name, found) in enumerate(body) if name and not isinstance(found, Table | AoT)),
-            default=0,
-        )
+        at = max((index + 1 for index, entry in enumerate(body) if entry[0] and not _headed(entry)), default=0)
         rest = body[at:]
         del body[at:]
         node.append(key, item)
@@ -622,20 +649,22 @@ def _drop(document: TOMLDocument, path: Keys, data: dict[str, Any]) -> TOMLDocum
     tail = _tail(_last(item))
     tables = list(_tables(document))
     at = next(index for index, table in enumerate(tables) if table is item)
-    before = tables[at - 1] if at else None
+    # What is right above its header ends the body of the table written before it, or of the file, or else comes right
+    # before what holds it there.
+    body = _body(tables[at - 1] if at else document)
+    at = next((index for index, (_, held) in enumerate(body) if _within(held, item)), len(body))
     del node[path[-1]]
-    if before is None:
-        body = document.body
-        keyed = [index for index, (name, _) in enumerate(body) if name is not None and name.key == path[0]]
-        at = keyed[0] if keyed else len(body)
-        above = _above(body[:at])
-        del body[at - above : at]
-        body[at - above : at - above] = _joined(body[: at - above], tail)
-    else:
-        body = _body(before)
-        del body[len(body) - _above(body) :]
-        body.extend(_joined(body, tail))
+    above = _above(body[:at])
+    del body[at - above : at]
+    body[at - above : at - above] = _joined(body[: at - above], tail)
     return tomlkit.parse(document.as_string())
+
+
+def _within(node: Any, item: Any) -> bool:
+    """Whether `node` is `item`, or a table with no header of its own that holds it, as `roles` holds `[roles.lead]`."""
+    if node is item:
+        return True
+    return isinstance(node, Table) and node.is_super_table() and any(_within(held, item) for _, held in _body(node))
 
 
 def _above(body: list[tuple[Any, Item]]) -> int:

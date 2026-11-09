@@ -115,7 +115,9 @@ goes with it, but an entry a person named, which stays until it is removed.
 The file is parsed by a format-preserving TOML library, and each edit is written into that document: a changed value keeps
 its line's comment, a new key goes after its table's last key and before the comments that end the table, which are about
 what follows, a new table goes after the last of its kind with those comments after it, and a removed table goes with the
-comments right above its header and leaves those about what follows. Beside the text, the editor keeps the data the edits
+comments right above its header and leaves those about what follows. A table a removal leaves empty goes too, as
+`[topology]` does with its only preset, and edits that together change nothing the file means leave it as it was, byte
+for byte. Beside the text, the editor keeps the data the edits
 mean; after each edit the text is read back with `tomllib`, the loader's own parser, and an edit whose text does not mean
 that data is refused, saying to make the change in the file. A file that is not TOML or not UTF-8 is left to the file.
 
@@ -177,6 +179,8 @@ of problems and its save are this module's, so the terminal draws them as the pa
   `tomllib` holds every edit to what it means, so a layout it cannot place is refused, never written wrong.
 - **A file written another way.** Dotted keys, inline tables and a table written in parts, its keys under two headers, are
   edited in their own form, and a test holds one of each; a form the placement does not foresee is caught by the read back.
+  Its spacing is not: a role added to a table written in parts takes `tomlkit`'s own placement, which may leave no blank
+  line before the next header, and the diff shows it before a save.
 - **A rename that loses the race.** A rename cannot compare what it replaces, so a file changed between the last look and
   the rename is overwritten. The window is the time it takes to write and sync a file of a few kilobytes, after the check of
   the person's base and a second look just before it.
