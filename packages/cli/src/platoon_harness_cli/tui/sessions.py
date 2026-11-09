@@ -63,9 +63,8 @@ class Sessions(Screen[None]):
         self._brand()
 
     def _brand(self) -> None:
-        """The logo's agents and, beside them under the clear row their hop takes, the wordmark and where the sessions
-        are, each line cut at the edge rather than wrapped, so that the logo is never torn. It stands still, as this
-        screen reads no agent's state."""
+        """The logo's agents beside the wordmark and where the sessions are, each line cut at the edge rather than
+        wrapped, so that the logo is never torn. It stands still, as this screen reads no agent's state."""
         root = find_root()
         home = Path.home()
         shown = str(root) if not root.is_relative_to(home) else "~" if root == home else f"~/{root.relative_to(home)}"
@@ -76,7 +75,6 @@ class Sessions(Screen[None]):
             SafeText(f"sessions under {shown}", "dim"),
         ]
         art = logo.sprite(logo.SMALL, logo.ANSI if self.app.current_theme.ansi else logo.TRUECOLOUR)
-        said = [Content("")] * (len(art) - len(said)) + said
         lines = [Content.assemble(cells, "   ", words) for cells, words in zip(art, said, strict=True)]
         width = self.size.width - 4
         self.query_one("#brand", Static).update(Content("\n").join(line.truncate(width) for line in lines))

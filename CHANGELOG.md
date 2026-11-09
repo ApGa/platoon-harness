@@ -57,9 +57,9 @@ named here is closed.
 - **Agents that move.** While agents of a live session work, the logo's agents step in turn and a working agent's dot
   stirs; while they rest, they blink now and then; a resting agent's ring breathes out for a second every six; and an
   agent finishing, one coming to need you, or more starting work gets a flourish of a second at most: a wave, a hop of
-  each agent in turn, or a stir. Motion follows the session's state alone, a session that is history never moves, and
-  `motion = false` in `tui.toml` or Textual's animation level below full turns it off. It takes under 1% of a core at
-  rest, measured.
+  each agent in turn as high as it has room, the front one crouching and springing back, or a stir. Motion follows the
+  session's state alone, a session that is history never moves, and `motion = false` in `tui.toml` or Textual's
+  animation level below full turns it off. It takes under 1% of a core at rest, measured.
 - **A calmer transcript, in levels.** A turn shows what its agent said, each message and its report whole, wrapped, and
   all else it did is one quiet line that counts it, `▸ 5 tool calls · ✗ 1 failed · 3 thoughts · 1 spawn`, which opens on
   each call by its tool's name and its input in short, each thought as one dim line and each spawn under its call, and

@@ -63,7 +63,7 @@ Workspace.medium #inspector { layer: overlay; dock: right; height: 100%; backgro
 #composer { height: auto; min-height: 3; max-height: 10; border: round $panel; padding: 0 1; }
 #composer:focus { border: round $accent; }
 #footer { height: 1; background: $panel; padding: 0 1; }
-#brand { height: auto; padding: 0 2 1 2; }
+#brand { height: auto; padding: 1 2; }
 #sessions { height: 1fr; border: round $accent; border-title-color: $foreground; padding: 0 1; }
 #said { height: auto; padding: 0 2; }
 Workspace.inspector-shown #inspector { display: block; }

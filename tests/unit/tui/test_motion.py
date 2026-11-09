@@ -24,14 +24,21 @@ def stepping(pixels: tuple[str, ...]) -> list[int]:
     return [index for index, (left, top, _) in enumerate(logo.SMALL_AT) if pixels[top + 5][left] != "."]
 
 
-def hopping(pixels: tuple[str, ...]) -> list[int]:
-    """Which of the small sprite's agents is in the air: drawn whole two rows above where it stands."""
-    return [
-        index
-        for index, (left, top, colour) in enumerate(logo.SMALL_AT)
-        if [row[left : left + 5] for row in pixels[top - 2 : top + 4]]
-        == [row.replace("x", colour) for row in logo.AGENT]
-    ]
+def lifted(pixels: tuple[str, ...]) -> list[int | None]:
+    """How many rows above where it stands each of the small sprite's agents is drawn whole, or None for one that is
+    not drawn whole."""
+    found: list[int | None] = []
+    for left, top, colour in logo.SMALL_AT:
+        drawn = tuple(row[left : left + 5].replace(colour, "x") for row in pixels)
+        found.append(next((lift for lift in range(top + 1) if drawn[top - lift : top - lift + 6] == logo.AGENT), None))
+    return found
+
+
+def crouching(pixels: tuple[str, ...], index: int) -> bool:
+    """Whether the small sprite's agent `index` crouches: its head a row lower and its feet where they stand."""
+    left, top, colour = logo.SMALL_AT[index]
+    drawn = [row[left : left + 5].replace(colour, "x") for row in pixels[top : top + 6]]
+    return drawn[0] == "....." and drawn[1] == logo.AGENT[0] and drawn[5] == logo.AGENT[5]
 
 
 def test_agents_step_in_turn_while_any_work_faster_as_more_work_and_stand_still_once_none_does():
@@ -105,15 +112,20 @@ def test_an_event_plays_a_flourish_of_a_second_at_most_and_the_first_state_seen_
     assert motion.flourish is None and max(FLOURISHES.values()) <= FPS
 
 
-def test_one_coming_to_need_you_makes_each_agent_hop_in_turn_and_land_where_it_stood():
+def test_one_coming_to_need_you_makes_each_agent_in_turn_hop_as_high_as_it_has_room_or_crouch_and_land():
+    """Each agent in turn, for a frame, hops as high as the rows above it let it, up to a cell, or crouches where there
+    are none, and lands where it stood."""
     motion = Motion()
     motion.follow({"lead": "working", "w": "idle"}, live=True, settled=False)
     before = frames(motion, 2)
     motion.follow({"lead": "needs_you", "w": "idle"}, live=True, settled=False)
     seen = frames(motion, FLOURISHES["hop"] + 2)
 
-    assert not any(hopping(pixels) for pixels in before)
-    assert [hopping(pixels) for pixels in seen] == [[0], [1], [2], [], []], "each up a cell for a frame, in turn"
+    assert not any(lift for pixels in before for lift in lifted(pixels))
+    assert [lifted(pixels) for pixels in seen] == [[2, 0, 0], [0, 1, 0], [0, 0, None], [0, 0, 0], [0, 0, 0]], (
+        "blue up a cell and sky up a pixel, as the rows above them let them, then green, with none, crouching"
+    )
+    assert crouching(seen[2], 2)
     assert seen[-2:] == [logo.SMALL] * 2 and motion.flourish is None
 
 

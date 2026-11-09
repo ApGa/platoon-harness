@@ -1,10 +1,11 @@
 """Motion: the small sprite's agents and the navigator's glyphs moving a little, from the record's state alone, a few
 frames a second. While agents of a live session work, the sprite's agents step in turn, faster as more work, and a
 working agent's dot stirs; while each agent of a live session that has not ended rests, they blink now and then; and a
-resting agent's ring breathes out for a second every six while the session is live, whether others work or not. An
-event gets a flourish of a second at most: a wave when an agent finishes or the session settles, a hop of each agent in
-turn when one comes to need you, and a stir when more start working. A session that is history never moves, nor does an
-agent whose state is unknown, and nothing moves where motion is off."""
+resting agent's ring breathes out for a second every six while the session is live, whether others work or not. An event
+gets a flourish of a second at most: a wave when an agent finishes or the session settles, a hop of each agent in turn
+when one comes to need you, as high as the rows above it let it, or a crouch where there are none, and a stir when more
+start working. A session that is history never moves, nor does an agent whose state is unknown, and nothing moves where
+motion is off."""
 
 from collections.abc import Mapping
 
@@ -33,10 +34,19 @@ _WAVES = (
     (logo.AGENT[0], logo.AGENT[1], ".xxx.x", "xxxx.", *logo.AGENT[4:]),
     (logo.AGENT[0], "x.x.xx", ".xxx.", "xxxx.", *logo.AGENT[4:]),
 )
-_HOPS = tuple(
-    logo.composed([*logo.SMALL_AT[:hopping], (left, top - 2, colour), *logo.SMALL_AT[hopping + 1 :]], {})
-    for hopping, (left, top, colour) in enumerate(logo.SMALL_AT)
-)
+_CROUCH = (".....", *logo.AGENT[:4], logo.AGENT[5])
+
+
+def _hop(agent: int) -> tuple[str, ...]:
+    """The small sprite with `agent` in the air, as high as the rows above it let it, up to a cell, or, with none,
+    crouching a pixel, its feet where they stand."""
+    left, top, colour = logo.SMALL_AT[agent]
+    if not top:
+        return logo.composed(logo.SMALL_AT, {agent: _CROUCH})
+    return logo.composed([*logo.SMALL_AT[:agent], (left, top - min(top, 2), colour), *logo.SMALL_AT[agent + 1 :]], {})
+
+
+_HOPS = tuple(_hop(agent) for agent in range(len(logo.SMALL_AT)))
 
 
 def allowed(app: App) -> bool:

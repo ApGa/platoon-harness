@@ -114,12 +114,11 @@ off. A file that cannot be read, holds any other key, gives either as another ki
 is not taken at all, and it says why, every problem at once, with the nearest key or theme to one misspelt, and what
 stands instead.
 
-Platoon's agents, three marching up, stand at the navigator's top and on the sessions screen beside the wordmark, under
-a clear row that their hop takes: sprites drawn by hand from the icon of [Platoon](https://github.com/ApGa/platoon)
-(MIT, © Apurva Gandhi), two pixels to a cell in half blocks, in the icon's blue to green, and in your terminal's own
-blue, cyan and green under a theme that keeps to them. The header says the session's name and how it stands, so nothing
-stands beside them in the navigator. On the sessions screen a line too long for the screen is cut at its edge, so the
-logo is never torn.
+Platoon's agents, three marching up, stand at the navigator's top and on the sessions screen beside the wordmark:
+sprites drawn by hand from the icon of [Platoon](https://github.com/ApGa/platoon) (MIT, © Apurva Gandhi), two pixels to
+a cell in half blocks, in the icon's blue to green, and in your terminal's own blue, cyan and green under a theme that
+keeps to them. The header says the session's name and how it stands, so nothing stands beside them in the navigator. On
+the sessions screen a line too long for the screen is cut at its edge, so the logo is never torn.
 
 Each agent's state has a glyph as well as a colour, so neither alone says it:
 
@@ -152,8 +151,10 @@ nothing else:
 - While every agent that has not ended rests, the logo's agents blink now and then, one at a time every six seconds.
 - A resting agent's `○` breathes out, to `◦`, for a second every six seconds while the session is live, whether others
   work or not.
-- On an event, a flourish of a second at most: the front agent waves as an agent finishes or the session settles, each
-  hops a cell up and back down in turn as one comes to need you, and they stir as more start working.
+- On an event, a flourish of a second at most: the front agent waves as an agent finishes or the session settles, they
+  stir as more start working, and as one comes to need you, each in turn hops up and back down, as high as the rows
+  above it in the logo let it, up to a cell: the blue one a cell, the sky one a pixel, and the green one, at the top,
+  crouches a pixel and springs back.
 
 A session that is history, which no runtime holds, never moves, and an agent whose state is unknown shows no motion that
 would say it works or rests, nor does the logo blink while one is unknown. The sessions screen's logo stands still, as

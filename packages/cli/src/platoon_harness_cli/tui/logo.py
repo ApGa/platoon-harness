@@ -15,11 +15,11 @@ AGENT = (
 )
 """One of the small sprite's agents, five pixels by six: a round head with its eyes open on the background, arms out,
 and its legs."""
-SMALL_AT = ((0, 4, "a"), (6, 3, "b"), (12, 2, "c"))
+SMALL_AT = ((0, 2, "a"), (6, 1, "b"), (12, 0, "c"))
 """Where each of the small sprite's three agents stands, its left and its top, and its colour: marching up, blue to
-green, with a clear column right of the last, which its raised hand takes as it waves, and two clear rows above it,
-which its head takes as it hops."""
-SMALL_SIZE = (18, 10)
+green, each with a row less above it to hop into, and with a clear column right of the last, which its raised hand
+takes as it waves."""
+SMALL_SIZE = (18, 8)
 TRUECOLOUR = {"a": "#1862a7", "b": "#389cc3", "c": "#60c664"}
 """Each agent's colour, as the icon has it, blue to green. `.` is clear."""
 ANSI = {"a": "ansi_blue", "b": "ansi_cyan", "c": "ansi_bright_green"}
@@ -41,7 +41,7 @@ def composed(at: Sequence[tuple[int, int, str]], changed: Mapping[int, Sequence[
 
 
 SMALL = composed(SMALL_AT, {})
-"""Three agents marching up, for the navigator's top and beside the wordmark: 18 cells by 5."""
+"""Three agents marching up, for the navigator's top and beside the wordmark: 18 cells by 4."""
 
 
 def sprite(pixels: Sequence[str], colours: Mapping[str, str]) -> list[Content]:
