@@ -66,7 +66,9 @@ def said(seq: int, gist: str) -> Event:
 
 
 def tool(seq: int, phase: str, gist: str, id: str = "call-1") -> Event:
-    return event(seq, "turn/lead", "item.recorded", gist, {"kind": "tool", "phase": phase, "native_id": id})
+    """A call's start, or its end, which says it completed, as a harness says how a call ended."""
+    ended = {"outcome": "completed"} if phase == "completed" else {}
+    return event(seq, "turn/lead", "item.recorded", gist, {"kind": "tool", "phase": phase, "native_id": id, **ended})
 
 
 def spawned(seq: int, name: str, native: dict[str, str] | None) -> Event:
@@ -880,6 +882,30 @@ async def test_a_session_that_is_history_has_no_turn_under_way():
             "── turn",
             "@lead",
             "  ▸ 3 tool calls · ✗ 1 failed · ? 1 ended unknown · 1 thought",
+        ]
+
+
+async def test_a_call_says_how_it_ended_whatever_its_phase_and_ended_unknown_where_its_end_says_not():
+    """A harness may report a call with no phase, or end one naming no outcome: one that failed says so on its line as
+    its fold counts it, and one whose end says not how it ended is said to have ended unknown, never counted a
+    success."""
+    turn = [
+        A_TURN[0],
+        did(2, 'bash {"command": "x"}', {"kind": "tool", "outcome": "failed"}),
+        call(3, "started", 'read {"path": "a.py"}', "r1"),
+        call(4, "completed", "read", "r1"),
+        did(5, "Done.", {"kind": "message"}),
+    ]
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(turn), 5)  # type: ignore[arg-type]
+        transcript.toggle(transcript._folds["t1"])
+
+        assert shown(transcript)[2:5] == [
+            "  ▾ 2 tool calls · ✗ 1 failed · ? 1 ended unknown",
+            "    ▸ bash  x  ✗ failed",
+            "    ▸ read  a.py  ? ended unknown",
         ]
 
 

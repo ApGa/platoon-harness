@@ -71,8 +71,8 @@ _HIDDEN = frozenset(
 _STEPS = frozenset({"tool", "thought", "patch"})
 """The items that are what an agent did in a turn, as opposed to what it said."""
 _ENDED = ("turn.ended", "turn.lost")
-_DONE = (None, "completed", "allow")
-"""A tool's outcomes that are no failure."""
+_DONE = ("completed", "allow")
+"""A tool's outcomes that are no failure. A call whose end names none ended unknown."""
 
 
 @dataclass(frozen=True)
@@ -360,22 +360,24 @@ def _spawned(event: Event, under: Said | None) -> Said:
 
 def _item(agent: Content, data: dict[str, Any], event: Event, started: Event | None) -> Said:
     """What an agent said, or did: a tool call or a patch by the tool's name and its input in short where its gist names
-    one, or else its words whole, and how it ended where that is no success, or a thought, dim."""
+    one, or else its words whole, and how it ended where that is no success or is not said, or a thought, dim."""
     match data.get("kind"):
         case "message":
             return Said(agent, NO_MARK, _told(event))
         case "thought":
             return Said(agent, NO_MARK, Content.assemble(("∴ ", "dim"), _told(event).stylize("dim italic")))
     name, given = tool_named((started or event).gist)
-    outcome = data.get("outcome") if data.get("phase") == "completed" else None
+    outcome = data.get("outcome") if data.get("phase") != "started" else None
     if name is not None:
         called = Content.assemble(SafeText(name), "  ", SafeText(summary(given), "dim"))
     else:
         called = SafeText(given.removesuffix(f" {outcome}") if started is None and outcome else given)
     if data.get("kind") == "patch":
         called = Content.assemble(("± ", "dim"), called)
-    if outcome in _DONE:
+    if data.get("phase") == "started" or outcome in _DONE:
         return Said(agent, NO_MARK, _linked(called))
+    if outcome is None:
+        return Said(agent, NO_MARK, Content.assemble(_linked(called), SafeText("  ? ended unknown", "$warning")))
     return Said(agent, NO_MARK, Content.assemble(_linked(called), SafeText(f"  ✗ {outcome}", "$error")))
 
 
@@ -936,6 +938,8 @@ class Transcript(ScrollView, can_focus=True):
             if data.get("phase") == "started":
                 running += under_way
                 unknown += not under_way and not after
+            elif data.get("outcome") is None:
+                unknown += 1
             elif data.get("outcome") not in _DONE:
                 failed += 1
         parts: list[Content] = []

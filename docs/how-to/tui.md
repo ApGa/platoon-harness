@@ -169,16 +169,17 @@ edge widens or narrows it, as Alt+→ and Alt+← do, from 24 columns to 64.
 
 An agent's transcript shows what it said, and folds the rest away, in levels you open as you need them:
 
-1. **A turn.** A rule across the transcript marks its start. Under the agent's name stand what it said, its messages, and
-   its report, always, each whole, wrapped at the edge. All else it did in the turn is one quiet line that counts it
+1. **A turn.** A rule across the transcript marks its start. Under the agent's name stand what it said, its messages,
+   and its report, always, each whole, wrapped at the edge. All else it did in the turn is one quiet line that counts it
    exactly, `▸ 5 tool calls · ✗ 1 failed · 3 thoughts · 1 spawn`, standing where the first of it stands: its tool calls
-   and patches, with how many failed, how many are running and how many ended unknown, as a call whose turn ended with
-   no end of it recorded did, its thoughts and its spawns. Where the window does not hold the turn's start, it says more
-   came before, and where it holds neither the turn's end nor the newest lines, as when it was read from the journal's
-   first line, that more comes after, not read yet, and a call there with no end says its end is not read yet.
+   and patches, with how many failed, how many are running and how many ended unknown, as did a call whose turn ended
+   with no end of it recorded, or whose end says not how it ended, its thoughts and its spawns. Where the window does
+   not hold the turn's start, it says more came before, and where it holds neither the turn's end nor the newest lines,
+   as when it was read from the journal's first line, that more comes after, not read yet, and a call there with no end
+   says its end is not read yet.
 2. **What it did.** That line opens on each step in its place among what was said: a call as its tool's name and its
-   input in short, the values of its JSON, with `✗` and the word for how it ended where it failed; a thought as one dim
-   line; a patch; and each spawn under the call that made it.
+   input in short, the values of its JSON, with `✗` and the word for how it ended where it failed, and `? ended unknown`
+   where that is not said; a thought as one dim line; a patch; and each spawn under the call that made it.
 3. **The whole of one.** A step opens on all of it: a call on its whole input, laid out, and what it gave back, a thought
    on its text, a message on its body as Markdown and code, an approval on what it asks, each with where it came from.
 

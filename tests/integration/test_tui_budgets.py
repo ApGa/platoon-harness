@@ -173,7 +173,8 @@ def turns(count: int) -> list[Event]:
                 data = {"turn": f"t{turn}"}
                 events.append(step(seq, turn, gist, data).model_copy(update={"type": "turn.started"}))
             elif kind == "tool":
-                events.append(step(seq, turn, gist, {"kind": kind, "phase": "completed", "native_id": f"c{seq}"}))
+                ended = {"kind": kind, "phase": "completed", "native_id": f"c{seq}", "outcome": "completed"}
+                events.append(step(seq, turn, gist, ended))
             else:
                 events.append(step(seq, turn, gist, {"kind": kind}))
     return events
