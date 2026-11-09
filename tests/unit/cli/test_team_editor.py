@@ -7,6 +7,7 @@ import hashlib
 import os
 import tomllib
 from dataclasses import replace
+from importlib import resources
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,8 @@ from platoon_harness import ConfigError, Team, load_team
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.codex import CodexDriver
-from platoon_harness_cli import machine, team_editor
+from platoon_harness.schema import Problem
+from platoon_harness_cli import machine, team_editor, web
 from platoon_harness_cli.team_editor import ROLE, SAVING, Asked, Draft, Edit, Field, Harness, draft, edits_of, save
 
 CLAUDE = Harness("claude", "2.1.316 (Claude Code), login unknown, not checked: --check checks it", ())
@@ -580,3 +582,19 @@ def test_saving_a_value_only_trust_may_take_asks_once_naming_it_and_never_trusts
     assert fields(saved)["test.command"].trust and fields(saved)["test.command"].text == "uv run pytest -q"
     assert isinstance(later, Draft)
     assert os.path.exists(path)
+
+
+def test_the_words_both_clients_say_of_a_draft_are_the_shared_module_s_and_the_page_says_each():
+    """The page's script and markup hold each word the module keeps for both clients as the terminal draws it, so the
+    two say the same things; what the server says, a save and each problem, the module words itself."""
+    script = resources.files(web).joinpath("sessions.js").read_text()
+    html = resources.files(web).joinpath("sessions.html").read_text()
+    said = [team_editor.UNSHOWN, team_editor.UNCHANGED, team_editor.CHECKING, team_editor.UNSAVED]
+    said.append(team_editor.NOT_SAVED)
+    problem = Problem("roles.bob.count", "is a whole number")
+
+    assert all(f"'{one}'" in script or f"' {one}'" in script for one in said)
+    assert f"`{team_editor.again('${file}')}`" in script
+    assert f"<h3>{team_editor.ALLOWS}</h3>" in html and f"<h3>{team_editor.CHANGES}</h3>" in html
+    assert team_editor.said(problem) == "error: roles.bob.count: is a whole number"
+    assert team_editor.saved(Path("/x")) == f"Saved {PROJECT_FILE} in /x."

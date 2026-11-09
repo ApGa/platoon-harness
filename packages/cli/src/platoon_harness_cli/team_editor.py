@@ -1,8 +1,9 @@
-"""The team editor, which the browser's sessions page shows and the terminal's is to show: the keys of the project's
-team file a person may set from a client, as fields made from the team's schema; a draft, the file as it is with a
-person's edits, written as the file's own text, keeping its comments, order and layout; the draft checked by the loader
-and by `team check`, each problem at its field, with `team show`'s sentences of it and the diff saving it makes; and the
-save, refused over a file found changed since it was read, and never through a link (RFC 0079)."""
+"""The team editor, which the browser's sessions page shows and the terminal's is to show, in the words both say:
+the keys of the project's team file a person may set from a client, as fields made from the team's schema; a draft,
+the file as it is with a person's edits, written as the file's own text, keeping its comments, order and layout; the
+draft checked by the loader and by `team check`, each problem at its field, with `team show`'s sentences of it and the
+diff saving it makes; and the save, refused over a file found changed since it was read, and never through a link
+(RFC 0079)."""
 
 import difflib
 import hashlib
@@ -76,6 +77,20 @@ KIND_FIXED = "A channel's kind is chosen as it is added: remove it and add it ag
 KIND = Literal["topic", "queue", "board"]
 """A channel's kind, as its table names it."""
 CHANGED = "read it again, and your changes are made on what it holds now, in a diff you see before you save"
+ALLOWS = "What it allows"
+"""What heads `team show`'s sentences of a draft, in each client."""
+CHANGES = "What saving changes"
+"""What heads the diff a save makes, in each client."""
+UNSHOWN = "Nothing yet: the loader takes no team from this draft, as its problems say."
+"""What stands for `team show`'s sentences of a draft the loader refuses."""
+UNCHANGED = "Nothing: the draft is the file as it stands."
+"""What stands for the diff of a draft that changes nothing."""
+CHECKING = "Waiting for the check of your last change."
+"""Why a client cannot save while it waits for a check."""
+UNSAVED = "Your changes are not saved yet: Save saves them, and Start saves them first."
+"""What a client says while it holds changes a save would write."""
+NOT_SAVED = "Nothing was saved."
+"""What a client says where the person turned down what a save asked."""
 
 type Keys = tuple[str, ...]
 """A place in the file, as the keys that lead to it."""
@@ -291,6 +306,21 @@ def save(
             return Asked(question, "Save it", shown)
     _write(folder / PROJECT_FILE, base, drafted.text)
     return drafted
+
+
+def said(problem: Problem) -> str:
+    """A problem as a client says it: as `team check` says it, its level first."""
+    return f"{problem.level}: {problem}"
+
+
+def saved(folder: Path) -> str:
+    """What a client says once a save wrote the project's team in `folder`."""
+    return f"Saved {PROJECT_FILE} in {folder}."
+
+
+def again(file: str) -> str:
+    """What a client asks before it reads `file` and this machine's harnesses again over a person's changes."""
+    return f"Read {file} and this machine's harnesses again, dropping your changes?"
 
 
 def keeping(keys: Sequence[str]) -> str | None:

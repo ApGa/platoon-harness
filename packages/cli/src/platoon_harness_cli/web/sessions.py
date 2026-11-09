@@ -256,7 +256,7 @@ class Sessions(Server[Request]):
             return {"refused": _problems(error)}
         if isinstance(saved, Asked):
             return {"ask": {"question": saved.question, "yes": saved.yes, "answer": {"trust": saved.trust}}}
-        return {"said": f"Saved {PROJECT_FILE} in {Path.cwd()}."}
+        return {"said": team_editor.saved(Path.cwd())}
 
     async def _resume(self, name: str) -> dict[str, Any]:
         """Resume a session no runtime holds, on a runtime of its own, and open it, the page having said first, once,
@@ -389,7 +389,7 @@ def _field(field: Field) -> dict[str, Any]:
 
 def _said(problems: Sequence[Problem]) -> list[dict[str, str]]:
     """Problems as `team check` says each, with its level apart."""
-    return [{"level": problem.level, "said": f"{problem.level}: {problem}"} for problem in problems]
+    return [{"level": problem.level, "said": team_editor.said(problem)} for problem in problems]
 
 
 def _why(task: asyncio.Task[None]) -> str:
