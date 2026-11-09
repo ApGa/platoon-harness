@@ -36,8 +36,8 @@ FIGURE = (
 """One of the large sprite's agents, seven pixels by twelve: a round head with two big white eyes, arms down at its
 sides, and its feet."""
 LARGE_AT = ((0, 2, "a"), (8, 0, "b"), (16, 2, "c"))
-"""The large sprite's three agents, of one size, the middle one a step ahead: blue, sky and green, mirrored about the
-middle."""
+"""The large sprite's three agents, of one size, the middle one a step ahead, so its shape is mirrored about the
+middle: blue, sky and green, left to right."""
 LARGE_SIZE = (23, 14)
 TRUECOLOUR = {"a": "#1862a7", "b": "#389cc3", "c": "#50be74", "d": "#60c664", "e": "#eef4fb", "w": "#e0a46c"}
 """Each pixel's colour, as the icon has it, blue to green, its eyes white, and `w`, the eyes of an agent that looks up

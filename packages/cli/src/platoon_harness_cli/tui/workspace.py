@@ -666,9 +666,9 @@ class Workspace(Screen[None]):
     def _tree(
         self, under: dict[str | None, list[dict[str, Any]]], parent: str | None, depth: int, mentioned: set[str]
     ) -> list[Row]:
-        """An agent and those below it, two lines each: its glyph, which turns while it works, and its name, with any
-        mention of you unread and how many entries wait for its next handover; then its state, its harness, and what it
-        waits on or is doing, where the record says."""
+        """An agent and those below it, two lines each: its glyph, which moves as motion draws it, and its name, with
+        any mention of you unread and how many entries wait for its next handover; then its state, its harness, and
+        what it waits on or is doing, where the record says."""
         rows = []
         for row in sorted(under[parent], key=lambda found: found["agent"]):
             state = _state(row)
