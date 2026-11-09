@@ -709,7 +709,7 @@ class Transcript(ScrollView, can_focus=True):
         gone = set(self._blocks[:excess])
         self._before = self._blocks[excess].first
         del self._blocks[:excess]
-        above = self._let_go(gone)
+        above = self._let_go(gone, oldest=True)
         if not self.following:
             self._place(max(self.scroll_y - above, 0))
 
@@ -727,12 +727,14 @@ class Transcript(ScrollView, can_focus=True):
         gone = set(self._blocks[cut:])
         del self._blocks[cut:]
         self._after, self.following = self._blocks[-1].first, False
-        self._let_go(gone)
+        self._let_go(gone, oldest=False)
 
-    def _let_go(self, gone: set[Block]) -> int:
-        """Forget the lines the window let go, and the rows they were drawn in, with the line of a fold all of whose
-        steps went, and say how many rows went above the top of the screen. A call is read again with the lines about
-        it, and a fold that lost a step counts again."""
+    def _let_go(self, gone: set[Block], *, oldest: bool) -> int:
+        """Forget the lines the window let go, the oldest or the newest, and the rows they were drawn in, with the line
+        of a fold all of whose steps went, and say how many rows went above the top of the screen. The rows of the
+        oldest lines lie before the first row of a line held that began after them, but for a fold's line, which stays
+        while its fold holds a step, and the rows of the newest from the first row of one that went. A call is read
+        again with the lines about it, and a fold that lost a step counts again."""
         top = int(self.scroll_y)
         for fold in {block.fold for block in gone if block.fold is not None}:
             fold.steps = [step for step in fold.steps if step not in gone]
@@ -741,25 +743,39 @@ class Transcript(ScrollView, can_focus=True):
             else:
                 gone.add(fold)
                 self._folds.pop(fold.turn, None)
-        above = sum(1 for block, _ in self._rows[:top] if block in gone)
-        self._rows = [row for row in self._rows if row[0] not in gone]
-        self._keep_held()
+        rows = self._rows
+        if oldest:
+            reach = max((block.first for block in gone if not isinstance(block, Fold)), default=0)
+            end = next(
+                (
+                    at
+                    for at, (block, _) in enumerate(rows)
+                    if block not in gone and not isinstance(block, Fold) and block.first > reach
+                ),
+                len(rows),
+            )
+            above = sum(1 for block, _ in rows[: min(top, end)] if block in gone)
+            rows[:end] = [row for row in rows[:end] if row[0] not in gone]
+        else:
+            above = 0
+            del rows[next((at for at, (block, _) in enumerate(rows) if block in gone), len(rows)) :]
+        self._keep_held(gone)
         return above
 
-    def _keep_held(self) -> None:
-        """Forget what the window let go: a call is read again with the lines about it, and a turn's start or end that
-        went is no longer known."""
+    def _keep_held(self, gone: set[Block]) -> None:
+        """Forget what the window let go, `gone`: a call is read again with the lines about it, and a turn's start or
+        end that went is no longer known."""
         held = set(self._blocks)
         self._tools = {native: block for native, block in self._tools.items() if block in held}
         self._join.keep(held)
         self._cut_at = {start: block for start, block in self._cut_at.items() if block in held}
-        self._resumed &= held | set(self._folds.values())
+        self._resumed -= gone
         newest = self.through if self._after is None else self._after
         self._calls = {ref: call for ref, call in self._calls.items() if self._before <= call.seq <= newest}
         self._began = {turn: seq for turn, seq in self._began.items() if self._before <= seq <= newest}
         self._ended = {turn: seq for turn, seq in self._ended.items() if self._before <= seq <= newest}
-        kept = held | set(self._folds.values())
-        self._heights = {block: height for block, height in self._heights.items() if block in kept}
+        for block in gone:
+            self._heights.pop(block, None)
 
     def draw(self, tail: Tail) -> None:
         """Lay out again after `take`, with what the agent in view is saying now, at most once a frame."""
@@ -1059,9 +1075,8 @@ class Transcript(ScrollView, can_focus=True):
         if firsts:
             self._respan(min(firsts, key=lambda step: step.first))
             return 0
-        if new:
-            before = self._rows[-1][0] if self._rows else None
-            self._rows += self._rows_of(new, before, self._emitted(new[0]))
+        if new:  # No line held before them is of a fold any of them is in, so each fold of theirs is drawn among them.
+            self._rows += self._rows_of(new, self._rows[-1][0] if self._rows else None)
         return 0
 
     def _first_drawn(self, fold: Fold) -> Block | None:
