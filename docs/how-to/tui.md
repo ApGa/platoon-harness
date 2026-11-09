@@ -114,13 +114,12 @@ off. A file that cannot be read, holds any other key, gives either as another ki
 is not taken at all, and it says why, every problem at once, with the nearest key or theme to one misspelt, and what
 stands instead.
 
-Platoon's agents stand at the navigator's top, three marching up, and on the sessions screen beside the wordmark, three of
-one size, round-headed with big white eyes, the middle one a step ahead: sprites drawn by hand from the icon of
-[Platoon](https://github.com/ApGa/platoon) (MIT, © Apurva Gandhi), two pixels to a cell in half blocks, in the icon's blue
-to green, and in your terminal's own blue, cyan and green under a theme that keeps to them. The header says the session's
-name and how it stands, so nothing stands beside the small ones. On the sessions screen the large ones stand where the
-screen has the rows and the columns beside the words, and small ones where it does not, and a line too long for the screen
-is cut at its edge, so the logo is never torn.
+Platoon's agents, three marching up, stand at the navigator's top and on the sessions screen beside the wordmark, under
+a clear row that their hop takes: sprites drawn by hand from the icon of [Platoon](https://github.com/ApGa/platoon)
+(MIT, © Apurva Gandhi), two pixels to a cell in half blocks, in the icon's blue to green, and in your terminal's own
+blue, cyan and green under a theme that keeps to them. The header says the session's name and how it stands, so nothing
+stands beside them in the navigator. On the sessions screen a line too long for the screen is cut at its edge, so the
+logo is never torn.
 
 Each agent's state has a glyph as well as a colour, so neither alone says it:
 
@@ -153,16 +152,16 @@ nothing else:
 - While every agent that has not ended rests, the logo's agents blink now and then, one at a time every six seconds.
 - A resting agent's `○` breathes out, to `◦`, for a second every six seconds while the session is live, whether others
   work or not.
-- On an event, a flourish of a second at most: the front agent waves as an agent finishes or the session settles, their
-  eyes look up at you in amber as one comes to need you, and they stir as more start working.
+- On an event, a flourish of a second at most: the front agent waves as an agent finishes or the session settles, each
+  hops a cell up and back down in turn as one comes to need you, and they stir as more start working.
 
 A session that is history, which no runtime holds, never moves, and an agent whose state is unknown shows no motion that
 would say it works or rests, nor does the logo blink while one is unknown. The sessions screen's logo stands still, as
 that screen reads no agent's state. Only the logo's rows and the glyphs that move are drawn again, and only when their
 frame changes: motion in a live session at rest, its frames and the rows they draw again, took 0.6% of a core, measured.
 `motion = false` in `tui.toml` turns it off, and so does Textual's animation level below full, as
-`TEXTUAL_ANIMATIONS=basic` or `none` sets it. Its timer decides nothing. Its paces and flourishes are the defaults
-pending the owner's ruling.
+`TEXTUAL_ANIMATIONS=basic` or `none` sets it. Its timer decides nothing. The hop is as the owner asked, and its paces and
+the other flourishes are the defaults pending the owner's ruling.
 
 The mouse does what a key does, and each key still does it: a click on a row of the navigator, or a tab of the strip under
 80 columns, shows that agent or channel, as Alt+↓ goes to it; a click on a line chooses it, as the arrows do, and a click

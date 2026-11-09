@@ -15,66 +15,33 @@ AGENT = (
 )
 """One of the small sprite's agents, five pixels by six: a round head with its eyes open on the background, arms out,
 and its legs."""
-SMALL_AT = ((0, 2, "a"), (6, 1, "b"), (12, 0, "d"))
+SMALL_AT = ((0, 4, "a"), (6, 3, "b"), (12, 2, "c"))
 """Where each of the small sprite's three agents stands, its left and its top, and its colour: marching up, blue to
-green, with a clear column right of the last, which its raised hand takes as it waves."""
-SMALL_SIZE = (18, 8)
-FIGURE = (
-    ".xxxxx.",
-    "xxxxxxx",
-    "xeexeex",
-    "xeexeex",
-    "xxxxxxx",
-    ".xxxxx.",
-    "..xxx..",
-    "xxxxxxx",
-    "x.xxx.x",
-    "..xxx..",
-    ".x...x.",
-    "xx...xx",
-)
-"""One of the large sprite's agents, seven pixels by twelve: a round head with two big white eyes, arms down at its
-sides, and its feet."""
-LARGE_AT = ((0, 2, "a"), (8, 0, "b"), (16, 2, "c"))
-"""The large sprite's three agents, of one size, the middle one a step ahead, so its shape is mirrored about the
-middle: blue, sky and green, left to right."""
-LARGE_SIZE = (23, 14)
-TRUECOLOUR = {"a": "#1862a7", "b": "#389cc3", "c": "#50be74", "d": "#60c664", "e": "#eef4fb", "w": "#e0a46c"}
-"""Each pixel's colour, as the icon has it, blue to green, its eyes white, and `w`, the eyes of an agent that looks up
-at you, in the notice tone. `.` is clear."""
-ANSI = {
-    "a": "ansi_blue",
-    "b": "ansi_cyan",
-    "c": "ansi_green",
-    "d": "ansi_bright_green",
-    "e": "ansi_bright_white",
-    "w": "ansi_yellow",
-}
+green, with a clear column right of the last, which its raised hand takes as it waves, and two clear rows above it,
+which its head takes as it hops."""
+SMALL_SIZE = (18, 10)
+TRUECOLOUR = {"a": "#1862a7", "b": "#389cc3", "c": "#60c664"}
+"""Each agent's colour, as the icon has it, blue to green. `.` is clear."""
+ANSI = {"a": "ansi_blue", "b": "ansi_cyan", "c": "ansi_bright_green"}
 """The same colours in the terminal's own, for a theme that keeps to them."""
 
 
-def composed(
-    figure: Sequence[str],
-    at: Sequence[tuple[int, int, str]],
-    size: tuple[int, int],
-    changed: Mapping[int, Sequence[str]],
-) -> tuple[str, ...]:
-    """Agents drawn as `figure` where `at` places each, its `x` pixels taking its colour, on a clear canvas of `size`,
-    an agent `changed` names drawn as the figure it gives instead, which may reach a column past its own."""
-    width, height = size
+def composed(at: Sequence[tuple[int, int, str]], changed: Mapping[int, Sequence[str]]) -> tuple[str, ...]:
+    """The small sprite's agents drawn as `AGENT` where `at` places each, its `x` pixels taking its colour, on a clear
+    canvas of `SMALL_SIZE`, an agent `changed` names drawn as the figure it gives instead, which may reach a column past
+    its own."""
+    width, height = SMALL_SIZE
     canvas = [["."] * width for _ in range(height)]
     for index, (left, top, colour) in enumerate(at):
-        for y, row in enumerate(changed.get(index, figure)):
+        for y, row in enumerate(changed.get(index, AGENT)):
             for x, pixel in enumerate(row):
                 if pixel != ".":
-                    canvas[top + y][left + x] = colour if pixel == "x" else pixel
+                    canvas[top + y][left + x] = colour
     return tuple("".join(row) for row in canvas)
 
 
-SMALL = composed(AGENT, SMALL_AT, SMALL_SIZE, {})
-"""Three agents marching up, for the navigator's top: 18 cells by 4."""
-LARGE = composed(FIGURE, LARGE_AT, LARGE_SIZE, {})
-"""Three agents of one size, the middle one a step ahead, for beside the wordmark: 23 cells by 7."""
+SMALL = composed(SMALL_AT, {})
+"""Three agents marching up, for the navigator's top and beside the wordmark: 18 cells by 5."""
 
 
 def sprite(pixels: Sequence[str], colours: Mapping[str, str]) -> list[Content]:

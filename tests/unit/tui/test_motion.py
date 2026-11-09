@@ -24,6 +24,16 @@ def stepping(pixels: tuple[str, ...]) -> list[int]:
     return [index for index, (left, top, _) in enumerate(logo.SMALL_AT) if pixels[top + 5][left] != "."]
 
 
+def hopping(pixels: tuple[str, ...]) -> list[int]:
+    """Which of the small sprite's agents is in the air: drawn whole two rows above where it stands."""
+    return [
+        index
+        for index, (left, top, colour) in enumerate(logo.SMALL_AT)
+        if [row[left : left + 5] for row in pixels[top - 2 : top + 4]]
+        == [row.replace("x", colour) for row in logo.AGENT]
+    ]
+
+
 def test_agents_step_in_turn_while_any_work_faster_as_more_work_and_stand_still_once_none_does():
     motion = Motion()
     motion.follow({"lead": "working", "w": "idle"}, live=True, settled=False)
@@ -70,8 +80,8 @@ def test_history_and_an_agent_whose_state_is_unknown_never_move():
 
 
 def test_an_event_plays_a_flourish_of_a_second_at_most_and_the_first_state_seen_plays_none():
-    """A wave as an agent finishes or the session settles, eyes that look up as one comes to need you, a stir as more
-    start working; none for the state the screen first draws, and none for a state a session that is history leaves."""
+    """A wave as an agent finishes or the session settles, a hop as one comes to need you, a stir as more start
+    working; none for the state the screen first draws, and none for a state a session that is history leaves."""
     played = []
     motion = Motion()
     for states, settled in (
@@ -91,8 +101,24 @@ def test_an_event_plays_a_flourish_of_a_second_at_most_and_the_first_state_seen_
     motion.follow({}, live=False, settled=False)
     motion.follow({"lead": "needs_you"}, live=True, settled=False)
 
-    assert played == [None, "stir", "look", "wave", "wave"]
+    assert played == [None, "stir", "hop", "wave", "wave"]
     assert motion.flourish is None and max(FLOURISHES.values()) <= FPS
+
+
+def test_one_coming_to_need_you_makes_each_agent_hop_in_turn_and_land_where_it_stood():
+    motion = Motion()
+    motion.follow({"lead": "working", "w": "idle"}, live=True, settled=False)
+    before = frames(motion, 2)
+    motion.follow({"lead": "needs_you", "w": "idle"}, live=True, settled=False)
+    seen = frames(motion, FLOURISHES["hop"] + 2)
+
+    assert not any(hopping(pixels) for pixels in before)
+    assert [hopping(pixels) for pixels in seen] == [[0], [1], [2], [], []], "each up a cell for a frame, in turn"
+    assert seen[-2:] == [logo.SMALL] * 2 and motion.flourish is None
+
+
+FIRST = len(logo.SMALL) // 2
+"""The navigator's row of the first agent `team` shows, under the logo's rows."""
 
 
 class Alone(App[None]):
@@ -127,12 +153,12 @@ async def test_the_navigator_moves_while_its_state_says_to_drawing_only_the_rows
         for _ in range(4):
             navigator.advance()
             await pilot.pause()
-            drawn.append(navigator.render_line(4).text[0])
+            drawn.append(navigator.render_line(FIRST).text[0])
         navigator.follow({"lead": "working"}, live=False, settled=False)
         stopped = navigator._ticking is None
 
     assert ticking and stopped
-    assert set(refreshed) <= {0, 1, 2, 3, 4}, "only the logo's rows and the working agent's glyph"
+    assert set(refreshed) <= set(range(FIRST + 1)), "only the logo's rows and the working agent's glyph"
     assert set(drawn) == set(GLYPHS["working"])
 
 
@@ -147,6 +173,6 @@ async def test_nothing_moves_where_motion_is_off():
             navigator = app.query_one(Navigator)
             team(navigator, {"lead": "working"})
             navigator.follow({"lead": "working"}, live=True, settled=False)
-            stood.append(navigator._ticking is None and navigator.render_line(4).text[0] == "●")
+            stood.append(navigator._ticking is None and navigator.render_line(FIRST).text[0] == "●")
 
     assert stood == [True, True, True]

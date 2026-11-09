@@ -63,9 +63,9 @@ class Sessions(Screen[None]):
         self._brand()
 
     def _brand(self) -> None:
-        """The logo's agents beside the wordmark and where the sessions are: large where the screen has the rows for it
-        and the columns for it beside the words, and else small, each line cut at the edge rather than wrapped, so that
-        the logo is never torn. It stands still, as this screen reads no agent's state."""
+        """The logo's agents and, beside them under the clear row their hop takes, the wordmark and where the sessions
+        are, each line cut at the edge rather than wrapped, so that the logo is never torn. It stands still, as this
+        screen reads no agent's state."""
         root = find_root()
         home = Path.home()
         shown = str(root) if not root.is_relative_to(home) else "~" if root == home else f"~/{root.relative_to(home)}"
@@ -75,14 +75,10 @@ class Sessions(Screen[None]):
             Content(""),
             SafeText(f"sessions under {shown}", "dim"),
         ]
+        art = logo.sprite(logo.SMALL, logo.ANSI if self.app.current_theme.ansi else logo.TRUECOLOUR)
+        said = [Content("")] * (len(art) - len(said)) + said
+        lines = [Content.assemble(cells, "   ", words) for cells, words in zip(art, said, strict=True)]
         width = self.size.width - 4
-        words = max(line.cell_length for line in said[:2]) + 3
-        large = self.size.height >= 24 and len(logo.LARGE[0]) + words <= width
-        art = logo.sprite(
-            logo.LARGE if large else logo.SMALL, logo.ANSI if self.app.current_theme.ansi else logo.TRUECOLOUR
-        )
-        said = [Content("")] * ((len(art) - len(said)) // 2) + said
-        lines = [Content.assemble(cells, "   ", said[at] if at < len(said) else "") for at, cells in enumerate(art)]
         self.query_one("#brand", Static).update(Content("\n").join(line.truncate(width) for line in lines))
 
     def on_screen_resume(self) -> None:

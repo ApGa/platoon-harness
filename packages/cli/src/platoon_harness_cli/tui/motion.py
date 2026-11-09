@@ -2,8 +2,8 @@
 frames a second. While agents of a live session work, the sprite's agents step in turn, faster as more work, and a
 working agent's dot stirs; while each agent of a live session that has not ended rests, they blink now and then; and a
 resting agent's ring breathes out for a second every six while the session is live, whether others work or not. An
-event gets a flourish of a second at most: a wave when an agent finishes or the session settles, eyes that look up at
-you when one comes to need you, and a stir when more start working. A session that is history never moves, nor does an
+event gets a flourish of a second at most: a wave when an agent finishes or the session settles, a hop of each agent in
+turn when one comes to need you, and a stir when more start working. A session that is history never moves, nor does an
 agent whose state is unknown, and nothing moves where motion is off."""
 
 from collections.abc import Mapping
@@ -17,7 +17,7 @@ FPS = 4
 TICK = 1 / FPS
 ENDED = frozenset({"done", "failed", "lost"})
 """The states of an agent that has ended, which a session's resting leaves aside."""
-FLOURISHES = {"wave": 4, "look": 3, "stir": 3}
+FLOURISHES = {"wave": 4, "hop": 3, "stir": 3}
 """How many frames each flourish takes: a second at most."""
 BLINK = 24
 """How many frames apart a resting session's agents blink: every six seconds, one at a time."""
@@ -33,7 +33,10 @@ _WAVES = (
     (logo.AGENT[0], logo.AGENT[1], ".xxx.x", "xxxx.", *logo.AGENT[4:]),
     (logo.AGENT[0], "x.x.xx", ".xxx.", "xxxx.", *logo.AGENT[4:]),
 )
-_LOOK = (logo.AGENT[0], "xwxwx", *logo.AGENT[2:])
+_HOPS = tuple(
+    logo.composed([*logo.SMALL_AT[:hopping], (left, top - 2, colour), *logo.SMALL_AT[hopping + 1 :]], {})
+    for hopping, (left, top, colour) in enumerate(logo.SMALL_AT)
+)
 
 
 def allowed(app: App) -> bool:
@@ -75,7 +78,7 @@ class Motion:
         if before is not None:
             came = {agent: state for agent, state in states.items() if before.get(agent) != state}
             if "needs_you" in came.values():
-                self._play("look")
+                self._play("hop")
             elif "done" in came.values() or (settled and self._settled is False):
                 self._play("wave")
             elif working > self.working:
@@ -95,11 +98,11 @@ class Motion:
         """The small sprite's pixels this frame: a flourish's, else an agent stepping while any work, else one
         blinking now and then while all rest, else the sprite at rest."""
         played = self.frame - self._began
+        if self.flourish == "hop":
+            return _HOPS[played]
         changed: dict[int, tuple[str, ...]] = {}
         if self.flourish == "wave":
             changed = {2: _WAVES[played % 2]}
-        elif self.flourish == "look":
-            changed = {index: _LOOK for index in range(3)} if played != 1 else {}
         elif self.flourish == "stir":
             changed = {played % 3: _STRIDE}
         elif self.working:
@@ -107,7 +110,7 @@ class Motion:
             changed = {(self.frame // pace) % 3: _STRIDE}
         elif self.resting and self.frame % BLINK == 0:
             changed = {(self.frame // BLINK) % 3: _BLINK}
-        return logo.composed(logo.AGENT, logo.SMALL_AT, logo.SMALL_SIZE, changed) if changed else logo.SMALL
+        return logo.composed(logo.SMALL_AT, changed) if changed else logo.SMALL
 
     def glyph(self, state: str) -> str | None:
         """The glyph of an agent in `state` this frame, where it moves: a working agent's and a resting agent's of a
