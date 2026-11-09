@@ -1872,7 +1872,11 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   makes from the team's schema, which the terminal's draws too, each problem the loader and `team check` find at its
   field, `team show`'s sentences and the diff a save makes, and saves the file in place, asking once before it writes what
   only trust may take ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md),
-  a draft). [web.md](how-to/web.md) is its guide, and
+  a draft). `web SESSION --replay`, or the sessions page's Replay, serves the page over a replay, its banner and
+  controls under the top bar, which `/x/replay` takes from a control link alone, every act of the session's disabled,
+  saying why, and a copy started anew folded into a projection of its own, whose `feed_id`, hashing its folder, the page
+  hears as a reset; as its links act on nothing, it is served past loopback whatever login its agents ran on.
+  [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
   [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
   and [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md), a draft, its decisions.

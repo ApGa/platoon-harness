@@ -1,5 +1,9 @@
 """The page's server: SwarmChat's gate and `view_*` replies over the projection, and our own routes under `/x/`.
 
+A replay's page is served by the same server over the replay's copy, which a new projection stands for whenever the
+replay starts a copy anew, and which the page hears as a reset; its controls are `/x/replay`, which a control link
+alone moves, and every act of the session's is refused, saying why.
+
 Every request is bounded before it is believed, by the SDK's HTTP: its head, then `Host` against the authority served,
 which defeats DNS rebinding, and on a POST `Origin` against the page's own origin, then its bearer, and only then a body
 of a stated length. A view credential reaches the page's reads alone: `view_*`, and `x_read`, every pane of ours but a
@@ -13,18 +17,19 @@ import contextlib
 import itertools
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import asdict
 from typing import Any, Literal, NamedTuple
 
 from platoon_harness import Refused, Session
 from platoon_harness.http import Head, Rejected, Server, bearer, check_site, response
-from platoon_harness.kernel import Clock, Delta, Outcome, first, is_held
+from platoon_harness.kernel import Clock, Delta, Outcome, Refusal, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 
 from .. import __version__, approvals, calls, channels, review
 from ..ops import CONFIRMED, Form, body_ref, cut, forms
 from ..provenance import REF_IN_TEXT, no_interactions, no_provenance, read, who_reached_whom
+from ..replay import CONTROLS, SPEEDS, Player, nothing_acts
 from ..review import changes_of, snapshots_of
 from ..roster import status_of
 from . import replies
@@ -44,10 +49,14 @@ HEADERS = ("Cache-Control: no-store", "X-Content-Type-Options: nosniff", "Referr
 """What every answer of a page's server says: that no cache keeps it, that its type is the one it names, and that it
 names no referrer."""
 _JSON = "Content-Type: application/json"
-_ROUTES = ("/x/exchange", "/x/command", "/x/body", "/x/link")
+_ROUTES = ("/x/exchange", "/x/command", "/x/body", "/x/link", "/x/replay")
 _READS = ("/v1/x_read",)
 """The page's one read of our own, beside SwarmChat's `view_*`, which a view credential reaches as it reaches those."""
 _SPENT = "this link was used already or has expired: ask for a new one"
+WATCHES = "A view link watches the replay: a control link moves it."
+"""Why a view link's controls of a replay are disabled."""
+REPLAYED = "A replay holds only what the record held, and what an agent was saying was never in it."
+"""What a replay's page says where an agent's live text would show."""
 _GONE = (
     "No runtime holds this session, so nothing is being said: what was being said went with the runtime that said it."
 )
@@ -83,8 +92,8 @@ class Request(NamedTuple):
 
 
 class Web(Server[Request]):
-    """The page's server for one session, as a guest of its runtime. It decides nothing: what it says comes from the
-    projection, and from the session's own ops."""
+    """The page's server for one session, as a guest of its runtime, or with `player` for a replay of it. It decides
+    nothing: what it says comes from the projection, and from the session's own ops."""
 
     def __init__(
         self,
@@ -95,9 +104,12 @@ class Web(Server[Request]):
         *,
         host: str = "127.0.0.1",
         scheme: str = "http",
+        player: Player | None = None,
     ) -> None:
         super().__init__(clock)
-        self.session, self.projection, self.page = session, projection, page
+        self.session, self.projection, self.page, self.player = session, projection, page, player
+        self._projected: Projection | None = None
+        self._telling: set[asyncio.Task[None]] = set()
         self.credentials = Credentials(clock)
         self.moved = asyncio.Condition()
         self._host, self._scheme = host, scheme
@@ -116,8 +128,41 @@ class Web(Server[Request]):
         return f"{self._scheme}://{authority or self.authorities[0]}/view#link={self.credentials.mint(kind)}"
 
     def live(self) -> bool:
-        """Whether a runtime holds the session, which only the kernel's own check says."""
-        return is_held(self.session.folder)
+        """Whether a runtime holds the session, which only the kernel's own check says, and which none of a replay
+        does."""
+        return self.player is None and is_held(self.session.folder)
+
+    async def replaying(self, follow: Callable[[Session, Projection], Awaitable[None]]) -> None:
+        """Fold the replay's copy as it grows, through `follow`, and a copy started anew into a projection of its own,
+        whose feed the page hears as a reset. The projection before is closed once the next is made, so a request that
+        read it as the copy changed reads it whole."""
+        player = self.player
+        assert player is not None
+        anew = asyncio.Event()
+
+        def changed() -> None:
+            if player.replay.session is not self.session:
+                anew.set()
+            telling = asyncio.ensure_future(self._tell())
+            self._telling.add(telling)
+            telling.add_done_callback(self._telling.discard)
+
+        player.changed = changed
+        while True:
+            await first(follow(self.session, self.projection), anew.wait())
+            anew.clear()
+            session = player.replay.session
+            if self._projected is not None:
+                self._projected.close()
+            self._projected = self.projection
+            self.projection = Projection(session.folder, self.projection.session, self.projection.person)
+            self.session = session
+            await self._tell()
+
+    async def _tell(self) -> None:
+        """Wake every page that waits for news, as the replay moved or changed how it plays."""
+        async with self.moved:
+            self.moved.notify_all()
 
     async def stop(self) -> None:
         """Stop serving, and stop reading what any agent is saying."""
@@ -126,6 +171,8 @@ class Web(Server[Request]):
         for task in hearing:
             task.cancel()
         await asyncio.gather(*hearing, return_exceptions=True)
+        if self._projected is not None:
+            self._projected.close()
 
     # HTTP.
 
@@ -147,6 +194,8 @@ class Web(Server[Request]):
             held, link = None, token
         elif (held := self.credentials.check(token)) is None:
             raise Rejected(401, "WWW-Authenticate: Bearer", why="this page's session has expired: open a new link")
+        elif route == "/x/replay" and held.kind != "control":
+            raise Rejected(403, why=WATCHES)
         elif route.startswith("/x/") and held.kind != "control":
             raise Rejected(403, why="a view link shows the session and acts on nothing")
         body = await self.body(head, reader, BODY_LIMIT if route == "/x/body" else JSON_LIMIT)
@@ -177,6 +226,8 @@ class Web(Server[Request]):
         params = params_of(request.body)
         if route == "/x/command":
             return json_answer(await self._command(params))
+        if route == "/x/replay":
+            return json_answer(await self._replay(params, held))
         if route == "/x/link":
             kind = params.get("class")
             if kind not in ("view", "control"):
@@ -198,7 +249,7 @@ class Web(Server[Request]):
                     statuses = await self._roster()
                     return json_answer(replies.snapshot(projection, self._server_info(), statuses, self.clock.now()))
                 case "view_feed":
-                    return json_answer(await self._feed(params))
+                    return json_answer(await self._feed(params, held))
                 case "view_messages":
                     return json_answer(replies.messages(projection, params))
                 case "view_thread":
@@ -234,12 +285,14 @@ class Web(Server[Request]):
 
     async def _info(self, held: Held) -> dict[str, Any]:
         """The server, and in `x` what this page may do: the credential's class, whether a runtime holds the session,
-        who the person is, the ops their grants hold, a form for each op they hold that writes, on any link, the ops
-        asked about before they run, the most bytes a body may be, the pattern a ref in text is found by, and why the
-        page may do nothing, when it may not."""
+        who the person is, the ops their grants hold, a form for each op they hold that writes, on any link, and none
+        in a replay, which acts on nothing, the ops asked about before they run, the most bytes a body may be, the
+        pattern a ref in text is found by, why the page may do nothing, when it may not, and how a replay stands."""
         live, name = self.live(), self.session.name
         cannot = None
-        if held.kind == "view":
+        if self.player is not None:
+            cannot = nothing_acts(name)
+        elif held.kind == "view":
             cannot = "This is a view link: it shows the session and acts on nothing."
         elif not live:
             cannot = (
@@ -253,13 +306,26 @@ class Web(Server[Request]):
             "person": self.projection.person,
             "session": name,
             "may": [] if cannot else sorted(op["name"] for op in ops),
-            "forms": [_page_form(form) for form in forms(ops)],
+            "forms": [] if self.player is not None else [_page_form(form) for form in forms(ops)],
             "confirmed": sorted(CONFIRMED),
             "body_limit": BODY_LIMIT,
             "refs": REF_IN_TEXT.pattern,
             "cannot": cannot,
+            "replay": self._replay_state(held),
         }
         return self._server_info() | {"x": x}
+
+    def _replay_state(self, held: Held) -> dict[str, Any] | None:
+        """How the replay stands, for its banner and its controls, or None for a session: what the banner says, whether
+        it plays and at which speed, where it stands of how many events, each control by its name and what it does,
+        and why the link cannot move it, when it cannot."""
+        player = self.player
+        if player is None:
+            return None
+        moves = None if held.kind == "control" else WATCHES
+        controls = [{"name": control.name, "does": control.does} for control in CONTROLS.values()]
+        state = {"banner": player.banner(), "playing": player.playing, "speed": SPEEDS[player.speed]}
+        return state | {"at": player.at, "total": player.total, "controls": controls, "cannot": moves}
 
     async def _roster(self) -> dict[str, str]:
         """Each agent's status, as the roster says it, read again once the projection has moved."""
@@ -270,7 +336,7 @@ class Web(Server[Request]):
             self._statuses = (through, {row["agent"]: status_of(row) for row in rows})
         return self._statuses[1]
 
-    async def _feed(self, params: Mapping[str, Any]) -> dict[str, Any]:
+    async def _feed(self, params: Mapping[str, Any], held: Held) -> dict[str, Any]:
         """Everything past the feed number `after`, held until something comes or the page's `timeout` passes, at most
         `HOLD`. A page whose `feed_id` is not this projection's, or that is past its end, takes a new snapshot."""
         projection = self.projection
@@ -279,20 +345,30 @@ class Web(Server[Request]):
         except (TypeError, ValueError, OverflowError):
             raise Rejected(400, why="after is a feed number and timeout is in seconds") from None
         if params.get("feed_id") not in (None, projection.feed_id) or after > projection.count:
-            return {"feed": projection.count, "events": [], "reset": True}
+            return {"feed": projection.count, "events": [], "reset": True} | self._fed(held)
         if projection.count <= after and timeout > 0:
             if self._holding >= HOLDING:
                 raise Rejected(503, why="too many pages are waiting for news: try again shortly")
             self._holding += 1
             try:
-                await first(self._past(after), self.clock.sleep(min(timeout, HOLD)))
+                await first(self._past(after, projection), self.clock.sleep(min(timeout, HOLD)))
             finally:
                 self._holding -= 1
-        return replies.feed(projection, after, await self._roster()) | {"x": {"live": self.live()}}
+        if self.projection is not projection:
+            return {"feed": self.projection.count, "events": [], "reset": True} | self._fed(held)
+        return replies.feed(projection, after, await self._roster()) | self._fed(held)
 
-    async def _past(self, after: int) -> None:
+    def _fed(self, held: Held) -> dict[str, Any]:
+        """What the feed says of ours: whether a runtime holds the session, and how a replay stands."""
+        return {"x": {"live": self.live(), "replay": self._replay_state(held)}}
+
+    async def _past(self, after: int, projection: Projection) -> None:
+        """Return once the feed holds more than `after`, or the replay moved, or changed how it plays."""
         async with self.moved:
-            await self.moved.wait_for(lambda: self.projection.count > after)
+            if self.player is not None:
+                await self.moved.wait()
+            else:
+                await self.moved.wait_for(lambda: self.projection is not projection or projection.count > after)
 
     async def _body(self, params: Mapping[str, Any]) -> tuple[dict[str, Any], bytes]:
         found, ref = replies.attachment(self.projection, params)
@@ -331,6 +407,10 @@ class Web(Server[Request]):
             case "changes":
                 return await self._changes()
             case "diff":
+                if self.player is not None:
+                    raise replies.Error(
+                        403, f"a replay reads no diff: asking for one is an act. {nothing_acts(self.session.name)}"
+                    )
                 if held.kind == "view":
                     raise replies.Error(
                         403, "a view link reads no diff: asking for one is an act, and it acts on nothing"
@@ -378,6 +458,8 @@ class Web(Server[Request]):
             raise replies.Error(400, "agent is an agent's name, as its page names it")
         if version is not None and (not isinstance(version, int) or isinstance(version, bool)):
             raise replies.Error(400, "version is the one the last answer gave")
+        if self.player is not None:
+            return {"version": 0, "text": "", "about": REPLAYED, "over": True}
         if self._holding >= HOLDING:
             raise Rejected(503, why="too many pages are waiting for news: try again shortly")
         self._holding += 1
@@ -575,8 +657,9 @@ class Web(Server[Request]):
         if opened not in (None, "text"):
             raise replies.Error(400, "from is `text`, for a ref opened from text, or left out")
         from_text = opened == "text"
+        replayed_to = None if self.player is None else self.player.time_of(self.player.at)
         try:
-            panel = await read(self.session, ref, from_text=from_text)
+            panel = await read(self.session, ref, from_text=from_text, replayed_to=replayed_to)
         except Refused as refused:
             status = 404 if refused.refusal.code == "not_found" else 400
             raise replies.Error(status, no_provenance(ref, refused, from_text=from_text)) from None
@@ -605,6 +688,9 @@ class Web(Server[Request]):
         op, args, key = params.get("op"), params.get("args", {}), params.get("key")
         if not isinstance(op, str) or not isinstance(args, dict) or not isinstance(key, str) or not _KEY.fullmatch(key):
             raise Rejected(400, why="a command is an op, its args, and a key of 32 lowercase hex the page made for it")
+        if self.player is not None:
+            refusal = Refusal(code="unsupported", op=op, detail=nothing_acts(self.session.name))
+            return Outcome(op=op, key=f"web/{key}", args_hash="", refusal=refusal).model_dump(mode="json")
         if "key" in args or "via" in args:
             raise Rejected(400, why="key and via are said beside an op's args, and via by this server")
         if (version := params.get("expected_version")) is not None:
@@ -627,11 +713,41 @@ class Web(Server[Request]):
         return outcome.model_dump(mode="json")
 
     async def _stored(self, body: bytes) -> dict[str, Any]:
-        """A body stored as the session stores one, for a command to cite by its ref."""
+        """A body stored as the session stores one, for a command to cite by its ref, which a replay refuses."""
+        if self.player is not None:
+            return {
+                "refusal": Refusal(code="unsupported", detail=nothing_acts(self.session.name)).model_dump(mode="json")
+            }
         try:
             return {"ref": await self.session.put_body(body)}
         except Refused as refused:
             return {"refusal": refused.refusal.model_dump(mode="json")}
+
+    async def _replay(self, params: Mapping[str, Any], held: Held) -> dict[str, Any]:
+        """Take one control of the replay, `control`, by its name in `CONTROLS`, a jump going to `where`, an event's
+        number or a time into the session, and answer with how the replay stands then, and why a jump went nowhere."""
+        player, control = self.player, params.get("control")
+        if player is None:
+            raise Rejected(404, why=f"this is no replay: `platoon-harness web {self.session.name} --replay` replays it")
+        if control not in CONTROLS:
+            raise Rejected(400, why=f"a replay's controls are {', '.join(CONTROLS)}")
+        said = None
+        match control:
+            case "play":
+                player.play()
+            case "speed":
+                player.faster()
+            case "step" | "back":
+                await player.step(1 if control == "step" else -1)
+            case "turn" | "turn-back":
+                await player.turn(1 if control == "turn" else -1)
+            case "jump":
+                where = params.get("where")
+                try:
+                    await player.jump(where if isinstance(where, str) else "")
+                except ValueError as error:
+                    said = str(error)
+        return {**(self._replay_state(held) or {}), "said": said}
 
 
 def _message(op: str, args: dict[str, Any], params: Mapping[str, Any]) -> dict[str, Any]:

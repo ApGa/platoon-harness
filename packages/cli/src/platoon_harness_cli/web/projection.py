@@ -4,8 +4,9 @@ Nothing reads the projection back into the journal, so the page is no second aut
 is a function of the events and of the bodies they cite and of nothing else, so a rebuild from nothing gives every id
 again. A chat's id is 16 hex of a hash of the session and what the chat is: a channel's stream, or the two people of a
 direct chat, whose inboxes it merges in journal order. A line's seq is its place in its chat, in journal order. The feed
-numbers what the page must hear, in the same order, and `feed_id` hashes the session and this version of the projection,
-whose change drops the file and folds again, which the page hears as a reset. A line shows one event, by its ref, which
+numbers what the page must hear, in the same order, and `feed_id` hashes the session, this version of the projection,
+whose change drops the file and folds again, and the folder it is in, as a replay's copy started anew is a folder of its
+own, either of which the page hears as a reset. A line shows one event, by its ref, which
 its Provenance follows. The feed also tells the page that what a queue's or a board's view reads moved, `x_moved`,
 naming its chat, so the page reads that view again.
 """
@@ -205,7 +206,7 @@ class Projection:
         self.db.row_factory = sqlite3.Row
         for pragma in ("journal_mode = WAL", "synchronous = NORMAL", "secure_delete = ON"):
             self.db.execute(f"PRAGMA {pragma}")
-        self.feed_id = hashed(session, str(VERSION))
+        self.feed_id = hashed(session, str(VERSION), str(folder.absolute()))
         self._folds: dict[str, Callable[[Event, Bodies], None]] = {
             "principal.added": self._principal_added,
             "agent.spawned": self._spawned,

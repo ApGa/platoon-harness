@@ -275,6 +275,13 @@ stop. A session started or resumed there runs on a runtime of its own. Its team 
 makes, and saves it in place, keeping its comments, after asking once before it writes what would run as you or a
 credential to pass on. Stopping `web` stops serving every page it serves, and leaves every session as it was.
 
+With --replay it serves a replay of the session instead: a read-only copy of its record as it stands now, drawn as
+the session is, from its start, with a banner saying so and controls that play it at its recorded pace or faster
+and move it forward and back an event or a turn at a time or to an event or a time. A control link moves it and a
+view link watches it, and neither acts on the session, so a replay is served past loopback whatever login its
+agents ran on. Its copies, under the root and never in the session's folder, go when `web` stops. The sessions
+page's Replay does the same.
+
 It serves loopback alone unless --host names another address, which needs --certificate and --key, as TLS. On
 loopback it also says how to reach it from another machine: forward its port under the same number. A session on a
 plan login, one whose owner said several agents may run on one, one of whose agents' harnesses came up last on one,
@@ -287,6 +294,7 @@ For example:
     platoon-harness web
     platoon-harness web fix-auth
     platoon-harness web fix-auth --port 8484
+    platoon-harness web fix-auth --replay
     platoon-harness web fix-auth --host 192.0.2.7 --certificate cert.pem --key key.pem
 
 **Arguments**:
@@ -299,6 +307,7 @@ For example:
 * `--port`: The port to serve, or 0 for any free one, which stderr says.
 * `--certificate`: A certificate chain, in PEM, to serve TLS with.
 * `--key`: The certificate's private key, in PEM.
+* `--replay`: Serve a replay of the session, which acts on nothing, rather than the session itself.
 
 ### platoon-harness run
 

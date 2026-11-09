@@ -72,6 +72,7 @@ token.
 | Start | Nothing, as the form says above Start that it launches the team's harnesses here, in the folder `web` runs in, which can spend money, and Start is disabled, saying why, until the list has come, which says that folder. Then, before anything runs, once each: trust, when the team's files name what would run as you, a command, a `module:attr` or a test command, or a credential to pass on, an auth profile, each shown by its place and as the team holds it, defaults filled in, as `roles.lead.harness = "tools.lead:Lead"`; and several agents on one plan login, in the terminal's words, `lead would run several agents headless on one plan login. Is this your own work?` | Starts a session from the team file named, read from that folder as `run --team` reads one, or left empty the project's own, `platoon-harness.toml`, named as given or from the time, on a runtime of its own, which runs on once you leave the page, then opens it as Open does. It takes no prompt: write to it on its page. A team file changed between the question and your yes is asked about again, as trust covers what you were shown, and the question and the team that runs come from one read of its files. Cancel starts nothing |
 | Resume | `Resume fix-auth? Its harnesses come back, which can spend money.` | Resumes a session no runtime holds, on a runtime of its own, then opens it. Disabled, saying why, where a runtime holds it |
 | Stop | `Stop fix-auth? Its turns are interrupted and its harnesses end; it stays resumable.` | Sends the owner's stop, as `session stop` does, and says so once the runtime has let go. A page this `web` serves of it follows it into its history. Disabled, saying why, where no runtime holds it |
+| Replay | Nothing, as a replay acts on nothing | Serves a replay of the session here, on a port of its own, as `web SESSION --replay` would, and goes to a control link of it, as Open does: see [Replay a session](replay.md) |
 
 Each question is a dialog whose Cancel has focus, and Esc is a no. While an act waits for its answer every act is
 disabled, saying so, and a refusal is said with its reason, in the command line's words: a name that is taken, a team that
@@ -98,6 +99,18 @@ link, refusing a file found changed since it was read, though a change made in t
 overwritten, and asking once first where it writes what would run as you or a credential to pass on. Start, with Team file
 left empty, saves the editor's changes first. [Edit a team](edit-a-team.md) is its guide, and the terminal's
 sessions screen draws the same editor.
+
+## A replay
+
+`platoon-harness web fix-auth --replay`, or Replay on the sessions page, serves the page over a replay of the session: a
+read-only copy of its record, from before its first event, drawn as the session is and moving as it plays. A banner under
+the top bar always says it is a replay, of which session, at which event of how many and when, and beside it are its
+controls: Play or Pause, Speed, Step, Back, Next turn, Turn back and Jump, to an event or a time into the session. A
+control link moves the replay, and a view link watches it, each of its controls disabled, saying so. Going back starts a
+copy anew, which the page draws anew from a snapshot. Every act of the session's is disabled, saying that a replay acts on
+nothing, and an estimate in an event's provenance says when it was written. As its links act on nothing, not even as you,
+a replay is served past loopback whatever login its session's agents ran on. Stopping `web` takes its copies back.
+[Replay a session](replay.md) is its guide.
 
 ## Choose a link
 

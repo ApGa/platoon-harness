@@ -1,10 +1,10 @@
 // platoon-harness: the sessions page, which `platoon-harness web` serves with no session. It spends the link the command
 // said for a session token, which it keeps in this tab alone, lists every session under the root as the terminal's
-// sessions screen does, and opens, starts, resumes or stops one, going to a control link of the page `web` serves a
-// session on to open it. It asks once before a resume, which can spend money, and before a stop, in the terminal's words,
-// and asks what the server asks before a start and a save. Its team editor draws the project's team as the server
-// makes its fields, from the team's schema, with each problem at its field. Whatever a session or the server says is put
-// in as text, never as markup.
+// sessions screen does, and opens, starts, resumes, stops or replays one, going to a control link of the page `web`
+// serves a session or its replay on to open it. It asks once before a resume, which can spend money, and before a stop,
+// in the terminal's words, and asks what the server asks before a start and a save. Its team editor draws the
+// project's team as the server makes its fields, from the team's schema, with each problem at its field. Whatever a
+// session or the server says is put in as text, never as markup.
 (function () {
   'use strict';
   const KEY = 'platoon-harness.sessions.token';
@@ -100,7 +100,8 @@
       button('Resume', 'resume', session.name, () => resume(session.name),
         () => session.live ? 'A runtime holds this session: Open opens it.' : null),
       button('Stop', 'stop', session.name, () => stop(session.name),
-        () => session.live ? null : 'No runtime holds this session, so there is nothing to stop.'));
+        () => session.live ? null : 'No runtime holds this session, so there is nothing to stop.'),
+      button('Replay', 'replay', session.name, () => replay(session.name)));
     td.append(acts);
     return tr;
   }
@@ -171,6 +172,11 @@
 
   async function open(name) {
     const p = await act('/x/open', {name}, `Opening ${name}.`);
+    if (p) location.assign(p.link);
+  }
+
+  async function replay(name) {
+    const p = await act('/x/replay', {name}, `Opening a replay of ${name}, which acts on nothing.`);
     if (p) location.assign(p.link);
   }
 

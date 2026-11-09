@@ -6,6 +6,9 @@ does the terminal UI.
 is. It starts and resumes nothing, so on history the page does nothing and names the command that resumes it, and
 leaving it changes nothing in the session. One `web` serves a session at a time, as its projection has one writer. A
 session on a plan login it serves on loopback alone, as a control link acts as you, on your login.
+
+`web SESSION --replay` serves a replay of it instead, over the replay's own copy, whose projection it alone writes, and
+whose links act on nothing in the session, so it serves one past loopback whatever login its agents ran on.
 """
 
 import asyncio
@@ -28,7 +31,8 @@ from platoon_harness.schema import Problem
 
 from ..exits import Usage
 from ..output import note
-from .page import load
+from ..replay import Player
+from .page import Page, load
 from .projection import Projection, name_of
 from .server import Web
 
@@ -141,6 +145,50 @@ async def follow(
             await clock.sleep(LOOK)
 
 
+async def _replay(
+    name: str,
+    stop: asyncio.Event,
+    page: Page,
+    clock: Clock,
+    *,
+    host: str,
+    port: int,
+    tls: ssl.SSLContext | None,
+    opened: asyncio.Future[Web] | None,
+) -> None:
+    """Serve a replay of a session's page as `serve` serves the session's, until `stop` is set, and close the replay,
+    which takes its copies back."""
+    player = await Player.open(name, clock=clock)
+    try:
+        session = player.replay.session
+        person = name_of(Manifest.model_validate_json((session.folder / MANIFEST).read_bytes()).principal)
+        projection = Projection(session.folder, name, person)
+        web = Web(session, projection, page, clock, host=host, scheme="https" if tls else "http", player=player)
+        try:
+            await web.listen(host, port, tls=tls)
+            if opened is None:
+                note(
+                    f"web: a replay of session {name} on {web.authorities[0]}. Each link opens once, within ten minutes"
+                )
+                note(f"web: view link, which watches the replay: {web.link('view')}")
+                note(f"web: control link, which plays and moves the replay, and acts on nothing: {web.link('control')}")
+            else:
+                note(f"web: a replay of session {name} on {web.authorities[0]}, opened from your sessions page")
+                opened.set_result(web)
+            if tls is None:
+                forward(host, web.port)
+
+            async def folding(followed: Session, projected: Projection) -> None:
+                await follow(followed, projected, web.moved, clock)
+
+            await first(web.replaying(folding), stop.wait())
+        finally:
+            await web.stop()
+            web.projection.close()
+    finally:
+        await player.close()
+
+
 def forward(host: str, port: int) -> None:
     """Say how another machine reaches a page served on loopback without TLS: through a forward of its port."""
     target = f"[{host}]" if ":" in host else host
@@ -176,12 +224,16 @@ async def serve(
     tls: ssl.SSLContext | None,
     clock: Clock | None = None,
     opened: asyncio.Future[Web] | None = None,
+    replay: bool = False,
 ) -> None:
     """Serve a session's page on `host` and `port` until `stop` is set, and say one view link and one control link on
-    stderr, or with `opened`, which the sessions page passes, give it the server once it listens, to make the links. A
-    page file that is not the one pinned, or a session on a plan login past loopback, refuses this before anything is
-    served."""
+    stderr, or with `opened`, which the sessions page passes, give it the server once it listens, to make the links.
+    With `replay`, serve a replay of it. A page file that is not the one pinned, or a session on a plan login past
+    loopback, refuses this before anything is served."""
     page, clock = load(), clock or SystemClock()
+    if replay:
+        await _replay(name, stop, page, clock, host=host, port=port, tls=tls, opened=opened)
+        return
     async with Session.attach(name) as session:
         lock = hold(session.folder, name)
         try:

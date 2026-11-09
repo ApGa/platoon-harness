@@ -218,6 +218,7 @@ const baseApi = api;
 api = async (name, params) => {
   const r = await baseApi(name, params);
   if (name === 'view_feed' && r.x && X.caps && r.x.live !== X.caps.live) X.refresh();
+  if (name === 'view_feed' && r.x && r.x.replay) X.drawReplay(r.x.replay);
   return r;
 };
 
@@ -228,6 +229,7 @@ start = async function () {
   } catch (e) {
     return login(e.status === 401 ? null : e.message);
   }
+  X.drawReplay(X.caps.replay);
   await baseStart();
   X.needed();
   X.resend();
@@ -1599,3 +1601,77 @@ onClick = e => {
   }
   $('[data-x-file]', el.closest('form')).click();
 };
+
+// A replay: a banner under the top bar, which says that it is one, of which session, where it stands of how many events
+// and how it plays, and its controls, the terminal's, each named as the server names it, with what it does as its
+// title. A control link moves it, and a view link's controls are disabled, saying why. Every act of the session's is
+// disabled too, Commands among them, as a replay offers no op's form, and `caps.cannot` says why. A copy the replay
+// started anew from a checkpoint is a feed of its own, which the page hears as a reset and draws anew.
+document.head.insertAdjacentHTML('beforeend', `<style>
+body.x-replaying #app { grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "top top top" "replay replay replay" "side main pane"; }
+#x-replay { grid-area: replay; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
+#x-replay .x-banner { margin: 0; flex: 100 1 24em; font-weight: 700; color: var(--accent); overflow-wrap: anywhere; }
+#x-replay .x-jump { display: flex; gap: 6px; }
+#x-replay .x-jump input { width: 16em; min-width: 0; font: inherit; font-size: 12.5px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line2); background: var(--side); color: inherit; }
+#x-replay .x-said { flex-basis: 100%; margin: 0; }
+@media ${X.PHONE} {
+  body.x-replaying #app, body.x-replaying.layout-map #app { grid-template-areas: "top" "replay" "side" "main" "pane"; }
+}
+</style>`);
+
+X.LABELS = {play: 'Play', speed: 'Speed', step: 'Step', back: 'Back', turn: 'Next turn', 'turn-back': 'Turn back'};
+
+// Draw how the replay stands: the banner, and each control, disabled where the link cannot move it.
+X.drawReplay = state => {
+  document.body.classList.toggle('x-replaying', !!state);
+  X.disable($('[data-x-commands]'), state ? X.caps.cannot : null);
+  let bar = $('#x-replay');
+  if (!state) return bar && bar.remove();
+  if (!bar) {
+    $('#top').insertAdjacentHTML('afterend', '<section id="x-replay" aria-label="Replay"></section>');
+    bar = $('#x-replay');
+  }
+  const labels = {...X.LABELS, play: state.playing ? 'Pause' : 'Play', speed: `Speed ${state.speed}`};
+  const about = does => state.cannot ? X.disabled(state.cannot) : html` title="${does}"`;
+  const buttons = state.controls.filter(c => c.name !== 'jump').map(c => html`<button class="btn" data-x-replay="${c.name}"${about(c.does)}>${labels[c.name]}</button>`);
+  const jump = state.controls.find(c => c.name === 'jump');
+  const banner = $('.x-banner', bar);
+  if (banner && $('.x-acts', bar).dataset.xFor === `${state.playing}|${state.speed}|${state.cannot || ''}`) {
+    banner.textContent = state.banner;
+    return;
+  }
+  const typed = $('.x-jump input', bar), was = typed ? typed.value : '', focused = document.activeElement;
+  const had = focused && bar.contains(focused) ? focused.dataset.xReplay || 'jump' : null;
+  bar.innerHTML = html`<p class="x-banner">${state.banner}</p><div class="x-acts" data-x-for="${state.playing}|${state.speed}|${state.cannot || ''}">${buttons}</div><form class="x-jump"><input aria-label="Jump to" placeholder="${X.REPLAY_JUMP}" value="${was}"${about(jump.does)}><button class="btn"${about(jump.does)}>Jump</button></form><p class="x-said" aria-live="polite"></p>`.s;
+  if (had) {
+    const back = had === 'jump' ? $('.x-jump input', bar) : $(`[data-x-replay="${had}"]`, bar);
+    if (back) back.focus();
+  }
+};
+X.REPLAY_JUMP = 'An event, or a time as m:ss';
+
+// Take one control of the replay, and draw how it stands then, saying why a jump went nowhere.
+X.control = async (control, where) => {
+  const said = $('#x-replay .x-said');
+  try {
+    const r = await fetch('/x/replay', {method: 'POST', body: JSON.stringify({control, where}),
+      headers: {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}});
+    const p = await r.json().catch(() => ({error: `web answered ${r.status}`}));
+    if (r.status === 401) return login(p.error);
+    if (!r.ok) { if (said) said.textContent = p.error; return; }
+    X.drawReplay(p);
+    $('#x-replay .x-said').textContent = p.said || '';
+  } catch (_) {
+    if (said) said.textContent = 'web could not be reached, so the replay did not move.';
+  }
+};
+document.addEventListener('click', e => {
+  const el = e.target.closest && e.target.closest('[data-x-replay]');
+  if (el) X.control(el.dataset.xReplay);
+});
+document.addEventListener('submit', e => {
+  const form = e.target.closest && e.target.closest('#x-replay .x-jump');
+  if (!form) return;
+  e.preventDefault();
+  if (!X.disabledAt($('input', form))) X.control('jump', $('input', form).value);
+});

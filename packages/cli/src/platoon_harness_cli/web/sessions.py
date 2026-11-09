@@ -1,13 +1,14 @@
 """The sessions page, which `platoon-harness web` serves with no session, on loopback alone: every session under the
-root and how each stands, and opening, starting, resuming or stopping one, as the terminal's sessions screen does on a
-terminal, and the team editor, which reads, checks and saves the project's team where `web` runs. What only the person
-may allow is asked first, once each: the page asks before a resume, which can spend money, and before a stop, and the
-server, which alone can tell, before a start whose team needs trust or runs several agents on one plan login, and
-before a save that writes what would run as them or a credential to pass on.
+root and how each stands, and opening, starting, resuming, stopping or replaying one, as the terminal's sessions screen
+does on a terminal, and the team editor, which reads, checks and saves the project's team where `web` runs. What only
+the person may allow is asked first, once each: the page asks before a resume, which can spend money, and before a
+stop, and the server, which alone can tell, before a start whose team needs trust or runs several agents on one plan
+login, and before a save that writes what would run as them or a credential to pass on.
 
 Its server mints one link, which the command says, and keeps credentials of its own, so no link of a session's page
 opens it and its token opens no session's page. A session opened from it is served in this process, on a port of its
-own on the same host, as `web SESSION` serves one, and the page goes to a control link of that server.
+own on the same host, as `web SESSION` serves one, and the page goes to a control link of that server, and a replay as
+`web SESSION --replay` serves one.
 """
 
 import asyncio
@@ -38,7 +39,7 @@ from .credentials import Credentials
 from .page import Unpinned, load
 from .server import HEADERS, JSON_LIMIT, Request, Web, authorities_of, json_answer, params_of, refusal_answer
 
-ACTS = ("/x/sessions", "/x/open", "/x/start", "/x/resume", "/x/stop", "/x/team", "/x/check", "/x/save")
+ACTS = ("/x/sessions", "/x/open", "/x/replay", "/x/start", "/x/resume", "/x/stop", "/x/team", "/x/check", "/x/save")
 """What the page asks of its server, each on the session token its link was spent for."""
 TRUST = "The team names what would run as you, or a credential to pass on, which needs your trust:"
 """What a start asks first of a team that needs trust, above each value that needs it."""
@@ -86,7 +87,7 @@ class Sessions(Server[Request]):
         self.html, self.policy = _page()
         self._host, self._tls = host, tls
         self._scheme = "https" if tls else "http"
-        self._served: dict[str, Served] = {}
+        self._served: dict[tuple[str, bool], Served] = {}
         self._harnesses: tuple[Harness, ...] | None = None
 
     @property
@@ -156,6 +157,8 @@ class Sessions(Server[Request]):
                 return json_answer(await self._check(_edits(params)))
             case "/x/save":
                 return json_answer(await self._save(params))
+            case "/x/replay":
+                return json_answer(await self._open(_name(params), replay=True))
         return json_answer(await self._open(_name(params)))
 
     # The page's reads and acts.
@@ -176,15 +179,17 @@ class Sessions(Server[Request]):
         project = PROJECT_FILE if (here / PROJECT_FILE).exists() else None
         return {"root": str(root), "here": str(here), "project": project, "rows": rows}
 
-    async def _open(self, name: str) -> dict[str, Any]:
-        """Serve the session `name` here, on a port of its own, unless this `web` serves it already, and answer with a
-        control link of its server; or refuse, saying why, as `web SESSION` would."""
-        served = self._served.get(name)
+    async def _open(self, name: str, *, replay: bool = False) -> dict[str, Any]:
+        """Serve the session `name` here, or with `replay` a replay of it, on a port of its own, unless this `web`
+        serves it already, and answer with a control link of its server; or refuse, saying why, as `web SESSION`
+        would."""
+        served = self._served.get((name, replay))
         if served is None or served.task.done():
             opened: asyncio.Future[Web] = asyncio.get_running_loop().create_future()
             stop = asyncio.Event()
-            serving = serve(name, stop, host=self._host, port=0, tls=self._tls, clock=self.clock, opened=opened)
-            served = self._served[name] = Served(opened, stop, asyncio.ensure_future(serving))
+            options = {"host": self._host, "port": 0, "tls": self._tls, "clock": self.clock, "opened": opened}
+            serving = serve(name, stop, **options, replay=replay)
+            served = self._served[(name, replay)] = Served(opened, stop, asyncio.ensure_future(serving))
         await asyncio.wait((served.opened, served.task), return_when=asyncio.FIRST_COMPLETED)
         if not served.opened.done():
             return {"refused": _why(served.task)}

@@ -13,6 +13,13 @@ named here is closed.
 
 ### New features
 
+- **Replay a session in the browser.** `web SESSION --replay`, or Replay on the sessions page, serves the page over a
+  replay of the session, drawn as the session is from a copy of its record that grows as it plays, under a banner that
+  always says it is a replay, of which session, at which event of how many and when. Its controls under the top bar play
+  it at the recorded pace or faster and move it an event or a turn at a time or to an event or a time; a control link
+  moves it and a view link watches it. Every act of the session's is disabled, saying a replay acts on nothing, and a
+  copy started anew is drawn anew from a snapshot. As its links act on nothing, it is served past loopback whatever login
+  its agents ran on. Before, the page showed a session only as it stands now. This is RFC 0080, a draft.
 - **Replay a session in the terminal.** `attach SESSION --replay`, or `R` on the sessions screen, opens a replay in the
   workspace, from before the session's first event: the session drawn as it stood at each point, its agents moving as it
   plays, under a banner that always says it is a replay, where it stands and how it plays. Space plays or pauses, `s`
