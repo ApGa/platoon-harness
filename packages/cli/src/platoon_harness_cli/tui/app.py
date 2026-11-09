@@ -43,12 +43,13 @@ Screen { layers: base overlay; }
 #banner.-shown { display: block; }
 #body { height: 1fr; }
 #navigator { width: 34; border: round $panel; border-title-color: $foreground; padding: 0 1; }
-#navigator:focus { border: round $accent; }
+#navigator:focus { border: heavy $accent; }
 #edge { width: 1; pointer: ew-resize; }
 #edge:hover, #edge.-dragged { background: $accent 50%; }
 #focus { width: 1fr; border: round $panel; border-title-color: $foreground; border-subtitle-color: $accent; }
-#focus:focus-within { border: round $accent; }
+#focus:focus-within { border: heavy $accent; }
 #transcript { height: 1fr; padding: 0 1 0 0; }
+#behind { height: 1; display: none; padding: 0 1; }
 #inspector { width: 42; display: none; padding: 0 1; border: round $panel; border-title-color: $foreground; }
 Workspace.medium #inspector { layer: overlay; dock: right; height: 100%; background: $surface; }
 #strip { height: 1; display: none; padding: 0 1; link-style: none; link-background-hover: $accent 30%; }
@@ -72,6 +73,7 @@ Workspace.short #focus, Workspace.short #navigator, Workspace.short #inspector, 
     border: none;
 }
 Workspace.short #composer { max-height: 3; }
+Workspace.short #behind.-shown { display: block; }
 .dialog { width: 72; height: auto; max-height: 90%; border: round $accent; background: $surface; padding: 1 2; }
 .dialog.wide { width: 96; max-width: 100%; height: 90%; }
 .dialog .about { margin-top: 1; color: $text-muted; }

@@ -2,7 +2,7 @@
 
 import json
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping
 from functools import partial
 from pathlib import Path
@@ -238,6 +238,8 @@ def _unmeasured(count: int) -> str:
 
 METER = 4
 """How many cells a limit's meter takes."""
+METERED = ("tokens", "usd")
+"""The units spent by what a harness measures, which a turn nobody measured whole leaves short."""
 
 
 def _meter(spent: float, limit: float) -> Content:
@@ -283,6 +285,7 @@ class Workspace(Screen[None]):
             with Vertical(id="focus"):
                 yield Static(id="strip")
                 yield Transcript(id="transcript")
+                yield Static(id="behind")
             yield Static(id="inspector")
         yield Dock(id="dock")
         yield Static(id="chip")
@@ -388,7 +391,8 @@ class Workspace(Screen[None]):
         for agent in sorted(came - {shown}):
             row = self._row(agent)
             why = f": it {why_said(row['why'])}" if row and row["why"] else ""
-            note(self, f"@{agent} needs you{why}. {reach('next_place')} goes to it.", severity="warning")
+            goes = f"{reach('next_place')} goes to each place you must act, in turn"
+            note(self, f"@{agent} needs you{why}. {goes}.", severity="warning")
 
     def _first_focus(self, live: Live) -> Focus:
         """The agent the session started first, or what was sent to you when it started none."""
@@ -501,6 +505,8 @@ class Workspace(Screen[None]):
             self._shown["title"] = focus.border_title = title
         if self._shown.get("behind") != behind:
             self._shown["behind"] = focus.border_subtitle = behind
+        self._set("#behind", behind)
+        self.query_one("#behind").set_class(bool(behind), "-shown")
         self._set("#inspector", self._inspector(live))
         dock = self.query_one(Dock)
         dock.show(self._dock(live))
@@ -515,18 +521,20 @@ class Workspace(Screen[None]):
             self.query_one(selector, Static).update(content)
 
     def _header(self, live: Live) -> Content:
-        """The session in segments: its name, how it stands, who is working and how many places need you, what is
-        blocked or failed, what changed and what is spent against each limit. Where they do not fit, the last go
-        first, and under 60 columns only the name and the counts stay, in glyphs."""
-        counts: dict[str, int] = defaultdict(int)
-        for row in live.roster:
-            counts[row["group"]] += 1
+        """The session in segments: its name, how it stands, who is working, how many places need you, and how many
+        agents are blocked, failed or lost, then what changed and what is spent against each limit. Where they do not
+        fit, what decorates them goes first, the meters, then the amounts spent with no limit, then all that is spent,
+        then what changed, and under 60 columns the name and the counts stay, in glyphs."""
+        counts = Counter(_state(row) for row in live.roster)
         acting = len(self._places(live))
-        working = (f"{STATES['working'][0]} {counts['working']}", "$success" if counts["working"] else "dim")
-        needing = (f"{NEEDS_YOU} {acting}", "bold $warning" if acting else "dim")
+        busy = "$success" if counts["working"] else "dim"
+        working = Content.styled(f"{STATES['working'][0]} {counts['working']}", busy)
+        needing = Content.styled(f"{NEEDS_YOU} {acting}", "bold $warning" if acting else "dim")
+        stuck = [(state, *STATES[state]) for state in ("blocked", "failed", "lost") if counts[state]]
         name = SafeText(self.session_name, "bold")
         if self.size.width < 60:
-            return Content.assemble(name, "  ", working, "  ", needing)
+            glyphs = [Content.styled(f"{glyph} {counts[state]}", style) for state, glyph, style in stuck]
+            return Content("  ").join([name, working, needing, *glyphs])
         runtime = ("live", "$success") if live.runtime == "live" else ("history", "$warning")
         standing = "waiting for you" if live.status.get("stalled") else "settled" if live.status.get("settled") else ""
         state = " · ".join(said for said in (live.status.get("state", ""), standing) if said)
@@ -535,22 +543,17 @@ class Workspace(Screen[None]):
             Content.assemble(runtime, (f" · {state}" if state else "", "dim")),
             Content.assemble(working, " working"),
             Content.assemble(needing, " need you"),
+            *(Content.styled(f"{glyph} {counts[state]} {state}", style) for state, glyph, style in stuck),
         ]
-        for group in ("blocked", "failed"):
-            if counts[group]:
-                glyph, style = STATES[group]
-                segments.append(Content.styled(f"{glyph} {counts[group]} {group}", style))
         changed = self._changed(live)
-
-        def fits(parts: list[Content]) -> bool:
-            return sum(part.cell_length + 2 for part in parts) - 2 <= self.size.width - 2
-
-        for meters, amounts in ((True, True), (True, False), (False, True), (False, False)):
-            shown = [*segments, changed, *self._spent(live, meters=meters, amounts=amounts)]
-            if fits(shown):
-                break
-        while len(shown) > 4 and not fits(shown):
-            shown.pop()
+        ways = [
+            [*segments, changed, *self._spent(live, meters=True, amounts=True)],
+            [*segments, changed, *self._spent(live, meters=False, amounts=True)],
+            [*segments, changed, *self._spent(live, meters=False, amounts=False)],
+            [*segments, changed],
+        ]
+        width = self.size.width - 2
+        shown = next((way for way in ways if sum(part.cell_length + 2 for part in way) - 2 <= width), segments)
         return Content("  ").join(shown)
 
     def _changed(self, live: Live) -> Content:
@@ -567,8 +570,8 @@ class Workspace(Screen[None]):
 
     def _spent(self, live: Live, *, meters: bool, amounts: bool) -> list[Content]:
         """Each shared limit and what is spent against it, with a meter, if `meters`, where the amount is known, and if
-        `amounts`, any metered amount with no limit, and once how many turns nobody measured whole, after `spent ?`
-        when nothing else would show."""
+        `amounts`, any metered amount with no limit, or `spent ?` where none would show, then how many turns nobody
+        measured whole, which goes with each metered amount shown, tokens or dollars, as none is whole without it."""
         limits = {row["unit"]: row for row in live.budgets if row["scope"] == "shared"}
         usage = live.ending.usage if live.ending else {}
         said: list[Content] = []
@@ -578,17 +581,15 @@ class Workspace(Screen[None]):
             meter = [" ", _meter(spent, row["limit"])] if measured else []
             words = _spend(unit, spent, row["label"], row["limit"]).partition(" ")
             said.append(Content.assemble(words[0], *meter, " ", words[2]))
-        if not amounts:
-            return said
-        said += [
-            Content(_spend(unit, used["amount"], used["label"], None))
-            for unit, used in usage.items()
-            if unit in ("tokens", "usd") and unit not in limits and used["amount"] is not None
-        ]
+        metered = {unit for unit in limits if unit in METERED}
+        for unit, used in usage.items():
+            if amounts and unit in METERED and unit not in limits and used["amount"] is not None:
+                said.append(Content(_spend(unit, used["amount"], used["label"], None)))
+                metered.add(unit)
         unmeasured = max((used["unmeasured"] for used in usage.values()), default=0)
-        if not unmeasured:
+        if not unmeasured or not (metered or amounts):
             return said
-        return [*(said or [Content("spent ?")]), Content.styled(_unmeasured(unmeasured), "dim")]
+        return [*(said if metered else [*said, Content("spent ?")]), Content.styled(_unmeasured(unmeasured), "dim")]
 
     def _banner(self, live: Live) -> Content:
         """Why this is history, from the session's state: its runtime stopped as its owner asked, went without its

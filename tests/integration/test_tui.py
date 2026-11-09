@@ -42,9 +42,11 @@ pytestmark = pytest.mark.timeout(90)
 @pytest.fixture(autouse=True)
 def importable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """A detached runtime is another process, and it must find the harnesses these tests name. Each test works in a
-    folder of its own, where the sessions screen looks for the project's team."""
+    folder of its own, where the sessions screen looks for the project's team, and a TUI it starts as a process reads
+    the settings of a config folder of its own."""
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).parents[2]))
     monkeypatch.setenv("PLATOON_HARNESS_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.chdir(tmp_path)
 
 

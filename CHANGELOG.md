@@ -37,11 +37,12 @@ named here is closed.
   each label's values as an `enum`, and leaves the argument out where the team declares none. Before, nothing on the record
   said what kind of work a task or a spawn was. This is step 1 of RFC 0078, a draft.
 - **A new look for the terminal UI.** The workspace is drawn in titled panels with thin rounded borders, the one with
-  focus in the accent, on the theme `platoon-ink`: dark ink with one accent, the logo's sky blue, and a muted
+  focus heavy and in the accent, on the theme `platoon-ink`: dark ink with one accent, the logo's sky blue, and a muted
   amber, not a yellow, for warnings, `history` and what needs you. Each agent in the navigator is two lines, a glyph and
   its name over its state, its harness and what it is doing, the glyph saying its state as its colour does. The header
-  is segments, the session's name and how it stands, the counts with their glyphs, what changed and each
-  limit with a thin meter, giving way where they do not fit, and under 80 columns the team is tabs over the transcript, the agent in view filled with the accent. A toast says when an agent
+  is segments, the session's name and how it stands, who works and needs you, who is blocked, failed or lost, what
+  changed and each limit with a thin meter, its meters giving way first where they do not fit and its counts never; under
+  80 columns the team is tabs over the transcript, the agent in view filled with the accent. A toast says when an agent
   comes to need you while another is in view. Before, the screen was plain text on panels with no title, an agent's state
   was a glyph beside its name alone, and nothing said an agent came to need you but the header's count.
 - **Themes in the terminal.** `/theme`, or `t` on the sessions screen, chooses one of Textual's themes for the run,

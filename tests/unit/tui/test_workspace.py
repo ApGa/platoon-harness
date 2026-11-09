@@ -10,9 +10,11 @@ import threading
 import time
 from collections.abc import AsyncIterator
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from rich.cells import cell_len
+from textual.geometry import Size
 from textual.strip import Strip
 from textual.widgets import Input
 
@@ -308,6 +310,7 @@ async def test_a_resize_never_changes_scroll_position_focus_or_the_composer_s_ta
                 assert screen.query_one("#dock").display == (height >= 16)
                 assert ("May I?" in text) == (height >= 16)
                 assert "need you" in text.splitlines()[0] or width < 60
+                assert ("to follow" in text) == reading, "the cue to follow again is drawn at every size"
                 if reading:
                     assert top_line(transcript).strip() == before[0]
                 else:
@@ -1009,9 +1012,15 @@ def drawing(app: TerminalUI, part) -> list:
     return [list(Strip.join(line).crop(region.x, region.right)) for line in update.strips[region.y : region.bottom]]
 
 
+def chars(drawn: list) -> str:
+    """What a part's drawing reads as, without its colours."""
+    return "\n".join("".join(segment.text for segment in line) for line in drawn)
+
+
 async def test_tab_goes_round_the_parts_and_esc_from_one_goes_back_to_the_composer_interrupting_nothing(root):
-    """Each part shows that it has focus, the footer names Esc by what it does from there, which in the transcript
-    closes a line one level before it goes back, and `/` from a part begins a typed command in the composer."""
+    """Each part shows that it has focus by more than colour, the footer names Esc by what it does from there, which in
+    the transcript closes a line one level before it goes back, and `/` from a part begins a typed command in the
+    composer."""
     async with attached(team([Ask("Ship the fix?"), Hang()]), root) as (owner, app, pilot):
         await pilot.press(*"go", "enter")
         await drawn(pilot, lambda text: "Ship the fix?" in text)
@@ -1035,7 +1044,8 @@ async def test_tab_goes_round_the_parts_and_esc_from_one_goes_back_to_the_compos
             unfocused, back = drawing(app, shown), footer.replace("Esc interrupt", f"Esc {esc}").split()
             part.focus()
             await drawn(pilot, lambda text, back=back: text.splitlines()[-1].split() == back)
-            assert drawing(app, shown) != unfocused, f"{part} shows no mark of its focus"
+            focused = drawing(app, shown)
+            assert chars(focused) != chars(unfocused), f"{part} shows its focus by colour alone, or not at all"
         await pilot.press("escape")
         assert app.focused is composer
         assert await of_type(owner, "turn.ended") == [], "Esc from a part interrupted the agent"
@@ -1222,6 +1232,57 @@ async def test_the_header_says_what_changed_and_each_limit_in_a_few_characters(r
         assert re.search(r"turns [━─]{4} 1/8", header), "a limit's meter is a thin bar beside what is spent of it"
         assert "turns unmeasured" not in header
         assert header.rstrip().endswith(("1 turn unmeasured", "/1,000", " 1/8"))
+
+
+class Sized(Workspace):
+    """A workspace whose screen is as wide as a test says, to draw its header."""
+
+    width = 200
+
+    @property
+    def size(self) -> Size:  # type: ignore[override]
+        return Size(self.width, 32)
+
+
+def row_of(agent: str, group: str, why: str | None = None) -> dict:
+    return {"agent": agent, "group": group, "why": {"kind": why} if why else None}
+
+
+def test_the_header_lets_what_decorates_it_go_first_and_never_the_counts_of_who_is_stuck():
+    """Where it does not fit, the meters go first, then an amount spent with no limit, then all that is spent, then
+    what changed, and the counts of who works, needs you, is blocked, failed or was lost stay, in glyphs alone under 60
+    columns. A turn nobody measured is said wherever a metered amount is, as none is whole without it, and an agent the
+    runtime lost is counted lost, as the navigator counts it, not failed."""
+    live = SimpleNamespace(
+        roster=[
+            row_of("lead", "working"),
+            row_of("w", "blocked"),
+            row_of("v", "failed"),
+            row_of("u", "failed", "lost"),
+        ],
+        attention={},
+        runtime="live",
+        status={"state": "open", "repo": "app"},
+        changes={"c": {"kind": "commit", "dropped": False, "total": None}},
+        budgets=[{"unit": "turns", "scope": "shared", "label": "exact", "spent": 3, "limit": 16}],
+        ending=SimpleNamespace(usage={"tokens": {"amount": 1234, "label": "exact", "unmeasured": 2}}),
+    )
+    screen = Sized("s")
+    seen = {}
+    for width in range(200, 39, -1):
+        screen.width = width
+        header = screen._header(live).plain  # type: ignore[arg-type]
+        for part in ("━", "tokens 1,234", "turns 3/16", "2 turns unmeasured", "1 commit", "◌ 1", "✗ 1", "⊘ 1"):
+            if part in header:
+                seen[part] = width
+        if width == 59:
+            slim = header
+
+    assert seen["━"] > seen["tokens 1,234"] > seen["turns 3/16"] > seen["1 commit"] > 60
+    assert seen["2 turns unmeasured"] == seen["tokens 1,234"]
+    assert seen["◌ 1"] == seen["✗ 1"] == seen["⊘ 1"] == 40
+    assert slim == "s  ● 1  ◉ 0  ◌ 1  ✗ 1  ⊘ 1"
+    assert "✗ 1 failed" in Sized("s")._header(live).plain and "⊘ 1 lost" in Sized("s")._header(live).plain  # type: ignore[arg-type]
 
 
 async def test_the_agents_move_while_a_live_session_works_or_rests_and_never_in_one_that_is_history(root):
@@ -1505,16 +1566,17 @@ async def test_the_navigator_s_edge_drags_to_its_width_as_alt_left_and_alt_right
 
 
 async def test_an_agent_that_comes_to_need_you_while_another_is_in_view_is_said_in_a_toast(root):
-    """Once: a toast names it, why it waits and how to go to it, while the agent in view needing you is shown where it
-    is, so it is no toast."""
+    """Once: a toast names it, why it waits and how to reach the places you must act, while the agent in view needing
+    you is shown where it is, so it is no toast. It waits for the frame that took both as needing you, which is when a
+    toast for either would be said."""
     spawn = Call("agent_spawn", {"name": "w1", "child_role": "worker", "goal": "work"})
     async with attached(team([spawn, Ask("May the lead?")], worker=[[Ask("May a worker?")]]), root) as (_, app, pilot):
         await pilot.press(*"go", "enter")
-        await drawn(pilot, lambda _: len(workspace(app)._places(workspace(app).live)) == 2)
-        await pilot.pause()
+        await drawn(pilot, lambda _: workspace(app)._needing == {"lead", "w1"})
         toasts = [notice.message for notice in app._notifications if "needs you" in notice.message]
 
-    assert toasts == ["@w1 needs you: it asks you to approve. Alt+A or /next-place goes to it."]
+    goes = "Alt+A or /next-place goes to each place you must act, in turn."
+    assert toasts == [f"@w1 needs you: it asks you to approve. {goes}"]
 
 
 def test_tui_toml_is_kept_beside_the_user_config():

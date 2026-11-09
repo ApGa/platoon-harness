@@ -49,8 +49,9 @@ printable characters, Enter, Esc, Tab, Shift+Tab, the arrows and Backspace.
   come, so a stray Tab from a draft, then the draft going on, answers nothing. A click chooses a place and gives no focus.
 - A part hidden while it has focus, by a resize, `/navigator` or a dock left empty, gives focus back to the composer.
 - Esc in the composer interrupts the agent in view, and from any other part goes back to the composer, interrupting
-  nothing, but that in the transcript it first closes the chosen line one level. The footer names Esc by what it does from the part with focus, and that part is marked: the navigator by its
-  edge, the transcript by its title and the dock by its band.
+  nothing, but that in the transcript it first closes the chosen line one level. The footer names Esc by what it does
+  from the part with focus, and that part is marked by more than its colour: the navigator and the focus pane by a heavy
+  border, the composer by its cursor and the dock by its band and the line that says how to choose a place.
 - Where nothing is typed, on the sessions screen, in a question, a form or the help, every act has a plain key, quitting
   included.
 
@@ -102,7 +103,7 @@ read or written loses only badges, which is said once.
 
 ### How it looks
 
-The workspace is drawn in titled panels with thin rounded borders, the one that has focus in the accent, on a
+The workspace is drawn in titled panels with thin rounded borders, the one that has focus heavy and in the accent, on a
 dark ink background with one accent colour, the logo's sky blue: the theme `platoon-ink`, which the owner chose. Warnings,
 `history` and what needs you are a muted amber in it, never a yellow, and each is told apart by its glyph and its words as
 well. `/theme`, or `t` on the sessions screen, chooses another of Textual's themes for this run, `ansi-dark` among them,
@@ -133,9 +134,13 @@ Each agent's state has a glyph as well as a colour, so neither alone says it:
 | `⊘` | lost: the runtime lost it |
 | `?` | unknown: a state this terminal does not know |
 
-Where the header does not fit, the amounts spent with no limit give way to the meters first, then the meters go, then its
-segments from its end, what is spent and then what changed, and under 60 columns it keeps the name and the counts. When an
-agent comes to need you while another is in view, a toast names it, why it waits and the key that goes to it.
+The header holds the session's name and how it stands, how many agents work and how many places need you, how many agents
+are blocked, failed or lost, what changed and each limit with what is spent against it, a thin meter beside each where the
+amount is known. Where it does not fit, what decorates it goes first, the meters, then the amounts spent with no limit, then
+all that is spent, then what changed; how many turns nobody measured whole goes with each amount in tokens or dollars it
+leaves short, and under 60 columns the name and the counts stay, in glyphs alone. The counts never give way. When an agent
+comes to need you while another is in view, a toast names it and why it waits, and says that Alt+A, or `/next-place`, goes
+to each place you must act, in turn. That order, and the toast, are the defaults pending the owner's ruling.
 
 ### Motion
 
@@ -430,7 +435,7 @@ ruling.
 | 80 to 119 | Navigator and focus pane, and the inspector over the focus pane |
 | 60 to 79 | The focus pane, with the team as tabs at its top, the one in view filled with the accent, and the navigator over the focus pane on `/navigator`, until Esc or a row chosen in it closes it |
 | under 60 | As 60 to 79, with the header shortened to the name and counts and the footer to `/ commands` and keys |
-| under 16 rows | The dock, the banner, the tabs, the logo and the panels' borders give way, and the composer keeps three rows |
+| under 16 rows | The dock, the banner, the tabs, the logo and the panels' borders give way, the composer keeps three rows, and while the transcript does not follow, a line under it says what came since and how to follow again |
 
 A resize changes which parts show, and never the scroll position or the composer's target. It moves focus only by hiding
 the part that has it, which gives focus back to the composer. The snapshot tests draw the same session at

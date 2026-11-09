@@ -4,6 +4,7 @@ import contextlib
 import os
 import select
 import signal
+import sys
 from pathlib import Path
 
 import pytest
@@ -51,6 +52,16 @@ def outside_any_repository(tmp_path_factory: pytest.TempPathFactory, monkeypatch
     """Each test runs in a folder of its own, outside this checkout, so that no session it starts takes this repository
     for its own: a test that wants one makes it under its `tmp_path`."""
     monkeypatch.chdir(tmp_path_factory.mktemp("cwd"))
+
+
+@pytest.fixture(autouse=True)
+def no_settings_of_yours(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The terminal UI run in a test reads its own settings from where nothing is, never the developer's `tui.toml`: a
+    test that gives it settings writes them where it says. A TUI a test starts as a process of its own is given a
+    config folder of the test's by that test."""
+    if (app := sys.modules.get("platoon_harness_cli.tui.app")) is not None:
+        nowhere = tmp_path_factory.getbasetemp() / "no-settings" / "tui.toml"
+        monkeypatch.setattr(app, "settings", lambda environ=os.environ: nowhere)
 
 
 @pytest.fixture(autouse=True)
