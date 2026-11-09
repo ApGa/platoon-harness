@@ -132,6 +132,9 @@ async def test_an_append_at_a_large_history_stays_in_budget_and_memory_stays_bou
                 at_window = resident()
         await pilot.pause()
         held = resident()
+        transcript.draw(transcript.tail)  # The first draw at this history lays it out once, as opening it does.
+        for y in range(transcript.size.height):
+            transcript.render_line(y)
 
         appends = []
         for seq in range(100_001, 100_201):
