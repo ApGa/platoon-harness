@@ -1793,8 +1793,9 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   rows whose frame changed. The transcript is on the Line API, a window of at most 10,000 lines read from the journal a page at a
   time as the person scrolls, either way, and drawn through an LRU of strips keyed by width. What an agent did in a turn besides
   what it said, its calls, patches, thoughts and spawns, is that turn's fold, one line that counts it, failures and what ended
-  unknown among it, and opens on each step, which opens on its whole; a line or a fold that opens or closes lays out its own
-  lines alone. An agent's reads its own streams, every `agent/*`, so a child of its needs no
+  unknown among it, and opens on each step, which opens on its whole; a message's line comes open on its body as it comes, since
+  that body is what it says, read with the other bodies its page draws open, so the page is laid out once; a line or a fold
+  that opens or closes lays out its own lines alone. An agent's reads its own streams, every `agent/*`, so a child of its needs no
   name to be drawn, and every `approval/*`, as an approval's id is its harness's, so its approvals and who answered them are
   drawn, a read for each glob, kept to what every read covered. A child's spawn is drawn under the call that made it, the
   tool item of its spawner's whose `native_id` its anchor holds, whichever of the two came first, by the join in `calls.py`,

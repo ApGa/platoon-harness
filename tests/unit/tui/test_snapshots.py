@@ -110,11 +110,14 @@ def still(app: App) -> App:
 
 def settled(screen: object) -> bool:
     """Whether the workspace has drawn its header from how the session ended, which it reads after its status, and its
-    transcript knows what each line of whitespace says, so that both are drawn as they stay."""
+    transcript has read what each line opens on, so that both are drawn as they stay."""
     if not isinstance(screen, Workspace) or screen.live is None or screen.live.ending is None:
         return False
     header = screen.query_one("#header")
-    return str(header.content) == str(screen._header(screen.live)) and not screen.query_one(Transcript).reading_bodies
+    transcript = screen.query_one(Transcript)
+    return str(header.content) == str(screen._header(screen.live)) and not any(
+        block.reading for block in transcript.blocks
+    )
 
 
 @pytest.mark.parametrize("size", SIZES)

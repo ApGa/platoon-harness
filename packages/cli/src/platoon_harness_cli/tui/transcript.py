@@ -1,7 +1,7 @@
 """The transcript: one agent's, one channel's or one thread's journal, a line per event under a heading for each run of
 lines one speaker says, what an agent did in a turn besides what it said folded into one line that counts it, and a line
-opening on demand, read from the journal a page at a time and drawn a line at a time, with what an agent is saying now
-below it."""
+open on what it says as it comes where it is a message's or else opening on demand, read from the journal a page at a
+time and drawn a line at a time, with what an agent is saying now below it."""
 
 import asyncio
 import bisect
@@ -391,6 +391,13 @@ def blank(event: Event) -> bool:
     return event.type == "item.recorded" and data.get("kind") == "message" and not event.gist.strip()
 
 
+def opens_on_body(event: Event) -> bool:
+    """Whether an event is a message with a body, whose line is drawn open as it comes: the body is what it says, and
+    its gist is the first of it, cut."""
+    data = event.data if isinstance(event.data, dict) else {}
+    return event.type == "item.recorded" and data.get("kind") == "message" and isinstance(data.get("body"), str)
+
+
 def _step(event: Event, children: set[str], agent: str | None) -> str | None:
     """The turn whose fold an event is a step of, or None: a tool call, a patch or a thought of an agent's, or a spawn
     of a child of `agent`'s, each in the turn the record names."""
@@ -409,9 +416,9 @@ class Block:
     """One line: `first`, the seq of the event that began it, which is where it stands; the event it shows, which a
     tool call's end takes over from its start, `start`, or where the end was read first takes its start as, and a cut,
     standing at the next span's first call, is the last call of the span it ends; how it reads; and what opening it
-    shows: its body, read when first opened, or its gist whole, or for an approval's request, its `ask`, read when
-    first opened, or for a call its input and what it gave back. A step of an agent's turn stands in that turn's
-    `fold`."""
+    shows: its body, read as it comes for a message's line, which opens as it comes, or when first opened, or its gist
+    whole, or for an approval's request, its `ask`, read when first opened, or for a call its input and what it gave
+    back. A step of an agent's turn stands in that turn's `fold`."""
 
     first: int
     event: Event
@@ -491,6 +498,11 @@ def _read_as(found: bytes) -> str:
     return found.decode(errors="replace") + ("\n\n(cut at 256 KiB)" if len(found) >= BODY_LIMIT else "")
 
 
+def _unread(event: Event, refused: Refused) -> str:
+    """A body that could not be read, said so under its gist."""
+    return f"{event.gist}\n\n(the body cannot be read: {refused})"
+
+
 class Tail:
     """What an agent is saying now: live text the journal does not yet show as an item. A piece the journal holds
     through some seq is dropped once the transcript has drawn that seq, so nothing is shown twice or goes missing. Text
@@ -551,10 +563,12 @@ class Transcript(ScrollView, can_focus=True):
     is a fold of the turn, drawn as one line that counts them, which opens on them, each a line that opens on its
     whole; a turn under way while the session is live shows its latest step too, and `unfolded` opens every fold. A
     line is laid out again alone, or with the lines of its fold, when it opens or closes, and so is a fold that takes
-    a step. An agent's turns are cut where `spans` says, read as the agent is shown and again as each of its turns
-    ends, and each cut is drawn once the window holds both calls it stands between. What an agent says in its turn
-    with a gist of whitespace alone is read, and drawn as no line once its body is known to be blank too, as one with
-    no body is. Text selected with the mouse is copied as its words, without what decorates them."""
+    a step. What a message says is its body, so its line opens on it as it comes, read with the bodies of the lines a
+    page draws open with it, which are laid out once they are all read. An agent's turns are cut where `spans` says,
+    read as the agent is shown and again as each of its turns ends, and each cut is drawn once the window holds both
+    calls it stands between. What an agent says in its turn with a gist of whitespace alone is read, and drawn as no
+    line once its body is known to be blank too, as one with no body is. Text selected with the mouse is copied as its
+    words, without what decorates them."""
 
     BINDINGS = [*bindings("transcript"), *bindings("panel")]
     """The transcript's own keys first, so its Esc closes a line before it goes back to the composer."""
@@ -614,6 +628,10 @@ class Transcript(ScrollView, can_focus=True):
         self._blank: LRUCache[str, bool] = LRUCache(_CACHE)
         self.reading_bodies: dict[str, list[Block]] = {}
         """The bodies being read to learn whether the lines waiting on them say anything."""
+        self.reading_open: list[Block] = []
+        """The lines drawn open as they come, whose bodies are read together, so that a page is laid out once."""
+        self._reading_open = False
+        """Whether a worker is reading those bodies, which a line added meanwhile is read with."""
         self._width = 0
 
     def on_mount(self) -> None:
@@ -840,11 +858,15 @@ class Transcript(ScrollView, can_focus=True):
             if held.fold is not None:
                 self._refold(held.fold)
             return None
-        block = Block(event.seq, event, line)
+        block = Block(event.seq, event, line, open=opens_on_body(event))
         if native and _phase(event) in ("started", "completed"):
             self._tools[native] = block
         if blank(event):
-            self._learn(block, event.data["body"])
+            self._learn(block, event.data["body"])  # Which reads its body too.
+            if self._blank.get(event.data["body"]):  # Read already, and blank: the line is drawn as no line at all.
+                return None
+        elif block.open:
+            self._read_soon(block)
         if (turn := _step(event, self._children, agent)) is not None:
             self._fold_in(block, turn)
         self._join.take(event, block)
@@ -884,11 +906,37 @@ class Transcript(ScrollView, can_focus=True):
                     self._reread(step)
 
     def _reread(self, block: Block) -> None:
-        """Read again what a line opens on, as what it says changed: at once where it is open, or when it next opens."""
+        """Read again what a line opens on, as what it says changed: as it is open, with the bodies a page draws open,
+        or when it next opens."""
         if block.open:
-            self.run_worker(self._read_body(block), exclusive=False)
+            self._read_soon(block)
         else:
             block.text = None
+
+    def _read_soon(self, block: Block) -> None:
+        """Put a line's body up to be read with the ones a page draws open: one worker reads them all, so the page is
+        laid out once rather than once a line."""
+        self.reading_open.append(block)
+        if not self._reading_open:
+            self._reading_open = True
+            self.run_worker(self._read_open(), exclusive=False)
+
+    async def _read_open(self) -> None:
+        """Read the bodies of the lines drawn open as they come, and lay the lines out again once."""
+        try:
+            while self.reading_open:
+                blocks, self.reading_open = self.reading_open, []
+                for block in blocks:
+                    await self._read_body(block)
+                self._settle(blocks)
+        finally:  # Set with no await since the loop took its last line, so nothing is left waiting on a worker gone.
+            self._reading_open = False
+
+    def _settle(self, blocks: Iterable[Block]) -> None:
+        """Lay out again the lines of `blocks` that are held, from the first to the last, as what they open on was
+        read."""
+        if held := [block for block in blocks if block in self._blocks]:
+            self._respan(min(held, key=lambda block: block.first), max(held, key=lambda block: block.first))
 
     def _under_way(self, fold: Fold) -> bool:
         """Whether a fold's turn is under way: a runtime holds the session, and the window holds its newest lines and
@@ -974,18 +1022,25 @@ class Transcript(ScrollView, can_focus=True):
 
     async def _read_blank(self, ref: str) -> None:
         """Let go of the lines whose body is blank too, which say nothing. A body that cannot be read, or that is cut
-        where it is read, is not known to be blank, and its lines stay, opening on what was read, said cut."""
+        where it is read, is not known to be blank, and its lines stay, opening on what was read, said cut, or on why
+        it could not be."""
         assert self._session is not None
         try:
             found = await self._session.get_body(ref, limit=BODY_LIMIT)
-        except Refused:
-            self.reading_bodies.pop(ref, None)
+        except Refused as refused:
+            waiting = self.reading_bodies.pop(ref, [])
+            for block in waiting:
+                block.text = SafeText(_unread(block.event, refused)).plain
+                self._forget(block)
+            self._settle(waiting)
             return
         self._blank[ref] = not found.decode(errors="replace").strip() and len(found) < BODY_LIMIT
         waiting = self.reading_bodies.pop(ref, [])
         if not self._blank[ref]:
             for block in waiting:
                 block.text = SafeText(_read_as(found)).plain
+                self._forget(block)
+            self._settle(waiting)
             return
         gone = set(waiting)
         after = [self._blocks[self._blocks.index(block) + 1] for block in waiting if block in self._blocks[:-1]]
@@ -1289,9 +1344,12 @@ class Transcript(ScrollView, can_focus=True):
 
     def _shown_words(self, block: Block) -> Content:
         """A line's words as drawn: a fold's counts, and a call with no end, said running while its turn is under way,
-        its end not read yet where its turn may go on past the window, and ended unknown once neither is so."""
+        its end not read yet where its turn may go on past the window, and ended unknown once neither is so. A message's
+        line says nothing of its own once it has read what it opens on, as its gist is the first of that, cut."""
         if isinstance(block, Fold):
             return self._counts(block)
+        if opens_on_body(block.event) and block.open and block.text is not None:
+            return Content("")
         data = block.event.data if isinstance(block.event.data, dict) else {}
         if _called(block) and data.get("phase") == "started" and block.fold is not None:
             if self._under_way(block.fold):
@@ -1324,8 +1382,9 @@ class Transcript(ScrollView, can_focus=True):
 
     def _body(self, block: Block, inner: int) -> list[Strip]:
         """What an open line shows at this width, under its words: its body as Markdown, else its gist whole, or an
-        approval's ask as it was asked, or a call's input and what it gave back as text, then where it came from, with
-        a tool's whole name. A fold opens on its steps, which are lines of their own."""
+        approval's ask as it was asked, or a call's input and what it gave back as text, then, for a call or an ask,
+        where it came from, with a tool's whole name. A message's body says what it says, where its words, who says
+        them and the line's place in the journal already do. A fold opens on its steps, which are lines of their own."""
         if isinstance(block, Fold):
             return []
         event, indent = block.event, self._indent(block) + 2
@@ -1337,11 +1396,12 @@ class Transcript(ScrollView, can_focus=True):
         else:
             said = block.text if block.text is not None else SafeText(event.gist).plain
             lines = markdown(said, width, self.app.console)
-        when = time.strftime("%H:%M:%S", time.localtime(event.wall_time))
-        data = event.data if isinstance(event.data, dict) else {}
-        tool = f" · tool {event.gist.split()[0]}" if data.get("kind") == "tool" and event.gist.split() else ""
-        where = SafeText(f"{event.type}{tool} · {event.actor} · seq {event.seq} · {when}", "dim")
-        lines.append(Strip(where.render_segments(), where.cell_length))
+        if _called(block) or block.ask is not None:
+            when = time.strftime("%H:%M:%S", time.localtime(event.wall_time))
+            data = event.data if isinstance(event.data, dict) else {}
+            tool = f" · tool {event.gist.split()[0]}" if data.get("kind") == "tool" and event.gist.split() else ""
+            where = SafeText(f"{event.type}{tool} · {event.actor} · seq {event.seq} · {when}", "dim")
+            lines.append(Strip(where.render_segments(), where.cell_length))
         return [Strip.join([Strip.blank(indent), line]) for line in lines]
 
     def _drawn_rows(self, block: Block, inner: int) -> tuple[list[Strip], int]:
@@ -1381,7 +1441,7 @@ class Transcript(ScrollView, can_focus=True):
         if block.open and block.event.type == "approval.requested" and block.ask is None:
             self.run_worker(self._read_ask(block), exclusive=False)
         elif block.open and block.text is None and (_called(block) or _refs(block)):
-            self.run_worker(self._read_body(block), exclusive=False)
+            self._read_soon(block)
         self._respan(block, block)
 
     def _respan_fold(self, fold: Fold) -> None:
@@ -1407,7 +1467,7 @@ class Transcript(ScrollView, can_focus=True):
     async def _read_body(self, block: Block) -> None:
         """Read what a line opens on: its body, or a call's input and what it gave back, each said cut where it is, and
         a body that cannot be read said so under its gist. A call that takes its start or its end while it reads is read
-        again."""
+        again. The line is drawn again as it reads, and laid out again by whoever asked for it."""
         event, began = block.event, block.start
         if _called(block):
             start = began or (event if _phase(event) == "started" else None)
@@ -1421,8 +1481,6 @@ class Transcript(ScrollView, can_focus=True):
             read = await self._read(event)
             block.text = SafeText(event.gist if read is None else read).plain
         self._forget(block)
-        if block in self._blocks:
-            self._respan(block, block)
 
     async def _read(self, event: Event) -> str | None:
         """An event's body as read, said cut where it was cut, or under its gist that it cannot be read, or None for an
@@ -1434,7 +1492,7 @@ class Transcript(ScrollView, can_focus=True):
         try:
             return _read_as(await self._session.get_body(ref, limit=BODY_LIMIT))
         except Refused as refused:
-            return f"{event.gist}\n\n(the body cannot be read: {refused})"
+            return _unread(event, refused)
 
     def _call_text(
         self, block: Block, start: Event | None, end: Event | None, given: str | None, back: str | None
@@ -1645,7 +1703,7 @@ class Transcript(ScrollView, can_focus=True):
             at = next((lines.index(block) for block in (last, start) if block in lines), len(lines))
             for block in reversed(lines[:at]):
                 last = block
-                if said in _words(self._line_text(block).plain):
+                if said in _words(self._searched(block)):
                     self._stop_following()
                     self._go_to(block)
                     return
@@ -1668,9 +1726,19 @@ class Transcript(ScrollView, can_focus=True):
             self._go_to(start if start in lines else lines[0])
 
     def _line_text(self, block: Block) -> Content:
-        """A line as it reads where it is drawn, with who says it."""
+        """A line as it reads where it is drawn, with who says it, who alone where the line says nothing itself."""
         words = self._shown_words(block)
-        return words if block.said.who is None else Content.assemble(block.said.who, "  ", words)
+        if block.said.who is None or not words.plain:
+            return words if block.said.who is None else block.said.who
+        return Content.assemble(block.said.who, "  ", words)
+
+    def _searched(self, block: Block) -> str:
+        """What `/find` looks at on a line: what it reads as, and a message's gist, which is the first of the body its
+        line opens on, so a message is found where it is drawn."""
+        shown = self._line_text(block).plain
+        if opens_on_body(block.event) and block.open and block.text is not None:
+            return f"{shown} {block.event.gist}"
+        return shown
 
     def copied(self, block: Block) -> str:
         """A line's text as `/copy` sends it: what it shows where it is drawn, and while it is open what it opens on."""

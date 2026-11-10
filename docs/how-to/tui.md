@@ -203,7 +203,9 @@ An agent's transcript shows what it said, and folds the rest away, in levels you
    input in short, the values of its JSON, with `✗` and the word for how it ended where it failed, and `? ended unknown`
    where that is not said; a thought as one dim line; a patch; and each spawn under the call that made it.
 3. **The whole of one.** A step opens on all of it: a call on its whole input, laid out, and what it gave back, a thought
-   on its text, a message on its body as Markdown and code, an approval on what it asks, each with where it came from.
+   on its text, an approval on what it asks, each of those with where it came from. What an agent said needs no opening:
+   a message's body is what it says, so its line comes open on it, as Markdown and code, and says nothing of its gist,
+   which is the first of that body, cut.
 
 Ended turns rest folded. While a runtime holds the session, a turn under way also shows its latest step under its line,
 `running` where it has no end yet, so you see what an agent is doing now; once the turn ends, it rests folded too.
@@ -224,7 +226,8 @@ again closes them all. `/open-line` opens or closes the chosen line from the com
 Each run of lines one speaker says stands under one heading, its name in the accent, or the sender and where it was sent,
 `@you → @lead`. A line of the runtime's own stands alone. A blank row stands before each new speaker, each line of the
 runtime's own after a speaker's, and each turn. A line reads its words as Markdown, its emphasis and code styled and their
-marks gone, and `▸` after them where it opens on more than its words, such as a body. What an agent says in a turn with a
+marks gone, and `▸` after them where it opens on more than its words, `▾` while it is open: a call's input and what it
+gave back, an approval's ask, or a message's body, whose line is its `▾` alone once it has read what it says. What an agent says in a turn with a
 gist of whitespace alone, as a model can before a tool call, says nothing and is drawn as no line once its body is read and
 blank too, or at once where it has none; one whose body is unread, cannot be read, or says something, is drawn. A page read
 back above keeps the heading its first line had, so what is on screen does not move, and a long run read back says its
@@ -258,7 +261,8 @@ missed. A fold's line is no event, so `p` on it says to open it and choose one o
 shortcut that decides nothing. The transcript then takes focus and chooses the line before the chosen one whose words hold
 yours, whatever their case and the spaces between them, in the order the lines stand with every fold open, opening the fold
 of a step it finds, and reading back from the journal a page at a time, as scrolling up does, within its window. A line's
-words are what it shows, not a body it opens on, nor what an agent is saying now. Ctrl+F
+words are what it shows, and a message's gist where its line opens on the body that begins with it, not the body itself,
+nor what an agent is saying now. Ctrl+F
 then Enter finds the next one back. Where no line holds them, back to the first line of the focus, it says so, and goes back
 to following, or to the line it began from, or where reading back let that line go from the window, to the oldest line
 held. A ref is opened through `/provenance`'s form, not found. That `/find` finds words alone, with Ctrl+F its shortcut, is

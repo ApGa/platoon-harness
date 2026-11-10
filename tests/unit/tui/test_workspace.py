@@ -1494,8 +1494,9 @@ def osc52(written: list[str]) -> list[str]:
 
 async def test_text_selected_with_the_mouse_is_copied_as_plain_text_without_what_decorates_it(root):
     """A drag over the transcript selects its rows, and Ctrl+C copies what they say as plain text, as OSC 52: who says
-    it and their words as they read, with no border, mark, rule or indent, and a line wrapped on one line. In the
-    navigator, an agent's name and state, without its glyph. With nothing selected, it copies the chosen line."""
+    it and their words as they read, with no border, mark, rule or indent. In the navigator, an agent's name and state,
+    without its glyph. With nothing selected, it copies the chosen line, which opens on what its message says, and so
+    copies that alone."""
     long = "a line far longer than the transcript is wide, " * 4
     turns = [Say("on it, **really**"), Say(long), Say("done")]
     async with attached(team(turns), root, size=(100, 32)) as (_, app, pilot):
@@ -1527,9 +1528,9 @@ async def test_text_selected_with_the_mouse_is_copied_as_plain_text_without_what
         notices = [notice.message for notice in app._notifications]
 
     selected, named_as, line = osc52(written)
-    assert selected == f"@lead\non it, really\n{long.strip()}"
+    assert selected.split() == f"@lead on it, really {long}".split()
     assert named_as.splitlines()[0] == "@lead" and named_as.splitlines()[1].startswith("idle · ")
-    assert line == "@lead  done"
+    assert line == "@lead\ndone", "a message's line copies what it says alone"
     assert f"Sent the {len(selected)} characters selected as OSC 52" in " ".join(notices)
 
 

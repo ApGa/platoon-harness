@@ -764,6 +764,96 @@ async def test_what_an_agent_says_that_is_whitespace_alone_is_no_line_once_its_b
         assert transcript.blocks[1].text == "   words"
 
 
+async def test_a_message_that_has_a_body_is_drawn_open_on_it_as_it_comes():
+    """A message says what its body says, and its gist is the first 280 characters of it, cut, so its line is drawn
+    open as it comes: the whole of it is there with no key pressed, once, on the rows under its mark."""
+    said = "the parser is fixed, and its tests pass"
+    journal = Journal([body_of(1, "the parser is fixed", "sha256:said")], bodies={"sha256:said": said.encode()})
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), journal, 1)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+
+        assert transcript.blocks[0].open
+        assert shown(transcript)[:3] == ["@lead", "   ▾", f"    {said}"]
+
+
+async def test_enter_on_a_message_s_line_closes_it_on_its_gist_alone():
+    journal = Journal([body_of(1, "the parser is fixed", "sha256:said")], bodies={"sha256:said": b"and its tests"})
+    app = Alone()
+    async with app.run_test(size=(80, 20)) as pilot:
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), journal, 1)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+        transcript.focus()
+        await pilot.press("enter")
+
+        assert not transcript.blocks[0].open
+        assert shown(transcript) == ["@lead", "  the parser is fixed ▸"]
+
+
+async def test_a_tool_call_s_line_is_drawn_shut_as_it_comes():
+    """A call's input is what opening it shows, not what it says, so its line waits for a key as it always has."""
+    journal = Journal([tool(1, "started", "bash ls")])
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), journal, 1)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+
+        assert not transcript.blocks[0].open
+        assert shown(transcript) == ["@lead", "  ▸ bash ls"]
+
+
+async def test_a_message_whose_gist_is_whitespace_alone_is_drawn_open_on_the_body_it_says():
+    """Its gist says nothing, so its body is all it says: read as it comes, drawn under a gist row of whitespace and
+    laid out again for it, and gone once its body is known to be blank too."""
+    journal = Bodies(
+        [body_of(1, " ", "sha256:said"), body_of(2, "\n", "sha256:blank")],
+        bodies={"sha256:said": b"words\n\nmore\n\nmost", "sha256:blank": b"\n \n"},
+    )
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), journal, 2)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+
+        assert [block.first for block in transcript.blocks] == [1]
+        assert transcript.blocks[0].open
+        assert shown(transcript)[1:5] == ["   ▾", "    words", "", "    more"]
+
+
+async def test_a_page_of_messages_is_read_and_laid_out_once(monkeypatch):
+    """One worker reads the bodies a page draws open and the page is laid out once, rather than once a line, so a
+    page of messages costs what a page costs."""
+    history = [body_of(seq, f"said {seq}", f"sha256:{seq}") for seq in range(1, 6)]
+    bodies = {f"sha256:{seq}": f"body {seq}".encode() for seq in range(1, 6)}
+    read, settled = [], []
+    reading = Journal.get_body
+
+    async def counted(self, ref, *, limit=None):
+        read.append(ref)
+        return await reading(self, ref, limit=limit)
+
+    laying = Transcript._settle
+
+    def sneaked(self, blocks):
+        settled.append(list(blocks))
+        laying(self, blocks)
+
+    monkeypatch.setattr(Journal, "get_body", counted)
+    monkeypatch.setattr(Transcript, "_settle", sneaked)
+    app = Alone()
+    async with app.run_test(size=(80, 20)):
+        transcript = app.query_one(Transcript)
+        await transcript.show(Focus.of_agent("lead"), Journal(history, bodies=bodies), 5)  # type: ignore[arg-type]
+        await app.workers.wait_for_complete()
+
+        assert read == sorted(bodies) and len(settled) == 1 and len(settled[0]) == 5
+        assert [block.open for block in transcript.blocks] == [True] * 5
+
+
 def did(seq: int, gist: str, data: dict[str, Any]) -> Event:
     """Something the lead did, or said, in its turn `t1`."""
     return event(seq, "turn/lead", "item.recorded", gist, data, turn="t1")

@@ -76,7 +76,7 @@ async def test_a_replay_is_drawn_as_its_session_from_its_start_under_a_banner_sa
     app = TerminalUI("s", replay=True)
     async with app.run_test(size=(120, 32)) as pilot:
         text = await drawn(pilot, lambda text: "Replay of s, before its first event" in text)
-        assert "replay · " in text and "no agents yet" in text and "on it ▸" not in text
+        assert "replay · " in text and "no agents yet" in text and "    on it" not in text
         assert app.focused is app.screen.query_one(Transcript)
 
         await jump(pilot, str(head))
@@ -104,14 +104,14 @@ async def test_the_replay_s_controls_are_keys_where_nothing_is_typed_and_typed_c
         await pilot.press("comma")
         await drawn(pilot, lambda text: "at event 1 of" in text)
         await pilot.press("right_square_bracket")
-        ended = await drawn(pilot, lambda text: f"at event {first} of" in text and "on it ▸" in text)
-        assert "shipped ▸" not in ended and "paused" in ended
+        ended = await drawn(pilot, lambda text: f"at event {first} of" in text and "    on it" in text)
+        assert "    shipped" not in ended and "paused" in ended
 
         app.screen.query_one(Composer).focus()
         await pilot.press(*"/turn", "enter")
-        await drawn(pilot, lambda text: f"at event {second} of" in text and "shipped ▸" in text)
+        await drawn(pilot, lambda text: f"at event {second} of" in text and "    shipped" in text)
         await pilot.press(*"/turn-back", "enter")
-        await drawn(pilot, lambda text: f"at event {first} of" in text and "shipped ▸" not in text)
+        await drawn(pilot, lambda text: f"at event {first} of" in text and "    shipped" not in text)
         await pilot.press(*"/speed", "enter")
         await pilot.press(*"/play", "enter")
         await drawn(pilot, lambda text: "playing at 4x" in text)
@@ -120,7 +120,7 @@ async def test_the_replay_s_controls_are_keys_where_nothing_is_typed_and_typed_c
         await drawn(pilot, lambda text: f"at event {head} of {head}" in text and "paused" in text)
         app.screen.query_one(Transcript).focus()
         await pilot.press("space")
-        await drawn(pilot, lambda text: "playing at 4x" in text and "shipped ▸" not in text)
+        await drawn(pilot, lambda text: "playing at 4x" in text and "    shipped" not in text)
         await pilot.press("space")
         await drawn(pilot, lambda text: "paused" in text)
 
