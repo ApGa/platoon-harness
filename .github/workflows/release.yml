@@ -41,7 +41,7 @@ jobs:
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status | grep -xE 'identical|behind' || { echo "::error::The tagged commit is not on main"; exit 1; }
+        run: gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status | grep -xE 'identical|behind' || { echo "::error::The tagged commit is not on main, or GitHub's compare API did not answer"; exit 1; }
 
       - name: Check that CHANGELOG.md dates the version
         if: github.ref_type == 'tag'

@@ -416,7 +416,7 @@ push to `main` and each pushed `v*` tag. On a tag, its `build` job first checks 
 that CHANGELOG.md dates the version:
 
 ```bash
-gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status | grep -xE 'identical|behind' || { echo "::error::The tagged commit is not on main"; exit 1; }
+gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status | grep -xE 'identical|behind' || { echo "::error::The tagged commit is not on main, or GitHub's compare API did not answer"; exit 1; }
 grep -q "^## ${GITHUB_REF_NAME#v} (2" CHANGELOG.md || { echo "::error::CHANGELOG.md does not date the version"; exit 1; }
 ```
 
