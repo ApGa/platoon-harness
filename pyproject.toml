@@ -107,6 +107,8 @@ only-include = ["packages/sdk/src/platoon_harness", "packages/cli/src/platoon_ha
 
 [tool.uv]
 exclude-dependencies = ["lmnr-claude-code-proxy"]
+# The build backend that makes the files a release uploads, pinned so that a new release of it changes none of them.
+build-constraint-dependencies = ["hatchling==1.33.0"]
 # uv makes the package's metadata again when its version changes, as it does when this file changes.
 cache-keys = [{ file = "pyproject.toml" }, { file = "packages/sdk/src/platoon_harness/version.py" }]
 

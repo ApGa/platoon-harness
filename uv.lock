@@ -9,6 +9,7 @@ resolution-markers = [
 
 [manifest]
 excludes = ["lmnr-claude-code-proxy"]
+build-constraints = [{ name = "hatchling", specifier = "==1.33.0" }]
 
 [[package]]
 name = "agent-client-protocol"
