@@ -42,7 +42,7 @@ RFC: see [When a change needs an RFC](#when-a-change-needs-an-rfc).
 
 **Goal:** a checkout where `platoon-harness` runs and the tests pass.
 
-**Prerequisites:** Linux, as nothing has run on macOS; Python 3.12 or 3.13, the two CI tests, and
+**Prerequisites:** Linux, as nothing has run on macOS; Python 3.12, 3.13 or 3.14, the three CI tests, and
 [uv](https://docs.astral.sh/uv/); git 2.47 or later, as CI requires; and optionally
 [bubblewrap](https://github.com/containers/bubblewrap), without which the tests of the `isolated` workspace skip, saying
 why. On Ubuntu, AppArmor blocks bubblewrap unless `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, as
@@ -94,7 +94,7 @@ CI's test job sets. The fast and browser tests need no harness, login or model k
 
 All but the live tests run on a CPU, with no network and no login: a harness under test runs against `FakeModel`, a
 model of ours on loopback, on a dummy key. `pyproject.toml`'s `addopts` selects the fast tests, which CI runs on Python
-3.12 and 3.13, with `UV_PYTHON` naming each:
+3.12, 3.13 and 3.14, with `UV_PYTHON` naming each:
 
 ```bash
 uv run pytest -q -n auto
@@ -102,7 +102,7 @@ uv run pytest -q -n auto
 
 | Tests | Marker | Need | In CI |
 |---|---|---|---|
-| Fast | none | Nothing more | Yes, on 3.12 and 3.13 |
+| Fast | none | Nothing more | Yes, on 3.12, 3.13 and 3.14 |
 | Slow | `slow` | The harness binaries to cover on `PATH`, such as `claude`, `codex` and `pi`, each against `FakeModel`; a test whose binary is missing skips, saying so. Those of the installed wheels need uv's cache to hold what they install | Only those of the installed wheels, in the release workflow |
 | Browser | `e2e` | Playwright's Chromium headless shell, or each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of `chromium`, `firefox` and `webkit`; a missing one fails, saying how to install it | Yes, once in each of the three |
 | Live | `live` | `PLATOON_HARNESS_LIVE=1` and the harnesses signed in as you usually are; the examples' also `pi`, and `PLATOON_HARNESS_LIVE_MODEL`, `OPENAI_BASE_URL` and `OPENAI_API_KEY` | Never |
@@ -209,7 +209,7 @@ subject too, as GitHub suggests that for the squashed commit.
 |---|---|
 | `pr-title` | The title, and a single commit's subject, on pull requests only |
 | `lint` | Every hook of the `pre-commit` stage, on every file, with `uv.lock` up to date |
-| `test` | The fast tests, on Python 3.12 and 3.13, with bubblewrap able to confine and git 2.47 or later |
+| `test` | The fast tests, on Python 3.12, 3.13 and 3.14, with bubblewrap able to confine and git 2.47 or later |
 | `e2e` | The browser tests, once in each of Chromium, Firefox and WebKit |
 | `build`, of the release workflow | The distribution built and checked, as [Releases](#releases) says |
 

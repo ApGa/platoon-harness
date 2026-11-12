@@ -5,7 +5,7 @@
 ## Requirements
 
 - **Linux.** Nothing has run on macOS.
-- **Python 3.12 or later**, which CI tests on 3.12 and 3.13, and [uv](https://docs.astral.sh/uv/), which finds one or
+- **Python 3.12 or later**, which CI tests on 3.12, 3.13 and 3.14, and [uv](https://docs.astral.sh/uv/), which finds one or
   downloads it.
 - **git 2.36 or later**, for an agent in a worktree or a snapshot of its own. The tests run on 2.47.
 - **Optionally, [bubblewrap](https://github.com/containers/bubblewrap)**, for the experimental `isolated` workspace
