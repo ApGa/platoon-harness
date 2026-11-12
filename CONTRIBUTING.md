@@ -138,7 +138,6 @@ While you work, run what you touch, such as `uv run pytest -q tests/unit/primiti
 | One test of `tests/unit/runtime/test_bwrap.py` | There is no writable folder outside `/tmp` |
 | One test each of `tests/unit/tools/test_ph.py` and `tests/unit/tools/test_shim.py` | The machine has no system `python3` |
 | One test of `tests/unit/drivers/test_process.py` | There is no `/dev/full` |
-| `test_the_recorded_mixed_team_s_layout_at_each_size` in `tests/unit/tui/test_snapshots.py`, and `tests/e2e/test_page_images.py` | No live run has recorded the mixed team's session yet, as [The docs' images](#the-docs-images) says |
 
 ## Design rules
 

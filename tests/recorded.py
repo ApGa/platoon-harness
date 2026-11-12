@@ -3,7 +3,7 @@ folder, the export, trimmed to what the clients read, its manifest and its journ
 with every private value a run names in it replaced, and refused if the repository's privacy scan still catches
 anything, so that no credential, token, local path or account goes into it. A live run of an example records one where
 `PLATOON_HARNESS_RECORD` names, and the terminal UI's snapshots and the page's images draw from the one kept at
-`RECORDED`, which no run has recorded yet."""
+`RECORDED`."""
 
 import hashlib
 import json

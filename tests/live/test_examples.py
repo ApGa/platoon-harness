@@ -5,7 +5,7 @@ to run them, and say what ran. A real model chooses its own steps, so each test 
 promises of any model, and fails a run that took more model calls than its docstring states, counted from the journal
 once the run has ended, or more time. No budget counts model calls as they are made, so the team's own budget of turns
 and wall time is what stops a runaway, and a run can spend past the number before its test fails. The six together
-state 310 calls; the docs' images need only the mixed team's, 40.
+state 450 calls; the docs' images need only the mixed team's, 50.
 
 `PLATOON_HARNESS_RECORD`, naming `tests/fixtures/sessions/mixed-team`, has the mixed team's run recorded there for the
 docs' images, as CONTRIBUTING.md says, once the run has passed every check of its test, and never from an endpoint on

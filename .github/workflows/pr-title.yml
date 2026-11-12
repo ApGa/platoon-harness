@@ -1,7 +1,6 @@
 name: PR title
 
-# A workflow of its own, so that editing a pull request's title or description re-runs only this check. It runs while
-# the repository is private too, so that collaborators get it.
+# A workflow of its own, so that editing a pull request's title or description re-runs only this check.
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
