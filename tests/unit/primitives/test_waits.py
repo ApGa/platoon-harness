@@ -1,4 +1,4 @@
-"""Wait: architecture section 7, and the Watch race from the brief."""
+"""Wait: architecture section 7, and the Watch race of STATUS's acceptance cases."""
 
 import asyncio
 from typing import Any

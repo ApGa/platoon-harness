@@ -1,4 +1,4 @@
-"""A team at the size of the brief's Scale case: 100 scripted members, each a process of its own on the real tool
+"""A team at the size of the Scale acceptance case: 100 scripted members, each a process of its own on the real tool
 plane, which a person wakes a round at a time until the journal holds 100,000 events, and what the run read as it
 went."""
 
@@ -17,7 +17,7 @@ from platoon_harness.primitives import Metrics
 from .scripts import MEMBERS, wire
 
 EVENTS = 100_000
-"""How many events the brief's Scale case asks a journal to hold."""
+"""How many events the Scale acceptance case asks a journal to hold."""
 
 
 def team() -> Team:

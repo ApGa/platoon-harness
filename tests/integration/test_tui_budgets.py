@@ -1,9 +1,10 @@
-"""The terminal UI's budgets, from section 7.9 of tui-expectations.md: event-loop lag at 100 agents with one live
-stream, an append at a large history, and resident memory. Short runs on a loaded shared host, so the numbers are
-printed and the bounds are the research's own. Opening and closing a line at a full window is held to the append's,
-every fold at once to the event loop's lag, and the motion of a live session at rest to a small share of a core, which
-is ours. And an attach to the journal of the Scale case, held to a budget twice what docs/reference/scale.md
-publishes."""
+"""The terminal UI's budgets, which probes of Textual set before it was built: event-loop lag under 50 ms at the 99th
+percentile at 100 agents with one live stream, an append under 60 ms at a large history, and resident memory, which
+past the full window grows less than half as much as it did filling it. Short runs on a loaded shared machine, so the
+numbers are printed and the bounds are those probes'. Opening and closing a line at a full window is held to the
+append's, every fold at once to the event loop's lag, and the motion of a live session at rest to a small share of a
+core, which is ours. And an attach to the journal of the scale test, held to a budget twice what
+docs/reference/scale.md publishes."""
 
 import asyncio
 import gc

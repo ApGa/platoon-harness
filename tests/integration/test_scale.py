@@ -1,4 +1,4 @@
-"""The brief's Scale case on the real stack: 100 ScriptedDriver agents, each a process of its own on the real tool
+"""The Scale acceptance case on the real stack: 100 ScriptedDriver agents, each a process of its own on the real tool
 plane, drive 100,000 events through the real kernel and runtime, and what that costs is measured and held to budgets
 set from what docs/reference/scale.md publishes. The run is slow and its budgets fit the hardware that page describes,
 so it runs by hand before each release and no CI job runs it. Each test prints what it measured. Every test reads one

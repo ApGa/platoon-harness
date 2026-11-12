@@ -1,4 +1,4 @@
-"""Queues: architecture section 7, and the Claim race from the brief."""
+"""Queues: architecture section 7, and the Claim race of STATUS's acceptance cases."""
 
 import asyncio
 from typing import Any

@@ -1,5 +1,5 @@
 """Every relative link in the repository's Markdown names a file inside it, and every anchor a heading there, the docs'
-table of contents links every page, and the security guide links the design of record where it would copy it."""
+table of contents links every page, and the security guide links the design where it would copy it."""
 
 import re
 from pathlib import Path
@@ -11,7 +11,7 @@ LINK = re.compile(r"\]\((?P<target>[^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HTML_ANCHOR = re.compile(r"<a (?:id|name)=\"(?P<anchor>[^\"]+)\"")
 SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:")
 CONTENTS = ROOT / "docs" / "README.md"
-INDEXED = ("docs/research/", "docs/rfcs/")
+INDEXED = ("docs/rfcs/",)
 """Folders with a README.md of their own, which the table of contents links in place of their pages."""
 
 
@@ -64,7 +64,7 @@ def test_every_relative_link_and_anchor_resolves():
 
 
 def test_the_table_of_contents_links_every_page_and_the_readme_of_each_indexed_folder():
-    """docs/README.md links every page under docs/ but those of research/ and rfcs/, and their README.md instead."""
+    """docs/README.md links every page under docs/ but those of rfcs/, and its README.md instead."""
     linked = {(CONTENTS.parent / target.partition("#")[0]).resolve() for _, target in links(CONTENTS)}
     pages = {page for page in tracked("docs/*.md") if not str(page.relative_to(ROOT)).startswith(INDEXED)}
     pages |= {ROOT / folder / "README.md" for folder in INDEXED}
@@ -74,7 +74,7 @@ def test_the_table_of_contents_links_every_page_and_the_readme_of_each_indexed_f
 
 
 def test_the_security_guide_links_each_tier_of_architecture_section_15_and_the_web_guide_s_security():
-    """The guide is section 15's, which stays the design of record, so each tier has a row there linking the section."""
+    """The guide is section 15's, which stays the design, so each tier has a row there linking the section."""
     section = (ROOT / "docs" / "architecture.md").read_text().partition("## 15. Security\n")[2].partition("\n## ")[0]
     tiers = [line for line in section.splitlines() if line.startswith("| ") and not line.startswith("| Tier |")]
     guide = ROOT / "docs" / "security.md"

@@ -1,6 +1,6 @@
 """journal.sqlite: the events, bodies and meta tables, and who may open them.
 
-The pragmas, the checkpoint thread and the filesystem rules come from docs/research/spikes/journal-performance.md.
+The pragmas, the checkpoint thread and the filesystem rules come from the measurements RFC 0002 records.
 """
 
 import ctypes

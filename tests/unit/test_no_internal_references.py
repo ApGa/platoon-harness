@@ -127,7 +127,7 @@ def test_the_scan_covers_every_text_file():
     assert {"README.md", "AGENTS.md", "CONTRIBUTING.md", "pyproject.toml", "uv.lock"} <= names
     assert {".pre-commit-config.yaml", "docs/README.md", "packages/sdk/src/platoon_harness/version.py"} <= names
     assert "tests/unit/test_no_internal_references.py" in names
-    for prefix in ("packages/sdk/src/", "packages/cli/src/", "docs/research/", "examples/", "tests/", ".github/"):
+    for prefix in ("packages/sdk/src/", "packages/cli/src/", "examples/", "tests/", ".github/"):
         assert any(name.startswith(prefix) for name in names), prefix
 
 
