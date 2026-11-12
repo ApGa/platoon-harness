@@ -13,6 +13,9 @@ named here is closed.
 
 ### New features
 
+- **A security policy and issue templates.** `SECURITY.md` says how to report a vulnerability privately, through
+  GitHub's private vulnerability reporting, and that the newest 0.1 release is supported. The bug report and feature
+  request templates ask for what `platoon-harness --version` prints, each harness and its version, the OS and the steps.
 - **Replay a session in the browser.** `web SESSION --replay`, or Replay on the sessions page, serves the page over a
   replay of the session, drawn as the session is from a copy of its record that grows as it plays, under a banner that
   always says it is a replay, of which session, at which event of how many and when. Its controls under the top bar play

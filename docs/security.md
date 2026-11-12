@@ -146,6 +146,5 @@ Keep secrets out of what agents read, and tombstone a body that holds one.
 
 ## Reporting a vulnerability
 
-The repository has no disclosure policy yet. `SECURITY.md`, through GitHub's private vulnerability reporting, is
-planned, as the default pending its owner's ruling, though nothing of it is built and no work toward it is scheduled
-yet: see [STATUS](STATUS.md#packaging-and-docs).
+Report one privately, through GitHub's private vulnerability reporting, never in a public issue:
+[SECURITY.md](../SECURITY.md) says how, and which releases are supported.
