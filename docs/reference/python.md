@@ -1423,7 +1423,7 @@ class OpenCodeDriver(AcpDriver):
 
 OpenCode, by `opencode acp`, on the user's own setup with ours beside it, reaching the network as the shell
 does. A start that names no model is refused, as OpenCode with none set sends prompts to a hosted model nobody
-chose.
+chose. No real ACP agent has passed its checks: OpenCode 2.2.6, run by hand on 2026-11-08, failed 7 of 18.
 
 **`start`**
 
