@@ -56,9 +56,9 @@ BY_HAND = {
     "git push origin v0.2.0": "a maintainer's, as the tag it pushes publishes the release",
 }
 """Each command the guide shows that neither CI nor a hook runs, and why it is run by hand."""
-PUBLISHES = "github.repository == 'ApGa/platoon-harness' && github.event_name == 'push' && "
-"""How the condition of a job that publishes begins: on a push to this repository, never to a fork or for a pull
-request."""
+PUBLISHES = "github.repository == 'ApGa/platoon-harness' && github.event_name == 'push' && github.ref_type == 'tag'"
+"""The condition of a job that publishes: a tag pushed to this repository, never to a fork, for a pull request or for a
+branch."""
 PINNED = re.compile(r"(?P<action>[\w.-]+/[\w./-]+)@(?P<commit>[0-9a-f]{40})  # (?P<release>v\d+\.\d+\.\d+)")
 """An action pinned to a commit, with the release it is beside it."""
 FENCE = re.compile(r"^(?P<indent> *)```(?P<language>[\w-]*)$")
@@ -205,7 +205,7 @@ def test_every_action_is_pinned_to_a_commit_and_every_workflow_reads_only_by_def
     """A tag moved upstream, or a release of a tool `uvx` fetches, changes nothing a workflow runs, a workflow's token
     reads only, and no checkout keeps credentials for a later step. A job that publishes alone asks for more, an OIDC
     token and nothing else, on a push to this repository, in the `pypi` environment, and runs no code of the repository:
-    it uploads what the build made."""
+    it uploads what the build made, once the build passes."""
     workflows = [yaml.safe_load(path.read_text()) for path in (ROOT / ".github" / "workflows").glob("*.yml")]
     jobs = [job for workflow in workflows for job in workflow["jobs"].values()]
     publishing = [job for job in jobs if "id-token" in job.get("permissions", {})]
@@ -221,7 +221,8 @@ def test_every_action_is_pinned_to_a_commit_and_every_workflow_reads_only_by_def
     assert [line for line in fetched if re.match(r"uvx (--from dist/|[\w-]+@[\d.]+ )", line) is None] == []
     assert [workflow.get("permissions") for workflow in workflows] == [{"contents": "read"}] * len(workflows)
     assert {access for job in reading for access in job.get("permissions", {}).values()} <= {"read"}
-    assert publishing and {job["if"].startswith(PUBLISHES) for job in publishing} == {True}
+    assert publishing and [(job["if"], job["needs"]) for job in publishing] == [(PUBLISHES, "build")] * len(publishing)
+    assert [step for job in publishing for step in job["steps"] if "run" in step] == []
     assert [(job["permissions"], job["environment"]["name"]) for job in publishing] == [
         ({"id-token": "write"}, "pypi")
     ] * len(publishing)
