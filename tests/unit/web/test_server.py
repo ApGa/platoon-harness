@@ -7,6 +7,7 @@ import inspect
 import json
 import socket
 import sqlite3
+import types
 import typing
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -17,7 +18,7 @@ from platoon_harness import ConfigError, Session, Team
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import DriverError, DriverInfo
 from platoon_harness.extensions import Installed
-from platoon_harness.http import SECONDS
+from platoon_harness.http import SECONDS, Rejected
 from platoon_harness.kernel import Delta, ManualClock
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime.control import BODY_LIMIT
@@ -741,21 +742,41 @@ async def test_a_command_not_as_the_page_sends_one_is_refused(web, session, comm
     assert await session.head() == head
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
-        b'{"op": "message.send", "args": {"to": "#general", "gist": "half \\ud800 of a character' + b"!" * 300 + b'"}}',
-        b"[" * 100_000 + b"]" * 100_000,
-    ],
-)
-async def test_a_body_that_is_not_json_of_unicode_text_is_refused_with_no_event(web, session, body):
+async def test_a_body_that_is_not_json_of_unicode_text_is_refused_with_no_event(web, session):
     browser = await Browser(web).opened("control")
     head = await session.head()
+    half = (
+        b'{"op": "message.send", "args": {"to": "#general", "gist": "half \\ud800 of a character' + b"!" * 300 + b'"}}'
+    )
 
-    reply = await browser.request("POST", "/x/command", body)
+    reply = await browser.request("POST", "/x/command", half)
 
     assert reply.status == 400 and "Unicode" in reply.json()["error"]
     assert await session.head() == head
+
+
+async def test_a_body_nested_deeper_than_python_may_parse_is_refused_with_no_event(web, session):
+    """Whether Python parses it depends on its stack, which 3.14 measures: refused either way, as not JSON or as not an
+    object."""
+    browser = await Browser(web).opened("control")
+    head = await session.head()
+
+    reply = await browser.request("POST", "/x/command", b"[" * 100_000 + b"]" * 100_000)
+
+    assert reply.status == 400
+    assert await session.head() == head
+
+
+def test_a_body_too_deep_to_parse_is_refused_as_not_json_of_unicode_text(monkeypatch):
+    def too_deep(body: bytes) -> object:
+        raise RecursionError
+
+    monkeypatch.setattr(server_module, "json", types.SimpleNamespace(loads=too_deep, dumps=json.dumps))
+
+    with pytest.raises(Rejected) as refused:
+        server_module.params_of(b"[[]]")
+
+    assert refused.value.status == 400 and "Unicode" in refused.value.why
 
 
 @pytest.mark.parametrize(
