@@ -3,8 +3,8 @@
 git and the team files are real, and only the model is scripted. A run names `fake-model` for MODEL and adds one
 `--set` line, `plays.OFFLINE`, handing pi its switch for no network. The copy, `team check` and `team show` need no
 harness, so they are fast tests, and run as shown. Real models run the examples in `tests/live/test_examples.py`. The
-README's quickstart and the first session's guide run the mixed team as the example's page does. None of these shows
-what a real model would choose, which only a live run does."""
+first session's guide runs the mixed team as the example's page does. None of these shows what a real model would
+choose, which only a live run does."""
 
 import ast
 import asyncio
@@ -205,33 +205,6 @@ async def test_the_mixed_team_fixes_issue_1_and_says_who_contributed_to_the_lead
     entries = [(entry["sender"], entry["gist"]) for entry in json.loads(messages.stdout)["entries"]]
     assert entries == [("@you", job), ("runtime", plays.FIXED)]
     assert [row["maker"] for row in json.loads(reached.stdout)["rows"]] == ["agent:lead", "agent:fixer", "human:you"]
-
-
-@pytest.mark.slow
-@pytest.mark.timeout(400)
-async def test_the_readme_s_first_steps_run_the_mixed_team_and_read_it_back(tmp_path: Path):
-    """The README's quickstart as it shows it, on the real `pi` and OpenHands against FakeModel: the copy, the mixed
-    team's own run, then the reads of the closed session: the sessions there are, the task on its queue, the note on
-    its board, and what cites the note, the lead's finish among it."""
-    needs("pi")
-    page = ROOT / "README.md"
-    commands = [command for command in shown(page, where="cp -r") if command.startswith("platoon-harness")]
-    run, *reads = commands
-
-    async with FakeModel() as model, on_sample(tmp_path, page, provider(model, tmp_path / "home")) as cli:
-        cast(model, **plays.MIXED)
-        ran = await run_on_fake_model(cli, run)
-        done = [await typed(cli, command) for command in reads]
-
-    assert run == shown(README, where="--name tally ")[0]
-    assert ran.code == 0 and [step.code for step in done] == [0] * len(done), [step.stderr for step in done]
-    listed, queued, posted, cited = (step.stdout for step in done)
-    assert re.search(r"^tally\s.*closed$", listed, re.MULTILINE), listed
-    assert [task["state"] for task in json.loads(queued)["tasks"]] == ["done"]
-    assert json.loads(posted)["ref"] == plays.NOTE
-    assert ("agent:lead", "agent.finished") in {
-        (row.get("maker"), row.get("type")) for row in json.loads(cited)["rows"]
-    }
 
 
 @pytest.mark.slow

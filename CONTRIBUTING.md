@@ -20,6 +20,7 @@ RFC: see [When a change needs an RFC](#when-a-change-needs-an-rfc).
 - [Add a topology preset](#add-a-topology-preset)
 - [Add an op or a primitive](#add-an-op-or-a-primitive)
 - [Add an example](#add-an-example)
+- [The docs' images](#the-docs-images)
 - [When a change needs an RFC](#when-a-change-needs-an-rfc)
 - [Releases](#releases)
 
@@ -409,18 +410,16 @@ lists alone, which tests there hold. A cost a README quotes comes from a run tha
 
 ## The docs' images
 
-The images of the terminal UI in `docs/assets` are copies of snapshots that `tests/unit/tui/test_snapshots.py` draws, which a
-test holds to them byte for byte, and the page's images, `web-chat.png` and `web-provenance.png`, are what
-`tests/e2e/test_page_images.py` writes. Each is to show a real session: the mixed team's, as a live run of it records it in
-the folder `RECORDED` names in `tests/recorded.py`, its manifest and its journal's events and bodies in text, with every local
-path, the host, the user, the group, the endpoint and the key replaced, and refused while the privacy scan catches anything. Once that recording is
-there, `SCREENSHOTS` maps each screenshot to the recorded session's snapshot, but for `tui-patch.svg`, which stays a scripted
-session's: a patch is read from git when it opens, and a recording keeps no repository. A live run on DeepSeek V4.1 Flash recorded the session
-on 2026-11-08. The docs never show one of FakeModel's: the
-live test refuses to record from an endpoint on loopback, where FakeModel serves.
+The terminal UI's images in `docs/assets` are copies of the snapshots `tests/unit/tui/test_snapshots.py` draws, held to
+them byte for byte, and the page's, `web-chat.png` and `web-provenance.png`, are what `tests/e2e/test_page_images.py`
+writes. The page's images, and the screenshots `RECORDED_SNAPSHOTS` names, show the mixed team's session as its live test
+records it in the folder `RECORDED` names in `tests/recorded.py`: with every local path, the host, the user, the group,
+the endpoint and the key replaced, refused while the privacy scan catches anything, and never from an endpoint on
+loopback, where FakeModel serves. The other screenshots show scripted sessions.
 
-Record it with the mixed team's live test alone, which may spend 50 model calls, with `PLATOON_HARNESS_LIVE_MODEL`,
-`OPENAI_BASE_URL` and `OPENAI_API_KEY` set. It records only a run that passed each of its checks. Then draw the images from it:
+To record it again, run the mixed team's live test alone, which may spend 50 model calls, with
+`PLATOON_HARNESS_LIVE_MODEL`, `OPENAI_BASE_URL` and `OPENAI_API_KEY` set; it records only a run that passed each of its
+checks. Then draw the images from it:
 
 ```bash
 PLATOON_HARNESS_LIVE=1 PLATOON_HARNESS_RECORD=tests/fixtures/sessions/mixed-team uv run pytest -q -m live tests/live/test_examples.py -k mixed_team
@@ -428,13 +427,10 @@ uv run pytest -q tests/unit/tui/test_snapshots.py -k recorded --snapshot-update
 PLATOON_HARNESS_IMAGES=docs/assets uv run pytest -q -m e2e tests/e2e/test_page_images.py
 ```
 
-Copy each snapshot over its screenshot as `test_each_screenshot_the_docs_show_is_its_snapshot_byte_for_byte` says, and say
-under each image what drew it, as `tests/unit/docs/test_images.py` holds: `recorded`, with the model, under one of the recorded
-session, and `scripted` under one of a scripted session. Show `web-chat.png` in the README's step 3 and in
-[the browser guide](docs/how-to/web.md), and `web-provenance.png` in [provenance](docs/how-to/provenance.md), and reword the
-sentences that link a screenshot as a scripted session's, in [the terminal UI guide](docs/how-to/tui.md) and the worktree team's
-step 3. No test holds an image of the page to what a browser draws byte for byte, as that differs with the host's fonts. Read the
-recording and each image before you commit them, as they are published with the repository.
+Copy each snapshot over its screenshot as `test_each_screenshot_the_docs_show_is_its_snapshot_byte_for_byte` says, and
+say under each image what drew it, as `tests/unit/docs/test_images.py` holds: `recorded`, with the model, or `scripted`.
+No test holds the page's images to what a browser draws, as that differs with the host's fonts. Read the recording and
+each image before you commit them, as they are published with the repository.
 
 ## When a change needs an RFC
 

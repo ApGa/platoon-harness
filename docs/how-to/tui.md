@@ -131,8 +131,8 @@ is not taken at all, and it says why, every problem at once, with the nearest ke
 stands instead.
 
 Platoon's agents, three marching up, stand at the navigator's top and on the sessions screen beside the wordmark:
-sprites drawn by hand from the icon of [Platoon](https://github.com/ApGa/platoon) (MIT, © Apurva Gandhi), two pixels to
-a cell in half blocks, in the icon's blue to green, and in your terminal's own blue, cyan and green under a theme that
+sprites drawn by hand from Platoon's icon, as [the README](../../README.md#license) credits it, two pixels to a cell in
+half blocks, in the icon's blue to green, and in your terminal's own blue, cyan and green under a theme that
 keeps to them. The header says the session's name and how it stands, so nothing stands beside them in the navigator. On
 the sessions screen a line too long for the screen is cut at its edge, so the logo is never torn.
 
