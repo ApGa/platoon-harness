@@ -6,7 +6,8 @@ This page is the table of contents. New here? [Install](getting-started/install.
 
 ## Getting started
 
-- [Install](getting-started/install.md): what you need, installing from a checkout, OpenHands, and what `doctor` says.
+- [Install](getting-started/install.md): what you need, installing from PyPI or a checkout, OpenHands, and what
+  `doctor` says.
 - [Concepts](getting-started/concepts.md): what platoon-harness is and is not, a session on disk, and one session traced.
 - [Your first session](getting-started/first-session.md): a team on your model, read back and opened, then a team of
   your own.

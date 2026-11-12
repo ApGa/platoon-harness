@@ -47,19 +47,25 @@ Nine everyday words name what a user meets ([architecture section 2](docs/archit
 
 ## Install
 
-Nothing is published to PyPI yet, so install from a checkout. You need Linux, Python 3.12 or later,
-[uv](https://docs.astral.sh/uv/), git 2.47 or later, and the harnesses you want on your PATH (`claude`, `codex`, `pi`),
-signed in as you usually are.
+You need Linux, git 2.47 or later, and the harnesses you want on your PATH (`claude`, `codex`, `pi`), signed in as you
+usually are. The command line, with [uv](https://docs.astral.sh/uv/), which finds a Python 3.12 or later or downloads
+one:
+
+```console
+$ uv tool install "platoon-harness[cli]"
+```
+
+The library alone: `uv add platoon-harness`, or `pip install platoon-harness`.
+
+The quickstart's first step runs an example, so it needs a checkout, whose `uv sync` installs platoon-harness with the
+`dev` group, which holds the tests' tools and its `cli` and `openhands` extras:
 
 ```console
 $ git clone https://github.com/ApGa/platoon-harness.git && cd platoon-harness
 $ uv sync
 ```
 
-`uv sync` installs platoon-harness with the `dev` group, which holds the tests' tools and its `cli` and `openhands`
-extras. To leave the group out, set `UV_NO_DEV=1` for `uv sync --extra cli` and for every `uv run` after it, as
-`uv run` installs the group otherwise. [Install](docs/getting-started/install.md) has the rest: OpenHands, and what
-`doctor` says.
+[Install](docs/getting-started/install.md) has the rest: OpenHands, extensions beside the tool, and what `doctor` says.
 
 ## Quickstart
 
@@ -92,21 +98,20 @@ event as the session journals it, and exits 0 once the session has settled, and 
 `git diff` to show. The commands after it read the closed session: the sessions there are, the task on the queue, the
 note on the board, and what cites the note.
 
-**2. Run your own harnesses.** Agents work where you start a session, so do this in a repository of yours, with the
-checkout's environment active:
+**2. Run your own harnesses.** Agents work where you start a session, so do this in a repository of yours, with
+`platoon-harness` on your PATH, from `uv tool install` or the checkout's environment:
 
 ```console
-$ source path/to/platoon-harness/.venv/bin/activate
 $ platoon-harness doctor     # what this machine has
 $ platoon-harness init       # a starter platoon-harness.toml from the harnesses it found
 $ platoon-harness            # the terminal UI
 ```
 
-`doctor` says `usable` when this machine can run a session. With the `dev` group it says so even with no harness on
-PATH, as the group installs the SDK's `openhands` extra and OpenHands runs on the runtime's own interpreter. Without the
-group and with no harness on PATH, it says `not usable`.
+`doctor` says `usable` when this machine can run a session. With the checkout's `dev` group, or the `openhands` extra,
+it says so even with no harness on PATH, as OpenHands runs on the runtime's own interpreter. Without either, and with no
+harness on PATH, it says `not usable`.
 
-**3. Watch and steer.** While a session runs, from another shell with the environment active:
+**3. Watch and steer.** While a session runs, from another shell with `platoon-harness` on your PATH:
 
 ```console
 $ platoon-harness attach tally    # the terminal UI, as a guest of the running session
@@ -165,7 +170,6 @@ coordination) and 3 (training with Platoon) are in progress: the SDK's half of t
 bridge lives on a branch of a fork of Platoon's repository, through which teams have trained on a GPU. Milestone 4
 (production polish) is planned. Nothing has run on macOS. [docs/STATUS.md](docs/STATUS.md) says what is implemented, what
 is tested and how, and what is planned.
-Nothing is published to PyPI yet.
 
 ## Documentation
 

@@ -1,6 +1,6 @@
 # Install
 
-**Goal:** a checkout where `platoon-harness` runs, with what the harnesses you use need.
+**Goal:** `platoon-harness` on your PATH, with what the harnesses you use need.
 
 ## Requirements
 
@@ -14,11 +14,30 @@
   workspace confines an agent with ([workspaces](../how-to/workspaces.md#where-an-isolated-agent-runs)).
 
 To try it, [your first session](first-session.md) runs a team of pi and OpenHands on a model you name, at any endpoint
-that speaks OpenAI's Chat Completions, with your key for it.
+that speaks OpenAI's Chat Completions, with your key for it, from a checkout, which holds the examples.
+
+## Install from PyPI
+
+The command line, as a tool of its own:
+
+```console
+$ uv tool install "platoon-harness[cli]"
+```
+
+uv installs it in an environment of its own, on a Python it finds or downloads, and puts the `platoon-harness` command
+on your PATH. The library alone, which needs pydantic and nothing more: `uv add platoon-harness`, or
+`pip install platoon-harness`.
+
+The tool sees only the drivers and extensions installed in its own environment, so name them when you install it, by
+their extras and with `--with`:
+
+```console
+$ uv tool install "platoon-harness[cli,openhands]" --with my-extension
+```
 
 ## Install from a checkout
 
-Nothing is published to PyPI yet, so clone the repository and install from its lock file:
+To work on platoon-harness, or to run the examples, clone the repository and install from its lock file:
 
 ```console
 $ git clone https://github.com/ApGa/platoon-harness.git && cd platoon-harness
@@ -49,8 +68,9 @@ $ uv sync --extra cli
 `harness = "openhands"` runs a worker per agent on the runtime's own interpreter, so nothing is looked up on PATH. The
 worker alone loads OpenHands, which the SDK's `openhands` extra brings, pinning `openhands-sdk` and `openhands-tools` at
 1.59.0 exactly. Install the extra for the interpreter that runs the runtime, which is the command line's when it starts
-a session: in a checkout, that is the checkout's own, and `uv sync` installs the extra with the dev group. Without the
-dev group, name it with the `cli` extra:
+a session: for the tool, name it with `cli`, as `uv tool install "platoon-harness[cli,openhands]"`. In a checkout, that
+is the checkout's own, and `uv sync` installs the extra with the dev group. Without the dev group, name it with the
+`cli` extra:
 
 ```console
 $ UV_NO_DEV=1 uv sync --extra cli --extra openhands
@@ -59,23 +79,26 @@ $ UV_NO_DEV=1 uv sync --extra cli --extra openhands
 `openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`, a binary under Laminar's own terms. The
 checkout's lock leaves it out with `exclude-dependencies`, so a checkout never installs it, and the worker runs without
 it. [Drivers](../extending/drivers.md#openhands-a-wire-worker) says why, and how to run the worker on an interpreter of
-its own. A wheel carries no such exclusion, so the extra installed from the SDK's wheel, as a published install would
-be, brings `lmnr-claude-code-proxy` unless you exclude it: with uv, by `exclude-dependencies` in your own project's
-`[tool.uv]`, as the checkout's `pyproject.toml` does, or by `uv pip install --excludes` with a file that names it.
-Either way, platoon-harness itself stays under the MIT license. OpenHands keeps no login, so its role needs an auth profile that names its key.
+its own. A wheel carries no such exclusion, so the extra installed from the wheel, as an install from PyPI is, brings
+`lmnr-claude-code-proxy` unless you exclude it: with uv, by `--excludes` with a file that names it, which
+`uv tool install` and `uv pip install` take, or by `exclude-dependencies` in your own project's `[tool.uv]`, as the
+checkout's `pyproject.toml` does. Either way, platoon-harness itself stays under the MIT license. OpenHands keeps no
+login, so its role needs an auth profile that names its key.
 
 ## Check the installation
 
 ```console
-$ uv run platoon-harness --version
+$ platoon-harness --version
 platoon-harness 0.1.0
-$ uv run platoon-harness doctor
+$ platoon-harness doctor
 ```
 
+In a checkout, run them through `uv run`.
+
 `doctor` says what this machine has, and whether it can run a session. On a machine with `claude` and `codex` signed in
-and no `pi`, after `uv sync` and `platoon-harness doctor --check`, it printed this, its root and sockets lines shown in
-the form they take for the default root, with `<home>`, `<filesystem>` and `<uid>` standing for your own, and `...` for a
-line per driver and extension:
+and no `pi`, after a checkout's `uv sync` and `platoon-harness doctor --check`, it printed this, its root and sockets
+lines shown in the form they take for the default root, with `<home>`, `<filesystem>` and `<uid>` standing for your own,
+and `...` for a line per driver and extension:
 
 ```text
 platoon-harness 0.1.0

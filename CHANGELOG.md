@@ -1,10 +1,11 @@
 # Changelog
 
-What each release of platoon-harness changes. Nothing is released yet: everything below goes into the first release, 0.1.0.
-Below 1.0, a minor release may change the Python API, the team file or the command line, and a patch release only fixes
-bugs; require a range such as `platoon-harness>=0.1,<0.2`.
+What each release of platoon-harness changes. 0.1.0 is the first, for Linux: `uv tool install "platoon-harness[cli]"`
+installs the command line, and `pip install platoon-harness` the library. Below 1.0, a minor release may change the
+Python API, the team file or the command line, and a patch release only fixes bugs; require a range such as
+`platoon-harness>=0.1,<0.2`.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-12)
 
 Known limitations are in [docs/STATUS.md](docs/STATUS.md), which says of every capability whether it is planned,
 implemented, tested, experimental or deferred. An id such as `bug-clients-3` names a finding that
@@ -1116,6 +1117,10 @@ named here is closed.
   `versions`, and an extension requires `platoon-harness`. Before, the SDK and the command line were two distributions,
   `platoon-harness-sdk` and `platoon-harness-cli`. See
   [RFC 0081](docs/rfcs/0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md).
+- **A message's line opens on what it says.** In the terminal's transcript, a message's line is drawn open on its body
+  as it arrives, where it was drawn shut on its gist, its first 280 characters, and a live message was replaced by that
+  cut once the journal held it. `/find` still looks at the gist. A tool call's line stays shut, as opening it shows its
+  input.
 - **A click on a transcript line chooses it.** A click on its `▸` or `▾` opens or closes it, as Enter does, and a click on
   the rest of it, chosen already or not, opens nothing. Before, a click opened the line it was on.
 - **Ctrl+O opens every fold of the transcript.** It opens each turn's calls, thoughts and spawns, and again closes them

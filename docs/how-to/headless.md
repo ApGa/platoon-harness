@@ -7,8 +7,9 @@ watch and steer it from another shell, and stop and resume it.
 
 **Prerequisites:**
 
-- `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
-  environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
+- `platoon-harness` on your PATH, installed as [Install](../getting-started/install.md) says: by
+  `uv tool install "platoon-harness[cli]"`, or from a checkout, with its environment active as
+  [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
 - the harnesses you use on your PATH, signed in as you usually are: `claude`, `codex` or `pi`, or the SDK's `openhands`
   extra, as [Install](../getting-started/install.md#openhands) says.
 

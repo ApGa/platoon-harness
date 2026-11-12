@@ -404,6 +404,6 @@ $ uv publish
 
 `uv build` writes an sdist to `dist/`, then a wheel built from it. `twine check --strict` checks their metadata, and that
 the README renders as the index's description, failing on a warning too, as it does for the sample, which has no
-`readme`. `uv publish` uploads `dist/` to PyPI, with a token, or from a CI workflow by trusted publishing. Nothing of
-platoon-harness is published yet, so until it is, a package that requires `platoon-harness` installs beside a
+`readme`. `uv publish` uploads `dist/` to PyPI, with a token, or from a CI workflow by trusted publishing. A person
+installs it beside the command line, as `uv tool install "platoon-harness[cli]" --with <your package>`, or beside a
 checkout, as step 8 does.

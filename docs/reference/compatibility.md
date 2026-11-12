@@ -802,7 +802,7 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 **Terms and licenses.**
 
 - OpenAI Terms clauses need review from a direct source.
-- `lmnr-claude-code-proxy` is proprietary, and the `openhands` extra installed from an index brings it in unless excluded, as uv's `--excludes` does. The worker runs without it, and the workspace lock excludes it. Nothing is published, so no install of the extra from an index has run, and its resolution with and without `--excludes` was a dry run.
+- `lmnr-claude-code-proxy` is proprietary, and the `openhands` extra installed from an index brings it in unless excluded, as uv's `--excludes` does. The worker runs without it, and the workspace lock excludes it. No install of the extra from PyPI has run yet. The release workflow resolves it from the built wheel with `--excludes`, which leaves the proxy out.
 - Concurrency of one plan login across many processes is unknown for both Claude Code and Codex.
 
 **Harness behavior not measured.**

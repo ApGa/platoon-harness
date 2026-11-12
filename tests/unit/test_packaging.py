@@ -239,5 +239,5 @@ def test_the_workspace_excludes_the_proprietary_dependency_and_install_md_says_a
         metadata.distribution("lmnr-claude-code-proxy")
     assert "`openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`" in guide
     assert "The checkout's lock leaves it out with `exclude-dependencies`, so a checkout never installs it" in guide
-    assert "the extra installed from the SDK's wheel, as a published install would be, brings" in guide
+    assert "the extra installed from the wheel, as an install from PyPI is, brings" in guide
     assert KEPT in guide and KEPT in " ".join(project()["readme"]["text"].split())
