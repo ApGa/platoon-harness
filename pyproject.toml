@@ -16,6 +16,7 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
 # The library needs pydantic alone, so what is built on it brings nothing more.
@@ -24,7 +25,7 @@ dependencies = ["pydantic>=2.10,<3"]
 [project.optional-dependencies]
 # The command line, its terminal UI and the page it serves.
 cli = [
-    "cyclopts>=4,<5",
+    "cyclopts>=4.16,<5",
     "markdown-it-py>=2.2",
     "rich>=14",
     "swarmchat==0.1.0",

@@ -3084,7 +3084,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cyclopts", marker = "extra == 'cli'", specifier = ">=4,<5" },
+    { name = "cyclopts", marker = "extra == 'cli'", specifier = ">=4.16,<5" },
     { name = "markdown-it-py", marker = "extra == 'cli'", specifier = ">=2.2" },
     { name = "openhands-sdk", marker = "extra == 'openhands'", specifier = "==1.59.0" },
     { name = "openhands-tools", marker = "extra == 'openhands'", specifier = "==1.59.0" },
