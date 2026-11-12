@@ -123,10 +123,18 @@ reports back through an op. Its query is read off the loop, so a slow one holds 
   scripted agents in worktrees of a repository of 200 files, each committing a file of its own each turn, for four rounds after
   the first, twice for each N, on the code of `fix: Run an agent's query on a reader thread, so a slow one holds up no other call`
   and on the same code with the `host.py` of `feat: Look at different workspaces at once, each after the shared one`, on Git
-  2.47.3, Python 3.12.13 and xfs, in jobs of 32 hardware threads on two nodes of two Intel Xeon Platinum 8558, whose other threads
-  other jobs used. The looks' git ran in the event loop's pool there, which on those nodes has the 32 threads the host's own pool
-  has now; the code with the host's own pool was not measured. [scale.md](../reference/scale.md#a-git-teams-looks) has the
-  numbers.
+  2.47.3, Python 3.12.13 and xfs, on 32 hardware threads of each of two shared machines of two Intel Xeon Platinum 8558, under
+  other load. The looks' git ran in the event loop's pool there, which on those machines has the 32 threads the host's own pool
+  has now; the code with the host's own pool was not measured. A round, from the person's message to every agent until every
+  look after that turn had finished, the least and the most of eight:
+
+  | Agents | One look at a time in a session | One look at a time in a workspace |
+  |---|---|---|
+  | 10 | 0.74 to 0.77 s | 0.36 to 0.42 s |
+  | 30 | 3.5 to 3.6 s | 1.3 to 1.5 s |
+  | 100 | 27.1 to 30.3 s | 8.6 to 10.3 s |
+
+  [scale.md](../reference/scale.md#a-git-teams-looks) keeps the second column.
 - Tests: [tests/unit/runtime/test_looks.py](../../tests/unit/runtime/test_looks.py),
   `test_looks_of_two_workspaces_run_at_once_each_after_the_shared_one`, whose looks of two agents' own workspaces each wait until
   both are in, which fails under one lock in a session, and which finds a commit made in your checkout before both workspaces

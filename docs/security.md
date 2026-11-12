@@ -1,8 +1,8 @@
 # Security
 
 This page says what platoon-harness protects and from whom, what it does not protect, how long a session keeps what it
-records, and what is redacted and what is not. [Architecture section 15](architecture.md#15-security) is the design of
-record; this page is its guide, and links each part to where it is said in full. [STATUS](STATUS.md) says what of it is
+records, and what is redacted and what is not. [Architecture section 15](architecture.md#15-security) is the design;
+this page is its guide, and links each part to where it is said in full. [STATUS](STATUS.md) says what of it is
 tested.
 
 ## What it protects, tier by tier
@@ -13,23 +13,24 @@ Section 15 keeps each threat in a tier of its own:
 |---|---|---|
 | Model arguments: hallucination, and prompt injection through a tool's arguments | An agent is who its token says, never what its arguments claim: no tool schema has a field for the caller's identity, an undeclared argument is refused and journaled, and every op is authorized by the server, at call time | [§15](architecture.md#15-security), [laws 6 and 7](architecture.md#3-laws), [the tool plane](architecture.md#10-tool-plane) |
 | Untrusted content: board entries, repository files, tool output, Markdown | Content is data, never instructions: the terminal draws it through `SafeText`, and the page escapes it and runs scripts by hash alone | [§15](architecture.md#15-security), [the web guide's Security](how-to/web.md#security) |
-| Network: the browser, and anything else that reaches a port | Loopback by default; any other address needs TLS, a wildcard is refused, and a session on a plan login is served on loopback alone, which `web` checks as it starts and again as each agent comes up; a replay of one, whose links act on nothing, is served past loopback too, by a default that waits for the owner's ruling. Your sessions, `web` with no session, are served on loopback alone, from one link only the command says. View and control links are separate classes, open once and expire, and `web` keeps only their hashes. `Host` must name the authority served and a POST's `Origin` the page's own | [§15](architecture.md#15-security), [the web guide's Security](how-to/web.md#security) |
+| Network: the browser, and anything else that reaches a port | Loopback by default; any other address needs TLS and a wildcard is refused, and the sessions page, `web` with no session, and a live session on a plan login are served on loopback alone. View and control links are separate classes, open once and expire, and `web` keeps only their hashes. `Host` must name the authority served and a POST's `Origin` the page's own | [§15](architecture.md#15-security), [the web guide's Security](how-to/web.md#security) |
 | An agent that can run commands, as you | Nothing in this tier: see below | [§15](architecture.md#15-security), [workspaces](how-to/workspaces.md#where-an-isolated-agent-runs) |
 | Extensions and drivers | They are trusted code: installing one is trusting it, and a team or project file can select one but never install one | [§15](architecture.md#15-security), [extensions](architecture.md#17-extensions-and-configuration) |
 
-Plan logins have rules of their own. platoon-harness starts your harness under its own login and never reads, copies or
-proxies a credential. Several agents headless on one plan login are refused, exit 78, unless you say it is your own work
-with `--plan-login`, or `plan_login=True` from Python. `web` serves a session on a plan login on loopback alone, since a
-control link acts as you, on your login. It refuses another address as it starts, from the session's opt-in, the logins
-its agents came up on and what each role's harness says now, as a control link can spawn any role. It stops with 78 if
-an agent comes up on a plan login while it serves, as when a harness was signed in on one since, and what a control link
-did before then stands. [RFC 0016](rfcs/0016-plan-logins-and-credentials.md) says why. A replay is the one exception:
-`web SESSION --replay` serves one past loopback whatever login its agents ran on, as its links act on nothing, not even
-as you, though they read every event and view of the record as its runtime did. That is
-[RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)'s default for its
-question 3, pending the owner's ruling. The sessions page, `web` with no session, serves on loopback alone, and so does
-every session it opens, so it starts several agents on one plan login only after asking you once whether it is your own
-work, as the terminal does.
+Plan logins have rules of their own ([RFC 0016](rfcs/0016-plan-logins-and-credentials.md)):
+
+- platoon-harness starts your harness under its own login and never reads, copies or proxies a credential.
+- Several agents headless on one plan login are refused, exit 78, unless you say it is your own work with `--plan-login`, or
+  `plan_login=True` from Python. The terminal and the sessions page ask you once instead.
+- `web` serves a live session on a plan login on loopback alone, since a control link acts as you, on your login. It refuses
+  another address with 78 as it starts, and stops with 78 if an agent comes up on a plan login while it serves another address;
+  what a control link did before then stands.
+- A replay, `web SESSION --replay`, is served past loopback whatever login its agents ran on, as its links act on nothing, not
+  even as you, but they read every event and view of the record as its runtime did
+  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)'s default for its question
+  3, pending the owner's ruling).
+
+[The web guide's Security](how-to/web.md#security) says what `web` checks, and when.
 
 A team or project file is untrusted too. What it names that would run code as you, a command, a `module:attr` or a test
 command, or a credential it would pass on, an auth profile, runs only once you trust it: `--trust` on the command line, the
@@ -51,7 +52,7 @@ team holds it, whose yes covers what you were shown and nothing the file says si
   boundaries, and every agent's assurance is `cooperative`. An `isolated` workspace hides your home, the session root and
   the runtime directory from its harness, but it still reaches the network, every loopback service, every socket file
   outside those folders and everything you can read elsewhere, on the same kernel. It is experimental, Linux only, and has
-  passed its escape tests on one host.
+  passed its escape tests on one Linux host with bubblewrap 0.4.1.
 - **The network, from an agent.** Nothing confines an agent's network access, an isolated one's included.
 - **Resources.** No agent's CPU, memory or disk is limited. `session.metrics` reports the CPU and peak memory of the
   process holding the journal, and what an agent's harness processes use as unknown, since nothing measures it; that it
@@ -101,14 +102,12 @@ A session's folder, as [§4](architecture.md#4-session-folder-and-process-model)
   harness keeps there;
 - `commits.bundle`, the commits the journal recorded.
 
-An agent's folder keeps its harness's scratch, its `tmp`, and the files where its harness keeps a credential only until
-the agent's stop has run once it ends: the stop removes them, and keeps the rest, as Credentials above says. `tmp` goes whole,
-with whatever its harness kept there, such as pi's full text of a tool result it cut for the model, which its transcript names
-by a path that then names nothing. An agent that has not ended keeps them: one in a session that stopped, which comes back on a
-resume, and one idle when its session closed or settled, as a close ends no agent. A close removes none of them, as the owner
-ruled, so a session never resumed, as a trainable one never is, keeps them for good. So does an
-ended agent whose stop had not begun when its runtime stopped, or that a killed runtime cut off, as it runs again only at a
-resume.
+Once an agent ends, its stop removes its harness's scratch, its `tmp`, whole, and the files where its harness keeps a
+credential, and keeps the rest, as Credentials above says. An agent that has not ended keeps them: one in a session that
+stopped, which comes back on a resume, and one idle when its session closed or settled, as a close ends no agent. A close
+removes none of them, as the owner ruled, so a session never resumed, as a trainable one never is, keeps them for good, and so
+does an ended agent whose stop had not begun when its runtime stopped, or that a killed runtime cut off, as that stop runs again
+only at a resume.
 
 Outside it: a harness on your own login keeps its own transcripts where it always does, in your home; an agent's worktree or
 branch may stay in your repository, as [workspaces](how-to/workspaces.md#when-a-workspace-goes) says; and the root keeps what
