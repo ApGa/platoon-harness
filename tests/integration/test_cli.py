@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from platoon_harness import Session, Team
+from platoon_harness import Session, Team, __version__
 from platoon_harness.config import Manifest
 from platoon_harness.runtime.paths import read_conformance
 
@@ -837,6 +837,7 @@ async def test_doctor_says_each_harness_its_version_and_login_kind_and_whether_i
     report = json.loads(done.stdout)
 
     assert done.code == 0 and report["usable"]
+    assert report["version"] == __version__ and "versions" not in report
     found = {harness["name"]: harness for harness in report["harnesses"]}
     assert found["claude"] == {
         "name": "claude",
