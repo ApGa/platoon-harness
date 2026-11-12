@@ -42,7 +42,7 @@ text = """
 Run the agent harnesses you already use, such as Claude Code, Codex, pi and OpenHands, as one team, in durable sessions
 you can watch, steer, resume and read back. It runs on Linux.
 
-The command line, as a tool of its own, which puts the `platoon-harness` command on your PATH:
+The command line, as a tool of its own, in uv's tool directory, which `uv tool update-shell` puts on your PATH:
 
 ```console
 $ uv tool install "platoon-harness[cli]"

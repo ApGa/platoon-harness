@@ -36,9 +36,9 @@ PATH, signed in as you usually are. Then:
 $ uv tool install "platoon-harness[cli]"
 ```
 
-`pip install platoon-harness` installs the SDK alone, whose `platoon-harness` command only says how to install the `cli`
-extra. [Install](docs/getting-started/install.md) says where to get each harness, how to add OpenHands, and what
-`doctor` says.
+In a virtual environment, `pip install "platoon-harness[cli]"` does the same, and `pip install platoon-harness` installs
+the SDK alone, whose `platoon-harness` command only says how to install the `cli` extra.
+[Install](docs/getting-started/install.md) says where to get each harness, how to add OpenHands, and what `doctor` says.
 
 ## Quickstart
 

@@ -32,8 +32,15 @@ says. Its other problems are a root it cannot use, below, or a conflict among in
 openhands  openhands-sdk is not installed for ~/.local/share/uv/tools/platoon-harness/bin/python: install the SDK's `openhands` extra there, …
 ```
 
-OpenHands runs on the runtime's own interpreter, and the extra that loads it is not installed for that one: install it
-with the command line, as [Install](../getting-started/install.md#openhands) shows. OpenHands keeps no login, so its
+OpenHands runs on the runtime's own interpreter, and the extra that loads it is not installed for that one. For the
+command line installed as a tool, install both extras, naming again every other extra and `--with` package, as
+installing again replaces what the tool held ([Install](../getting-started/install.md#openhands)):
+
+```console
+$ uv tool install "platoon-harness[cli,openhands]"
+```
+
+In a virtual environment, `pip install "platoon-harness[cli,openhands]"` does the same. OpenHands keeps no login, so its
 role also needs an auth profile that names its key.
 
 ## The command line needs its extra
