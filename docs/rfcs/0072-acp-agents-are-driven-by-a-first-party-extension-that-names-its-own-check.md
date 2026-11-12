@@ -45,9 +45,9 @@ them, and a generic ACP driver was planned from the start. Three things stand in
 ### 1. The driver is the SDK's own
 
 `AcpDriver` is `platoon_harness.drivers.acp` and `opencode` is `platoon_harness.drivers.opencode`, beside the SDK's other drivers,
-under its driver entry points. They release with the SDK, so they need no name on PyPI, tag or release environment of their own,
-and `examples/extension-package` shows how a third party ships a driver or an extension. The driver uses the SDK's public names
-alone, as every driver does, which an AST test holds.
+under its driver entry points. They release with the SDK, so they need no name on PyPI, tag or release environment of their own, and
+`examples/extension-package` shows how a third party ships an extension, and a driver ships the same way, under
+`platoon_harness.drivers`. The driver uses the SDK's public names alone, as every driver does, which an AST test holds.
 
 ### 2. Protocol 1 over `rpc.Peer`
 
@@ -179,7 +179,7 @@ it against `FakeModel` in a home of the check's own, through a provider given in
 | Alternative | Why not |
 |---|---|
 | The ACP Python SDK | It drops an update it cannot parse before the client sees it, so the gap would lose its frame, its 1.0 is still at release candidates, and it cannot share the lock with the `openhands` extra's 0.12.1 |
-| A first-party extension, a distribution of its own under `extensions/acp`, as this first proposed | It costs a name on PyPI, a tag and a release environment, and `examples/extension-package` already shows the path a third party's driver takes. The SDK releases with each change of a protocol still moving toward version 2 instead |
+| A first-party extension, a distribution of its own under `extensions/acp`, as this first proposed | It costs a name on PyPI, a tag and a release environment, and `examples/extension-package` already shows the path a third party's extension takes, which a driver's takes too. The SDK releases with each change of a protocol still moving toward version 2 instead |
 | `harness = { command = [...], mode = "acp" }` in the team file | A change of the team file's schema with one agent to serve. A driver named for its command is the naming law's way, so a second agent gets a driver of its own until a team needs the generic one |
 | Name a check by an entry point of its own group | A second registry for one fact about a driver, which `describe` already answers |
 | Move the SDK's own checks onto `DriverInfo.check` | `levels`, a pure function, reads `CHECKED` to say what makes a result, so moving them is a change of its own |
@@ -212,7 +212,7 @@ it against `FakeModel` in a home of the check's own, through a provider given in
 ## Open questions
 
 1. Where do first-party extensions live and ship? Decided on 2026-11-12: the ACP driver is the SDK's own, as the note under the
-   status table says, and a third party ships a driver as `examples/extension-package` does.
+   status table says, and a third party ships a driver as `examples/extension-package` ships an extension.
 2. Open: should ACP be spoken over the ACP Python SDK or the SDK's own `rpc.Peer`? Today `rpc.Peer`, on protocol 1. The SDK's client would replace `driver.py`'s use of the peer, and it drops an update it cannot parse
    before a client sees it, so an unknown update would keep its gap and lose its raw frame: that answer would change
    `test_an_unknown_update_keeps_its_raw_frame_and_a_gap` and what STATUS says of it, and nothing else built here.
