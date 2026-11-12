@@ -29,7 +29,7 @@ says. Its other problems are a root it cannot use, below, or a conflict among in
 ## doctor's `openhands` line names an interpreter
 
 ```text
-openhands  openhands-sdk is not installed for ~/.local/share/uv/tools/platoon-harness/bin/python: install the SDK's `openhands` extra there, …
+openhands  openhands-sdk is not installed for ~/.local/share/uv/tools/platoon-harness/bin/python: install platoon-harness's `openhands` extra for it, …
 ```
 
 OpenHands runs on the runtime's own interpreter, and the extra that loads it is not installed for that one. For the
@@ -43,15 +43,15 @@ $ uv tool install "platoon-harness[cli,openhands]"
 In a virtual environment, `pip install "platoon-harness[cli,openhands]"` does the same. OpenHands keeps no login, so its
 role also needs an auth profile that names its key.
 
-## The command line needs its extra
+## The command line needs its cli extra
 
 ```text
-platoon-harness: the command line needs its extra: uv tool install "platoon-harness[cli]", or pip install "platoon-harness[cli]"
+platoon-harness: the command line needs its cli extra, and ~/project/.venv/bin/python has no cyclopts, markdown-it-py, rich, swarmchat, textual, tomlkit: uv tool install "platoon-harness[cli]", naming again every extra and --with the tool has, uv add "platoon-harness[cli]" in a project, or pip install "platoon-harness[cli]"
 ```
 
-It exits 78. The `platoon-harness` that ran belongs to an install of the library alone, without the `cli` extra. An
-active virtual environment that holds one comes first on your PATH, ahead of a `uv tool install`: install the extra
-there, or deactivate the environment.
+It exits 78. The `platoon-harness` that ran belongs to the interpreter the message names, which holds the library
+without the `cli` extra. An active virtual environment that holds one comes first on your PATH, ahead of a
+`uv tool install`: install the extra there, or deactivate the environment.
 
 ## init says none is on PATH
 
