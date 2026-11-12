@@ -176,17 +176,21 @@ def test_each_requirement_of_the_cli_extra_is_marked_by_the_extra_alone():
 
 
 def test_the_command_runs_a_launcher_that_needs_only_the_standard_library():
-    """Without the `cli` extra the command must still say what to install, so the module it names, and what that module
-    imports before the command line, import nothing outside the standard library."""
-    relative = [
-        node.module
-        for node in ast.parse(LAUNCHER.read_text()).body
-        if isinstance(node, ast.ImportFrom) and node.level == 1
-    ]
-    first = [LAUNCHER, CLI / "__init__.py", *(CLI / f"{module}.py" for module in relative)]
+    """Without the `cli` extra the command must still say what to install, so the module it names, its package, and
+    each module they import before the command line, however deep, import nothing outside the standard library."""
+    first: set[Path] = set()
+    walk = [LAUNCHER, CLI / "__init__.py"]
+    while walk:
+        if (path := walk.pop()) in first:
+            continue
+        first.add(path)
+        for node in ast.parse(path.read_text()).body:
+            if isinstance(node, ast.ImportFrom) and node.level == 1:
+                names = [node.module] if node.module else [alias.name for alias in node.names]
+                walk += [CLI / f"{name}.py" for name in names]
 
     assert project()["scripts"] == {"platoon-harness": "platoon_harness_cli.launcher:main"}
-    assert relative == ["exits"]
+    assert sorted(path.name for path in first) == ["__init__.py", "exits.py", "launcher.py"]
     assert [path.name for path in first if not imported(path) <= set(sys.stdlib_module_names)] == []
 
 
