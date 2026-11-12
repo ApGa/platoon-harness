@@ -59,6 +59,14 @@ jobs:
         if: github.ref_type == 'tag'
         run: test -f "dist/platoon_harness-${GITHUB_REF_NAME#v}-py3-none-any.whl"
 
+      # Uploaded before any step below runs code the lock does not pin, so none of it can change what publish uploads.
+      # publish still needs every step of this job to pass.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
       - name: Check their metadata and their PyPI description
         run: uvx twine@7.0.0 check --strict dist/*
 
@@ -79,12 +87,6 @@ jobs:
       # above left in uv's cache: alone, with its cli extra, and as a tool.
       - name: Test the wheel as a person installs it
         run: uv run pytest -q -m slow tests/integration/test_installed.py
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
-        with:
-          name: dist
-          path: dist/
-          if-no-files-found: error
 
   publish:
     # Only a v* tag pushed to this repository publishes.
