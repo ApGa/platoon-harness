@@ -884,8 +884,16 @@ async def test_doctor_and_a_start_without_the_openhands_extra_name_one_interpret
     interpreter = re.match(r"openhands +openhands-sdk is not installed for (.+?): ", told)
     assert doctor.code == 0 and "claude     9.9.9 (fake), login unknown, not checked" in doctor.stdout
     assert interpreter is not None and Path(interpreter[1]).is_file(), told
-    assert told.endswith("install the SDK's `openhands` extra there, `platoon-harness[openhands]`")
-    assert (run.code, reason) == (1, f"its spawn failed: {told.removeprefix('openhands').lstrip()}")
+    said = (
+        "install platoon-harness's `openhands` extra for it, beside any other extras it has, "
+        "`platoon-harness[openhands]`"
+    )
+    route = 'for the command line: uv tool install "platoon-harness[cli,openhands]", naming again each --with'
+    assert told.endswith(f"{said}; {route}")
+    assert (run.code, reason) == (
+        1,
+        f"its spawn failed: {told.removeprefix('openhands').lstrip().removesuffix(f'; {route}')}",
+    )
 
 
 async def test_doctor_check_runs_each_harness_s_checks_and_keeps_none_that_names_no_version(cli: Cli):

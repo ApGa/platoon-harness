@@ -104,8 +104,8 @@ def sdk_version() -> str:
         version(_TOOLS)
     except PackageNotFoundError as error:
         raise DriverError(
-            f"{error.name} is not installed for {sys.executable}: install the SDK's `openhands` extra there, "
-            "`platoon-harness[openhands]`"
+            f"{error.name} is not installed for {sys.executable}: install platoon-harness's `openhands` extra for it, "
+            "beside any other extras it has, `platoon-harness[openhands]`"
         ) from error
     return sdk
 

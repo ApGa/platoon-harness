@@ -137,11 +137,13 @@ def _check(found: list[dict[str, Any]], drivers: dict[str, Driver], root: Path) 
 
 def _openhands(name: str) -> dict[str, Any]:
     """OpenHands, from the metadata of the SDK's `openhands` extra on this interpreter, which is the worker's. Its login
-    is unknown, as it keeps none, and only a role's auth profile gives it a key."""
+    is unknown, as it keeps none, and only a role's auth profile gives it a key. Where it is missing, the reason adds
+    the command line's own route, as a tool install replaces what the last one named."""
     try:
         return {"name": name, "found": True, "version": worker.sdk_version(), "login": None}
     except DriverError as error:
-        return {"name": name, "found": False, "reason": str(error)}
+        route = 'for the command line: uv tool install "platoon-harness[cli,openhands]", naming again each --with'
+        return {"name": name, "found": False, "reason": f"{error}; {route}"}
 
 
 def _login(driver: Driver) -> str | None:

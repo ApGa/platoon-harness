@@ -162,7 +162,10 @@ async def test_without_the_extra_the_worker_refuses_to_start_naming_the_interpre
 
     monkeypatch.setattr(worker, "version", version)
     spec = make_spec(tmp_path, model="m", access={"OPENAI_API_KEY": Secret("k")})
-    said = f"{missing} is not installed for {sys.executable}: install the SDK's `openhands` extra there, "
+    said = (
+        f"{missing} is not installed for {sys.executable}: install platoon-harness's `openhands` extra for it, "
+        "beside any other extras it has, "
+    )
 
     with pytest.raises(DriverError, match=f"^{re.escape(said)}`platoon-harness\\[openhands\\]`$"):
         await worker.Worker().start(spec, Heard())
