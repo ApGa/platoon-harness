@@ -16,7 +16,8 @@ SHARED = {
     JOURNAL: "A commit to the session's journal failed, which ended its runtime as a kill would. `run`, `serve` and "
     "`session resume` exit this, with what the journal said, and `session resume` goes on from what it holds",
     CONFIGURATION: "A team, a root or a machine that cannot be used as it is. `team check` and `doctor` print each "
-    "problem on stdout, as what they say, and every other command on stderr",
+    "problem on stdout, as what they say, and every other command on stderr, and the command itself, where its `cli` "
+    "extra is not installed, says so on stderr before any command runs",
     INTERRUPTED: "Ctrl+C, where no session's ending says more",
 }
 """What each code every command shares means, as the reference says it."""

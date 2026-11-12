@@ -40,7 +40,7 @@ Every command shares these:
 | 1 | A command other than `run` and `session resume` was refused, and nothing it asked for happened |
 | 64 | A command line that cannot run as it was given. `run` and `session resume` exit this for a refusal before the session is theirs, such as a name that is taken or no session of that name, so they never exit 1 for one |
 | 74 | A commit to the session's journal failed, which ended its runtime as a kill would. `run`, `serve` and `session resume` exit this, with what the journal said, and `session resume` goes on from what it holds |
-| 78 | A team, a root or a machine that cannot be used as it is. `team check` and `doctor` print each problem on stdout, as what they say, and every other command on stderr |
+| 78 | A team, a root or a machine that cannot be used as it is. `team check` and `doctor` print each problem on stdout, as what they say, and every other command on stderr, and the command itself, where its `cli` extra is not installed, says so on stderr before any command runs |
 | 130 | Ctrl+C, where no session's ending says more |
 
 ## JSONL
