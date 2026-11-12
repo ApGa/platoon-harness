@@ -238,8 +238,8 @@ Within one agent:
   writes are in flight, and 1,024 of the session's, past which a write is refused `busy` with when to retry (§5.7).
 - **Whether a harness makes the calls of one response at once is its own,** or its driver's where the driver sets it. Codex and pi
   ran two commands, two `cat`s and two calls of ours at once, and Claude Code two commands it asked approvals for in turn and the
-  rest at once. OpenHands ran each two in turn, as our worker keeps its SDK's `tool_concurrency_limit` at 1, whose raising awaits
-  the owner: `test_what_one_response_runs_at_once` ([compatibility.md](reference/compatibility.md#tool-calls-at-once)).
+  rest at once. OpenHands ran each two in turn, as our worker keeps its SDK's `tool_concurrency_limit` at 1:
+  `test_what_one_response_runs_at_once` ([compatibility.md](reference/compatibility.md#tool-calls-at-once)).
 - **Its effects start in order,** but for an interrupt, a stop and an answer (§5.4), and its harness's reports are heard in order.
 
 See [RFC 0077](rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md).
@@ -805,12 +805,11 @@ on `task.added` payload 2 and `agent.spawned` payload 4, by name, where an older
 - **Checked.** A label the team does not declare, or a value its label does not take, refuses the whole op `invalid`, saying what
   may be given, and a team that declares none refuses any. A person's, a program's and the runtime's work meets the same check.
 - **Optional.** A label left out is none: the agents a session starts have no creator to give one, and a creator unsure of one
-  leaves it out rather than guess. Whoever creates the work decides its labels then, as the owner said will do for now, and no op
-  changes them after.
+  leaves it out rather than guess. Whoever creates the work decides its labels then, and no op changes them after.
 - **Shown as the values allowed.** A tool that takes `labels` shows each label with its values as an `enum`, and no other key, and
   says them in its description, which `ph` shows; where the team declares none, the argument is left out (§10).
-- **No claimant is shown them.** `task.claim` and `task.list` show a task as they did, as the owner ruled:
-  labels are for the record, which a person reads, and for the training system that reads them on each span (§11).
+- **No claimant is shown them.** `task.claim` and `task.list` show a task as they did: labels are for the
+  record, which a person reads, and for the training system that reads them on each span (§11).
 
 See [RFC 0078](rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md).
 
@@ -1640,7 +1639,7 @@ its end for an end, and any other, as a lapse, by commit order among the claiman
 between turns, and anywhere within one; a hold its claimant's end ended, or that holds still, runs past its last call. A span's
 labels are those of the task of each claim it held or may have held, and those its agent was spawned with unless it surely held
 one, so a span that held no task carries its spawn's labels, or none, and a span that claimed a task carries the task's for its
-calls before the claim too, the default pending the owner's ruling; where these differ they are None, unknown, never merged and
+calls before the claim too; where these differ they are None, unknown, never merged and
 never one of them guessed (§7). Where a harness's turns are cut follows from
 what it reports: pi, Claude Code and ScriptedDriver join a tool call to the model call that chose it, so theirs are cut at writes;
 OpenHands reports its calls and joins no tool call to one, so each of its turns is one span; Codex gives no id per model call, so
@@ -1887,7 +1886,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   went back the page's projection is started anew from the nearest copy of it the page kept, one each checkpoint's
   spacing, folded to where the replay went before the page hears a reset, as its `feed_id`, hashing its folder, changes;
   the banner names where the page's projection stands. As its links act on nothing, it is served past loopback whatever
-  login its agents ran on, by the RFC's default, pending the owner's ruling (§15).
+  login its agents ran on (§15).
   [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
   [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
@@ -2225,9 +2224,9 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
   on a plan login after all, and what a control link did before then stands. A replay is the one exception: `web SESSION
   --replay` serves one past loopback whatever login its agents ran on, as its links act on nothing, not even as the
   person, though they read every event and view of the record as its runtime did
-  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)'s question 3, whose
-  default waits for the owner's ruling). The sessions page, `web` with no session, and every session it opens are on
-  loopback alone, so it starts several agents on one plan login after asking once, as the TUI does.
+  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)). The sessions page, `web`
+  with no session, and every session it opens are on loopback alone, so it starts several agents on one plan login after asking
+  once, as the TUI does.
 - **Project config is untrusted.** It can select installed components but can never install one. What would run code or pass a credential, a
   `command` harness, a `module:attr` reference, an auth profile or a `test` command, needs an explicit trust step when it comes from a
   project or team file: `--trust` on the command line, `trust_project` to `load_team`, the trust field of the terminal's start

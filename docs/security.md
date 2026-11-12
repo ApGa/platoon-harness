@@ -27,8 +27,7 @@ Plan logins have rules of their own ([RFC 0016](rfcs/0016-plan-logins-and-creden
   what a control link did before then stands.
 - A replay, `web SESSION --replay`, is served past loopback whatever login its agents ran on, as its links act on nothing, not
   even as you, but they read every event and view of the record as its runtime did
-  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)'s default for its question
-  3, pending the owner's ruling).
+  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)).
 
 [The web guide's Security](how-to/web.md#security) says what `web` checks, and when.
 
@@ -44,8 +43,7 @@ team holds it, whose yes covers what you were shown and nothing the file says si
   can connect to a session's tool plane and to `web`'s port. A bearer check keeps it from reading the session or acting on
   it there, so the data is protected, but not availability: each server takes at most 1,024 connections at once, counted
   before any is read, so a process that holds them makes your agents' tool calls answer 503. The control socket is out of
-  their reach, in a directory only you can open. Out of scope is the project's default, pending its owner's ruling on the
-  threat model.
+  their reach, in a directory only you can open.
 - **An agent that can run commands, as you.** Claude Code, Codex, pi and OpenHands run shell commands, as your user, so
   such an agent can read the session folder, the owner's token, another agent's token in that agent's environment, other
   sessions and your home. On such a session, approvals and the line between sessions are workflow controls, not
@@ -55,8 +53,7 @@ team holds it, whose yes covers what you were shown and nothing the file says si
   passed its escape tests on one Linux host with bubblewrap 0.4.1.
 - **The network, from an agent.** Nothing confines an agent's network access, an isolated one's included.
 - **Resources.** No agent's CPU, memory or disk is limited. `session.metrics` reports the CPU and peak memory of the
-  process holding the journal, and what an agent's harness processes use as unknown, since nothing measures it; that it
-  reports use and limits none is the default, pending the owner's ruling on per-agent limits.
+  process holding the journal, and what an agent's harness processes use as unknown, since nothing measures it.
 - **macOS.** Nothing has run there yet, and no isolation exists for it.
 
 ## Credentials
@@ -102,12 +99,13 @@ A session's folder, as [§4](architecture.md#4-session-folder-and-process-model)
   harness keeps there;
 - `commits.bundle`, the commits the journal recorded.
 
-Once an agent ends, its stop removes its harness's scratch, its `tmp`, whole, and the files where its harness keeps a
-credential, and keeps the rest, as Credentials above says. An agent that has not ended keeps them: one in a session that
-stopped, which comes back on a resume, and one idle when its session closed or settled, as a close ends no agent. A close
-removes none of them, as the owner ruled, so a session never resumed, as a trainable one never is, keeps them for good, and so
-does an ended agent whose stop had not begun when its runtime stopped, or that a killed runtime cut off, as that stop runs again
-only at a resume.
+Once an agent ends, its stop removes its harness's scratch, its `tmp`, whole, with whatever its harness kept there, such
+as pi's full text of a tool result it cut for the model, which its transcript then names by a path that names nothing,
+and the files where its harness keeps a credential, and keeps the rest, as Credentials above says. An agent that has not
+ended keeps them: one in a session that stopped, which comes back on a resume, and one idle when its session closed or
+settled, as a close ends no agent. A close removes none of them, so a session never resumed, as a trainable one never
+is, keeps them for good, and so does an ended agent whose stop had not begun when its runtime stopped, or that a killed
+runtime cut off, as that stop runs again only at a resume.
 
 Outside it: a harness on your own login keeps its own transcripts where it always does, in your home; an agent's worktree or
 branch may stay in your repository, as [workspaces](how-to/workspaces.md#when-a-workspace-goes) says; and the root keeps what

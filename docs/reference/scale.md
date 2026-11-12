@@ -16,11 +16,6 @@ uv run pytest -q -s -m scale
 Everything in the tables but [A git team's looks](#a-git-teams-looks) was measured on 2026-11-08, in four runs one after another,
 on the code of that day, which has changed since.
 
-The hardware of record, what counts as an agent here, budgets at twice the measured values, and that no CI job holds
-them are the default, pending the owner's ruling, as [STATUS](../STATUS.md) says. So is measuring the roster and
-attention snapshots, which are whole, rather than paging them. The 50 ms floor under each budget of time is this page's
-addition to that default, pending the same ruling.
-
 ## What runs
 
 - **100 agents, each a `ScriptedDriver`**, `member-1` to `member-100`, of one role in a mesh. They are scripted, not
