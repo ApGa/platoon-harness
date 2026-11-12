@@ -210,7 +210,7 @@ questions).
 |---|---|---|---|
 | M1 the gauges | `Gauges`, `Kernel.gauges()` and `Txn.gauges()` | `tests/unit/kernel/test_writer.py`, `test_the_writer_reports_its_depth_in_flight_and_ack_latency_by_public_names` |`feat: Give the kernel's writer gauges public names` |
 | M2 the query | `Counters`, `session.metrics`, `Session.metrics` and the command `session metrics` | `tests/unit/primitives/test_metrics.py` |`feat: Answer session.metrics, unknown where nothing measured` |
-| M3 measured at scale | The writer's cost of metrics and a reading's cost, held to budgets set from measurements on the real stack | Milestone 4's scale tests, `test_metrics_cost_the_writer_no_more_than_their_budget` | |
+| M3 measured at scale | The writer's cost of metrics and a reading's cost, held to budgets set from measurements on the real stack | The scale test, `test_metrics_cost_the_writer_no_more_than_their_budget` | |
 
 ## Open questions
 
