@@ -1,7 +1,7 @@
 """What platoon-harness publishes: one distribution of two layers, its version set in one place; a library that needs
 pydantic alone, and a command line whose imports its `cli` extra installs, run by a launcher that needs nothing more to
 say so; the project's one sentence as its description; the license in its wheel, and every license of what installing
-it brings on the allowlist, but those the `openhands` extra brings that the owner has yet to rule on; and classifiers
+it brings on the allowlist, but those `OPENHANDS_UNLISTED` names, which the `openhands` extra brings; and classifiers
 that claim no system STATUS has not seen run and no Python CI does not test."""
 
 import ast
@@ -48,18 +48,17 @@ ALLOWED = {
     "MIT License",
 }
 """Each license a runtime dependency may state, as `stated` reads it: an SPDX identifier, a trove classifier, or the
-words of a `License` field that name one. Each is permissive, but MPL-2.0, whose copyleft reaches only changes to its
-own files: admitting it is the default, pending the owner's confirmation."""
-UNSETTLED = {
+words of a `License` field that name one. Each is permissive but MPL-2.0, whose copyleft reaches only changes to its
+own files."""
+OPENHANDS_UNLISTED = {
     "agent-client-protocol": (),
     "func-timeout": ("License :: OSI Approved :: GNU Lesser General Public License v2 (LGPLv2)",),
     "lupa": ("MIT style",),
     "openhands-sdk": (),
     "openhands-tools": (),
 }
-"""What each distribution the `openhands` extra brings whose license is not on the allowlist states: no license, the
-LGPL, or words that name none. Whether a published extra may bring them is the owner's to rule on: the owner's ruling
-that it may bring `lmnr-claude-code-proxy` names that alone."""
+"""What each distribution the optional `openhands` extra brings whose license is not on the allowlist states: no
+license, the LGPL, or words that name none."""
 KEPT = "Either way, platoon-harness itself stays under the MIT license."
 """What the install guide and the distribution's description say of the extra that brings Laminar's proxy."""
 IDENTIFIER = re.compile(r"[^\s()]+")
@@ -212,22 +211,21 @@ def test_the_classifiers_name_the_pythons_ci_tests_and_nothing_else():
 
 def test_every_runtime_dependency_s_license_is_on_the_allowlist():
     """What installing platoon-harness with its `cli` extra brings states a license on the allowlist, every one. The
-    `openhands` extra brings besides only what `UNSETTLED` names, and the proxy the checkout excludes, whose license
-    nothing here can read, as it is not installed."""
+    `openhands` extra brings besides only what `OPENHANDS_UNLISTED` names, and the proxy the checkout excludes, whose
+    license nothing here can read, as it is not installed."""
     plain, missing = required(("platoon-harness", ("cli",)))
     extra, excluded = required(("platoon-harness", ("cli", "openhands")))
 
     assert missing == set() and excluded == set(tool()["uv"]["exclude-dependencies"])
     assert {"platoon-harness", "pydantic", "swarmchat", "textual"} <= plain < extra
     assert unlisted(plain) == {}
-    assert unlisted(extra) == UNSETTLED
+    assert unlisted(extra) == OPENHANDS_UNLISTED
 
 
 def test_the_workspace_excludes_the_proprietary_dependency_and_install_md_says_a_published_install_brings_it():
     """OpenHands' SDK requires `lmnr`, which requires Laminar's proxy. The workspace's lock leaves it out, so no
-    checkout installs it, and the install guide says so, and that the extra installed from a wheel brings it, which the
-    owner has ruled a published install may. The guide and the distribution's description say that platoon-harness stays
-    MIT either way."""
+    checkout installs it, and the install guide says so, and that the extra installed from a wheel brings it unless you
+    exclude it. The guide and the distribution's description say that platoon-harness stays MIT either way."""
     excluded = tool()["uv"]["exclude-dependencies"]
     lock = tomllib.loads((ROOT / "uv.lock").read_text())
     guide = " ".join((ROOT / "docs" / "getting-started" / "install.md").read_text().split())

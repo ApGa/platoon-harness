@@ -144,8 +144,7 @@ Browsing writes nothing to the journal, moves no agent's cursor, and moves no ma
 
 On a control link, each act is one op, sent to `/x/command` and run by `Session.submit`, as the terminal runs it, so your
 grants decide what you may do here as anywhere. Every control you cannot use now is drawn disabled, saying why, and Tab
-reaches it. No accessibility audit has been run on the page, and it claims no WCAG level, which is the default, pending the
-owner's ruling.
+reaches it. No accessibility audit has been run on the page, and it claims no WCAG level.
 
 | Act | Where | What it sends |
 |---|---|---|
@@ -195,7 +194,7 @@ What the whole of platoon-harness protects, and what it does not, is in [securit
   it serves another address, `web` stops with 78 once an agent comes up on a plan login after all, and what a control
   link did before then stands. A harness that cannot say which login it has is not counted. A replay is the one
   exception: it is served past loopback whatever login its agents ran on, as its links act on nothing, not even as you,
-  though a link to one reads every event and view of the record. That is the default, pending the owner's ruling.
+  though a link to one reads every event and view of the record.
 - **What it believes.** Every request is bounded in size and in time before it is believed, by the same code as the SDK's
   tool server: its `Host` must name the authority served, which defeats DNS rebinding, and a POST's `Origin` must be the
   page's own.

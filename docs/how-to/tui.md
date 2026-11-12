@@ -106,10 +106,9 @@ An agent's transcript shows what it said, and folds the rest away, in levels you
    text, an approval on what it asks.
 
 Ended turns rest folded, and a turn under way shows its latest step, `running` where it has no end yet. Nothing a fold
-holds is out of reach, and a fold never hides that something failed, waits on you or is unknown. That ended turns rest
-folded, that a turn under way shows its latest step, that a turn's ordinary end draws no line, and these keys, are the
-defaults pending the owner's ruling. Enter, Right and Left open and close the chosen line, and Ctrl+O, or `/folds`,
-opens every fold.
+holds is out of reach, and a fold never hides that something failed, waits on you or is unknown. A turn's ordinary end,
+finished or stopped, draws no line. Enter, Right and Left open and close the chosen line, and Ctrl+O, or `/folds`, opens
+every fold.
 
 Below the lines is what the agent in view is saying now, live, until the journal holds it. Reading up stops following,
 and `/follow` follows again; `/oldest` reads from the journal's first line. Each ref a line's words name is underlined,
@@ -117,13 +116,12 @@ and a click on it shows that ref's provenance, as [See where a line came from](#
 
 `/find`, or Ctrl+F, opens a form for words, and sending it chooses the line before the chosen one whose words hold
 yours, whatever their case, opening folds and reading back a page at a time. A ref is opened through `/provenance`'s form,
-not found. That `/find` finds words alone, with Ctrl+F its shortcut, is the default pending the owner's ruling.
+not found.
 
 A drag with the mouse selects text, and Ctrl+C, or `/copy`, copies it as plain text, without borders or glyphs from the
 transcript; with nothing selected, it copies the chosen line. It is sent to the terminal as OSC 52, which a terminal may
 put on its clipboard, or not, or not past a length of its own: no real terminal has been measured, nor tmux or SSH
-between. Shift held as you drag selects as the terminal itself does. That `/copy` copies the chosen line, with nothing
-selected, is the default pending the owner's ruling.
+between. Shift held as you drag selects as the terminal itself does.
 
 ## Steer an agent
 
@@ -140,12 +138,11 @@ the same chat, so a reply that went to another chat is in the terminal's thread 
 
 Approvals never take focus, and the dock's `y` and `n` act only on a place you chose there, so typing never answers one.
 When an agent comes to need you while another is in view, a toast names it and why it waits, and Alt+A, or
-`/next-place`, goes to each place you must act, in turn. That order, and the toast, are the defaults pending the owner's
-ruling. `/yes` and `/no` take a place's first and second action, Allow and Deny for an approval, and `/ask` reads what an
-approval asks, as whole as the record holds it, before you answer it. An ask the record cut at 64 KiB says how many bytes
-more it asks, which Allow allows too, and one whose record holds no body says that what it asks beyond its gist is
-unknown. An answer another client gave as you pressed shows as theirs, and an act the runtime refused shows disabled,
-saying why.
+`/next-place`, goes to each place you must act, in turn. `/yes` and `/no` take a place's first and second action, Allow
+and Deny for an approval, and `/ask` reads what an approval asks, as whole as the record holds it, before you answer
+it. An ask the record cut at 64 KiB says how many bytes more it asks, which Allow allows too, and one whose record holds
+no body says that what it asks beyond its gist is unknown. An answer another client gave as you pressed shows as
+theirs, and an act the runtime refused shows disabled, saying why.
 
 Esc in the composer interrupts the agent in view, and `/stop-below` stops the turns of it and of every agent below it.
 Every other op you hold that writes is in the palette, `/palette`, an extension's among them, each through a form worded
@@ -176,15 +173,13 @@ tell the agent or to resolve it in your own checkout, never in its workspace
 `p` with the transcript in focus shows where the chosen line came from, and `/provenance` opens a form for any ref, as
 `stream@version`: what it rests on, what came of it, whose work it reaches, and what estimators said of it, in the
 parts [Provenance](provenance.md#follow-it-in-the-terminal-and-the-browser) describes, each link opening its event's
-provenance and Esc going back one hop. That a ref is opened by hand, rather than found by searching, is the default
-pending the owner's ruling. [A screenshot](../assets/tui-provenance.svg) shows the provenance of the mixed team's lead's
+provenance and Esc going back one hop. [A screenshot](../assets/tui-provenance.svg) shows the provenance of the mixed team's lead's
 answer on the recorded session.
 
 `/reached` shows who reached whom in the session in the same panel: each pair of makers, each kind of edge apart with how
 it is known, never summed, and each agent's unknowns, so an agent no pair names is not shown to be reached by nobody. It
 walks the journal each time it is read, so it slows as the session grows. [A screenshot](../assets/tui-who-reached-whom.svg)
-shows it on a scripted session. That it is listed in provenance, and not on the page's Map, counting these kinds, is the
-default pending the owner's ruling.
+shows it on a scripted session.
 
 ## Replay a session
 

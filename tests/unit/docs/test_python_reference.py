@@ -18,7 +18,7 @@ PROMISED = (
     "each name `tests/public_api.txt` lists, and each attribute and method without a leading underscore that a class "
     "it lists defines"
 )
-"""What the public API is, by default, pending the owner's ruling."""
+"""What the public API is."""
 MARK = re.compile(
     r"^#{2,3} `(?P<name>[\w.]+)`\n\n\*\*Experimental\.\*\* \[STATUS\]\(\.\./STATUS\.md\): (?P<lead>.+)\.$", re.MULTILINE
 )
@@ -81,7 +81,7 @@ def test_each_link_within_the_page_lands_on_the_heading_it_names():
 
 def test_each_page_that_says_what_0_1_0_promises_says_it_in_the_same_words():
     """The page, the extending index, the tutorial, CHANGELOG and STATUS each say what the public API is in one set of
-    words, so none promises more or less than another while the owner's ruling is pending."""
+    words, so none promises more or less than another."""
     pages = [PAGE, *(ROOT / "docs" / "extending" / name for name in ("index.md", "extensions.md"))]
     pages += [ROOT / "CHANGELOG.md", STATUS]
 

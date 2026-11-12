@@ -330,11 +330,10 @@ list, and make it again. A test holds it to them. -->
 Every name `tests/public_api.txt` lists, under the module whose `__all__` holds it: the SDK's, `platoon_harness` and
 the modules beneath it.
 
-By default, pending the owner's ruling, the public API is each name `tests/public_api.txt` lists, and each attribute and
-method without a leading underscore that a class it lists defines, of which the list records only some, and nothing
-else is, whatever its spelling. 0.1.0 promises it under the policy below 1.0 that [CHANGELOG](../../CHANGELOG.md)
-states, so a minor release may change any of it and a patch release only fixes bugs, and there is no experimental
-namespace.
+The public API is each name `tests/public_api.txt` lists, and each attribute and method without a leading underscore
+that a class it lists defines, of which the list records only some; nothing else is, whatever its spelling. 0.1.0
+promises it under the policy below 1.0 that [CHANGELOG](../../CHANGELOG.md) states: a minor release may change any of
+it, and a patch release only fixes bugs. There is no experimental namespace.
 
 Each name is shown as a stub declares it, in its source's own words without comments, then its docstring: a function by
 its signature, a class by its attributes whose names have no leading underscore and its `__init__`, then each method of

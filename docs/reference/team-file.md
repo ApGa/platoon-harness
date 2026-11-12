@@ -60,13 +60,13 @@ A template for agents. `tools` lists op globs, and only ever narrows what the to
 `count` is how many start with the session: left out, one, or none if another role spawns this one. `delivery` is
 how a message reaches this role's inboxes, and `inbox_depth` how many entries one holds before refusing more.
 `effort` goes to the harness as it stands, and a harness that cannot honor it fails the spawn. `stays` says whether
-an agent is told to stay after its task for the next message, rather than to finish, which one that does not stay
-does with a turn that leaves nothing more to come for it: left out, one the session started stays and one spawned
-does not, and a spawn may say otherwise either way. `on_parent_exit` says what becomes
-of an agent whose parent ends: `cancel-subtree` ends it too, `cancelled` if a turn of its was cut off and `retired`
-otherwise, and `adopt` gives it to the session. `allow_native_children` lets its harness start agents of its own,
-beside ours, which a role on a harness whose driver cannot turn them off, as on ACP, must say. `preamble` is the
-template of what its agents are told before `instructions`, its own words, in place of the team's.
+an agent is told to stay for the next message after its task, or to finish; one that does not stay finishes when a
+turn ends with nothing more to come. Left out, `stays` holds for agents the session starts and not for spawned ones,
+and a spawn may say otherwise. `on_parent_exit` says what becomes of an agent whose parent ends: `cancel-subtree`
+ends it too, `cancelled` if a turn of its was cut off and `retired` otherwise, and `adopt` gives it to the session.
+`allow_native_children` lets its harness start agents of its own, beside ours, which a role on a harness whose
+driver cannot turn them off, as on ACP, must say. `preamble` is the template of what its agents are told before
+`instructions`, its own words, in place of the team's.
 
 | Key | Type | Default |
 |---|---|---|

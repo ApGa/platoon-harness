@@ -173,8 +173,7 @@ and whether its turn was still open, and what was not said below a bound reads a
 
 A ref a message's text names, standing apart from the words around it, is a link in both clients, and shows that ref's own
 provenance, saying first that it was opened from a ref in text: naming an event in text is no citation, so nothing checks
-it. A ref can be opened by hand too, through `/provenance`'s form in the terminal or the pane's field in the page. Opening
-a ref by hand, rather than searching by ref, is the default pending the owner's ruling.
+it. A ref can be opened by hand too, through `/provenance`'s form in the terminal or the pane's field in the page.
 
 ## What `unknown` means
 
