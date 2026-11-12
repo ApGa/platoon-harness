@@ -23,7 +23,19 @@ def test_the_launcher_says_what_to_install_where_the_cli_extra_is_missing(monkey
 
     assert launcher.missing() == ["textual"]
     assert launcher.main() == CONFIGURATION
-    assert capsys.readouterr() == ("", f"{launcher.HINT}\n")
+    assert capsys.readouterr() == ("", f"{launcher.hint(['textual'])}\n")
+
+
+def test_the_launcher_s_hint_names_what_is_missing_the_python_it_is_missing_for_and_each_way_to_install_it(
+    monkeypatch,
+):
+    monkeypatch.setattr(sys, "executable", "/venv/bin/python")
+
+    assert launcher.hint(["rich", "textual"]) == (
+        "platoon-harness: the command line needs its cli extra, and /venv/bin/python has no rich, textual: "
+        'uv tool install "platoon-harness[cli]", naming again every extra and --with the tool has, '
+        'uv add "platoon-harness[cli]" in a project, or pip install "platoon-harness[cli]"'
+    )
 
 
 def test_the_launcher_runs_the_command_line_where_the_cli_extra_is_installed(monkeypatch, capsys):

@@ -50,10 +50,11 @@ UI, web server or command-line parser:
 ### 4. A command that says what is missing
 
 `platoon-harness` runs `platoon_harness_cli.launcher:main`, which imports only the standard library before the command
-line. Where the installed metadata shows a distribution of the `cli` extra missing, it prints
+line. Where the installed metadata shows distributions of the `cli` extra missing, it prints, naming them and the Python
+it runs on,
 
 ```text
-platoon-harness: the command line needs its extra: uv tool install "platoon-harness[cli]", or pip install "platoon-harness[cli]"
+platoon-harness: the command line needs its cli extra, and /venv/bin/python has no rich, textual: uv tool install "platoon-harness[cli]", naming again every extra and --with the tool has, uv add "platoon-harness[cli]" in a project, or pip install "platoon-harness[cli]"
 ```
 
 and exits 78, the code for a machine that cannot be used as it is.

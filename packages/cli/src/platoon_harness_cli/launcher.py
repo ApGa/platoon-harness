@@ -7,11 +7,6 @@ from importlib import metadata
 
 from .exits import CONFIGURATION
 
-HINT = (
-    'platoon-harness: the command line needs its extra: uv tool install "platoon-harness[cli]", '
-    'or pip install "platoon-harness[cli]"'
-)
-"""What the command says where the extra is not installed."""
 _EXTRA = re.compile(r"""^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)[^;]*;.*\bextra\s*==\s*["']cli["']""")
 """A requirement of the `cli` extra, as installed metadata spells it, and the distribution it names."""
 
@@ -28,10 +23,19 @@ def missing() -> list[str]:
     return absent
 
 
+def hint(absent: list[str]) -> str:
+    """What the command says where the distributions `absent` of the `cli` extra are not installed."""
+    return (
+        f"platoon-harness: the command line needs its cli extra, and {sys.executable} has no {', '.join(absent)}: "
+        'uv tool install "platoon-harness[cli]", naming again every extra and --with the tool has, '
+        'uv add "platoon-harness[cli]" in a project, or pip install "platoon-harness[cli]"'
+    )
+
+
 def main() -> int:
     """Run the command line, or, where the `cli` extra is not installed, say what to install and exit 78."""
-    if missing():
-        print(HINT, file=sys.stderr)
+    if absent := missing():
+        print(hint(absent), file=sys.stderr)
         return CONFIGURATION
     from .main import main as command_line
 

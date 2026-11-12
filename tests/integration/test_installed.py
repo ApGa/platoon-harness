@@ -14,7 +14,7 @@ import pytest
 from packaging.requirements import Requirement
 
 import platoon_harness
-from platoon_harness_cli.launcher import HINT
+from platoon_harness_cli.launcher import hint
 
 from .installing import PACKAGES, ROOT, SECONDS, Installed, apart, install, install_wheels, uv
 
@@ -83,11 +83,18 @@ def test_the_library_alone_installs_nothing_of_the_cli_extra(alone: Installed, t
     assert names.isdisjoint(required(alone, "cli") | required(alone, "openhands"))
 
 
-def test_the_library_alone_s_command_says_to_install_the_cli_extra(alone: Installed, tmp_path: Path):
-    """The command names the extra and how to install it, and exits 78, as a machine that cannot be used as it is."""
+def test_the_library_alone_s_command_says_to_install_the_cli_extra(
+    alone: Installed, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The command names the extra, each of its distributions the environment's Python lacks and how to install it,
+    and exits 78, as a machine that cannot be used as it is."""
+    requirements = [Requirement(line) for line in alone.metadata("platoon-harness").get_all("Requires-Dist", [])]
+    absent = [requirement.name for requirement in requirements if requirement.name in required(alone, "cli")]
+    monkeypatch.setattr(sys, "executable", str(alone.environment / "bin" / "python"))
+
     done = alone.run("platoon-harness", "--version", home=tmp_path / "home", cwd=tmp_path)
 
-    assert (done.returncode, done.stdout, done.stderr) == (78, "", f"{HINT}\n")
+    assert (done.returncode, done.stdout, done.stderr) == (78, "", f"{hint(absent)}\n")
 
 
 def test_a_headless_run_from_the_installed_wheels_settles_on_the_exec_driver(installed: Installed, tmp_path: Path):
