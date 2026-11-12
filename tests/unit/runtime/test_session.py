@@ -1099,10 +1099,9 @@ async def test_a_child_that_stays_answers_a_task_a_follow_up_and_a_question_on_o
 
 
 async def test_a_tree_that_does_not_stay_settles_once_its_child_reports_without_finishing(tmp_path):
-    """The first GPU run of a team on OpenHands, rebuilt: a root that does not stay spawns a child and waits on it, with
-    a timeout no test reaches, and the child reports and never calls `agent.finish`. Each ends with its turn, so the
-    root's wait holds, its next turn is its last, and the session closes at its `until`, where before it sat idle until
-    that timeout, which only a person could end."""
+    """A root that does not stay spawns a child and waits on it, with a timeout no test reaches, and the child reports
+    and never calls `agent.finish`. Each ends with its turn, so the root's wait holds, its next turn is its last, and
+    the session closes at its `until`, where before it sat idle until that timeout, which only a person could end."""
     clock = ManualClock(1000.0)
     spawned = Call("agent_spawn", {"name": "kid", "child_role": "helper", "goal": "craft three"})
     crafter = [[spawned, Call("wait", {"agents": ["@kid"], "timeout": 1200})], [Say("all three are crafted")]]
@@ -1314,7 +1313,7 @@ async def test_a_wall_limit_to_come_does_not_hold_off_a_stall(tmp_path):
 
 
 async def test_a_wake_the_budget_refuses_under_a_wall_limit_ends_the_session_needs_human_at_once(tmp_path):
-    """Live run 42 waited out its wall limit here. A scripted turn reports no usage, so each is charged its estimate."""
+    """A live run waited out its wall limit here. A scripted turn reports no usage, so each is charged its estimate."""
     clock = ManualClock(1000.0)
     budget = {"wall": "1m", "tokens": 100, "estimate": {"tokens": 60}}
     team = Team.model_validate({"roles": {"bob": {"harness": scripted([Say("one")], [Say("two")])}}, "budget": budget})

@@ -315,7 +315,7 @@ async def test_measurements_carry_a_label_and_the_weakest_wins(kernel):
 
 
 async def test_a_turn_nobody_measured_leaves_its_session_to_go_on_under_its_limit(kernel):
-    """An interrupt cuts a call short, which no harness measures. Live run 42 stopped here."""
+    """An interrupt cuts a call short, which no harness measures. A live run stopped here."""
     await spawn(kernel, "bob")
     await set_budget(kernel, limits={"usd": 10.0}, estimate={"usd": 1.0})
     await wake(kernel, "bob")

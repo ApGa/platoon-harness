@@ -2098,7 +2098,7 @@ async def test_a_report_a_held_wait_held_back_reaches_a_turn_after_its_answer(ke
 
 
 async def test_a_report_a_held_wait_held_back_wakes_nobody_once_its_reader_has_read_it(kernel):
-    """As in run 22: the answer came through a held wait, and the parent read the report itself in that turn."""
+    """As in a live run: the answer came through a held wait, and the parent read the report itself in that turn."""
     lead, placed = await report_held_back(kernel, hold=30.0)
     await hold_open(kernel, placed)
     result_of(await kernel.submit(kernel.runtime, "wait.release", {"id": placed["id"], "told": True}))

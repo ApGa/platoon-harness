@@ -243,8 +243,8 @@ CRAFTING = [
     ],
     [Say("all three are crafted")],
 ]
-"""A root that does not stay, as the first GPU run's was: it hands its child the task, waits on its end, and ends its
-next turn without finishing."""
+"""A root that does not stay: it hands its child the task, waits on its end, and ends its next turn without
+finishing."""
 SEALED = [Call(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "looked"}), AskModel(), Compact()]
 """A sealed turn: the environment's tool, the model, and a compaction."""
 

@@ -1366,11 +1366,11 @@ async def test_propagate_credits_a_spawn_through_the_goal_its_child_took(tmp_pat
 
 
 async def test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took(tmp_path):
-    """The GPU run's failure, scripted: peers that stay and never finish, closed on what each said last, which follows
-    from and cites nothing. `a` spawns `h`, which posts its plan and reports; `a`, woken by the report, tells `b`, whose
-    last words follow. Each closing message keeps half its share and passes the rest along what its span took: `b`'s
-    along `a`'s message, and `a`'s along `h`'s report, which passes along `h`'s goal, `a`'s spawn, which passes along
-    the program's first message. Without takes each peer kept its half, and `h` nothing."""
+    """Peers that stay and never finish, closed on what each said last, which follows from and cites nothing. `a` spawns
+    `h`, which posts its plan and reports; `a`, woken by the report, tells `b`, whose last words follow. Each closing
+    message keeps half its share and passes the rest along what its span took: `b`'s along `a`'s message, and `a`'s
+    along `h`'s report, which passes along `h`'s goal, `a`'s spawn, which passes along the program's first message.
+    Without takes each peer kept its half, and `h` nothing."""
     spawning = ToolCall("agent_spawn", {"name": "h", "child_role": "helper", "goal": "craft the plan"}, id="spawn")
     posting = ToolCall("board_post", {"board": "notes", "name": "plan", "gist": "the plan"}, id="post")
     telling = ToolCall("message_send", {"to": "@b", "gist": "the plan is on the board"}, id="tell")

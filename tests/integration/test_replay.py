@@ -1,7 +1,7 @@
 """A replay's budget: a seek on a session of more than 10,000 events, either way, from the nearest checkpoint of its
 views, which keeps a seek quick however long the record. Each seek is held to half of what a copy made from nothing
 takes to the record's end on the same machine, as a seek that refolds from the start would, and to `SEEK`, five times
-the slowest measured on a shared login node, 91 ms, where a copy from nothing took 0.46 s. A seek before the
+the slowest measured on a shared Linux machine, 91 ms, where a copy from nothing took 0.46 s. A seek before the
 checkpoints are built copies from the start, which is timed and said. The page's seek, from its control to its
 projection holding where the replay went, is held to `PAGE_SEEK` once the page has folded the record that far once,
 and its first jump to the end, which folds the whole record into the page, is timed and said."""
@@ -30,7 +30,7 @@ SEEK = 0.5
 """The longest a seek may take, in seconds."""
 PAGE_SEEK = 1.5
 """The longest a page's seek may take, in seconds, once the page has folded the record that far: five times the
-slowest measured on a shared login node, 310 ms, where its first jump to the end took 3 s."""
+slowest measured on a shared Linux machine, 310 ms, where its first jump to the end took 3 s."""
 
 
 async def recorded(root: Path) -> int:

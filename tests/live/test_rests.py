@@ -126,7 +126,7 @@ async def ended_or_answered(session: Session) -> list:
 
 async def test_claude_code_killed_as_its_first_turn_begins_comes_back_or_is_lost_at_once(tmp_path):
     """Budget: at most 3 model calls, counted from the journal. Killed as its first turn begins, Claude Code has often
-    written no conversation to reopen, as run 76 found, so its relaunch exits before it is ready: its second exit, which
+    written no conversation to reopen, as a run found, so its relaunch exits before it is ready: its second exit, which
     loses the agent there, saying why, and no handover is tried again. One that had written it comes back on it."""
     work, root = tmp_path / "work", tmp_path / "root"
     work.mkdir()

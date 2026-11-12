@@ -72,8 +72,8 @@ def test_the_installed_command_line_runs_from_wheels_in_a_fresh_environment(inst
 
 
 def test_the_library_alone_installs_nothing_of_the_cli_extra(alone: Installed, tmp_path: Path):
-    """`import platoon_harness` needs pydantic alone, as a library built on it, such as Platoon's teams bridge, would
-    install it, and nothing the `cli` or `openhands` extra requires is there."""
+    """`import platoon_harness` needs pydantic alone, as a library built on it would install it, and nothing the `cli`
+    or `openhands` extra requires is there."""
     imported = alone.run("python", "-I", "-c", "import platoon_harness", home=tmp_path / "home", cwd=tmp_path)
     held = alone.run("python", "-I", "-c", HELD, home=tmp_path / "home", cwd=tmp_path)
     names = set(held.stdout.split())

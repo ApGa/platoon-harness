@@ -60,7 +60,7 @@ def one_agent() -> Team:
 async def test_one_agent_reaches_our_tool_on_its_first_turn_takes_a_delivery_and_is_interrupted(tmp_path):
     """Budget: at most 8 model calls, counted from the journal, plus the one the interrupt cuts short. The catalog is
     served remotely and can change without a CLI update, so this is what shows our tool still reaches the model. The
-    agent stays, so the preamble says what its role says: in run 27 the role's words alone did not keep it there."""
+    agent stays, so the preamble says what its role says: in a live run the role's words alone did not keep it there."""
     async with Session.start(one_agent(), root=tmp_path / "root", cwd=tmp_path, plan_login=True) as session:
         goal = (
             "Call the board_post tool of the ph server once, to post `hi` as `hello` on the board `notes`. "
