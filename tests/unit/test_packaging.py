@@ -166,6 +166,15 @@ def test_the_library_needs_pydantic_alone_and_the_cli_extra_holds_what_the_comma
     assert needed - {"pydantic"} <= cli
 
 
+def test_each_requirement_of_the_cli_extra_is_marked_by_the_extra_alone():
+    """The launcher finds the `cli` extra's requirements by their marker, so each must name the extra and nothing more:
+    one with a second clause would be reported missing where the command line does not need it."""
+    installed = [Requirement(line) for line in metadata.requires("platoon-harness") or []]
+    markers = [str(requirement.marker) for requirement in installed if "cli" in str(requirement.marker)]
+
+    assert markers == ['extra == "cli"'] * len(project()["optional-dependencies"]["cli"])
+
+
 def test_the_command_runs_a_launcher_that_needs_only_the_standard_library():
     """Without the `cli` extra the command must still say what to install, so the module it names, and what that module
     imports before the command line, import nothing outside the standard library."""
