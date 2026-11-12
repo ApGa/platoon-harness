@@ -24,7 +24,7 @@ Every example but the extension package needs:
   extras, and this repository cloned at the release you installed, X.Y.Z being what `platoon-harness --version` prints:
 
   ```console
-  $ uv venv examples-env
+  $ uv venv --python 3.12 examples-env
   $ source examples-env/bin/activate
   $ echo lmnr-claude-code-proxy > excludes.txt
   $ uv pip install "platoon-harness[cli,openhands]" --excludes excludes.txt

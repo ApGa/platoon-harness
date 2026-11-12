@@ -123,7 +123,8 @@ history.*
   at 64 KiB says how many bytes more it asks, which Allow allows too, and one whose record holds no body says that what
   it asks beyond its gist is unknown.
 - **Delivered to.** Where SwarmChat says "Read by", the page says "Delivered to": the agents a handover landed a message
-  in, or a tool's result showed it to, which is evidence, never that one understood it. A person's reading leaves none.
+  in, or a tool's result showed it to. That is evidence it was handed over, never that one understood it, and a person's
+  reading leaves none.
 - **Tasks and entries.** Tasks, in a queue's chat, and Entries, in a board's, open its tasks or entries in the pane, in
   the words the terminal's `/tasks` says, read again whenever what they read moved.
 - **Search.** Every message the page shows, newest first, in any case, by text, sender, chat, file, time and who it was

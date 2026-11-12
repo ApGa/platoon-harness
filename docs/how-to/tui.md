@@ -89,9 +89,9 @@ reading a session: moving them is no event, and acknowledges nothing an agent wa
 | under 60 | As 60 to 79, with the header shortened to the name and counts and the footer to `/ commands` and keys |
 | under 16 rows | The dock, the banner, the tabs, the logo and the panels' borders give way, the composer keeps three rows, and while the transcript does not follow, a line under it says what came since and how to follow again |
 
-A resize changes which parts show, and never the scroll position or the composer's target. The recorded session at
-[120 by 32](../assets/tui-wide.svg), [90 by 28](../assets/tui-medium.svg), [70 by 24](../assets/tui-narrow.svg),
-[52 by 20](../assets/tui-slim.svg) and [100 by 14](../assets/tui-short.svg), in columns by rows, shows each.
+A resize changes which parts show, and never the scroll position or the composer's target. Screenshots of the recorded
+session show each size, in columns by rows: [120 by 32](../assets/tui-wide.svg), [90 by 28](../assets/tui-medium.svg),
+[70 by 24](../assets/tui-narrow.svg), [52 by 20](../assets/tui-slim.svg) and [100 by 14](../assets/tui-short.svg).
 
 ## Read the transcript
 
@@ -171,10 +171,10 @@ tell the agent or to resolve it in your own checkout, never in its workspace
 ## See where a line came from
 
 `p` with the transcript in focus shows where the chosen line came from, and `/provenance` opens a form for any ref, as
-`stream@version`: what it rests on, what came of it, whose work it reaches, and what estimators said of it, in the
-parts [Provenance](provenance.md#follow-it-in-the-terminal-and-the-browser) describes, each link opening its event's
-provenance and Esc going back one hop. [A screenshot](../assets/tui-provenance.svg) shows the provenance of the mixed team's lead's
-answer on the recorded session.
+`stream@version`: what it rests on, what came of it, whose work it reaches, and what estimators said of it, in the parts
+[Provenance](provenance.md#follow-it-in-the-terminal-and-the-browser) describes, each link opening its event's
+provenance and Esc going back one hop. [A screenshot](../assets/tui-provenance.svg) shows the provenance of the mixed
+team's lead's answer on the recorded session.
 
 `/reached` shows who reached whom in the session in the same panel: each pair of makers, each kind of edge apart with how
 it is known, never summed, and each agent's unknowns, so an agent no pair names is not shown to be reached by nobody. It

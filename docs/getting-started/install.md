@@ -32,8 +32,9 @@ $ uv tool install "platoon-harness[cli]"
 
 uv installs it in an environment of its own and puts `platoon-harness` on your PATH. The tool sees only what that
 environment holds, so add a driver or an extension package to it with `--with`, as
-`uv tool install "platoon-harness[cli]" --with PACKAGE`, and OpenHands with its extra, [below](#openhands).
-`uv tool upgrade platoon-harness` upgrades it, and your sessions stay where they are.
+`uv tool install "platoon-harness[cli]" --with PACKAGE`, and OpenHands with its extra, [below](#openhands). Installing
+again replaces what the tool held, so name every extra and package you want each time. `uv tool upgrade platoon-harness`
+upgrades it, and your sessions stay where they are.
 
 The library alone, for a script, needs pydantic and nothing more: `uv add platoon-harness`, or
 `pip install platoon-harness`. Its `platoon-harness` command only says how to install the `cli` extra.

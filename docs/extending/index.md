@@ -50,11 +50,11 @@ A role's `harness` and a team's `extensions` name your code in one of two ways:
 | `module:attr` | `harness = "my_drivers:MyDriver"`, `extensions = ["ballot:extension"]` | When the team is loaded, from a layer you trust | You try something out, or your code is in no package |
 
 There are two entry-point groups: `platoon_harness.drivers`, whose names are drivers' names and whose values are driver
-classes, and `platoon_harness.extensions`, whose names are extensions' names and whose values are `Extension`s. Discovery
-reads installed metadata and imports nothing, so before any code loads or any cost is spent it refuses a name that two distributions both register,
-unless the team pins one as `name@version` by a version the other does not have, and a distribution whose requirement on
-`platoon-harness` excludes the release that runs. `platoon-harness extension list` shows what each group holds, from
-metadata alone.
+classes, and `platoon_harness.extensions`, whose names are extensions' names and whose values are `Extension`s.
+Discovery reads installed metadata and imports nothing, so before any code loads or any cost is spent it refuses a name
+that two distributions both register, unless the team pins one as `name@version` by a version the other does not have,
+and a distribution whose requirement on `platoon-harness` excludes the release that runs.
+`platoon-harness extension list` shows what each group holds, from metadata alone.
 
 `module:attr` imports, so it is taken only from a layer you trust: Python, your user config, `--set` and the
 environment. A project or team file that names one is refused without `--trust`, as
@@ -64,9 +64,9 @@ environment. A project or team file that names one is refused without `--trust`,
 
 - **Public names alone.** Code outside the kernel reaches the SDK by its public API alone: each name
   `tests/public_api.txt` lists, and each attribute and method without a leading underscore that a class it lists
-  defines, which [the Python API reference](../reference/python.md) shows, and which 0.1.0 promises under the policy below
-  1.0 that [CHANGELOG](../../CHANGELOG.md) states. An extension reaches the kernel by its `__all__`, as the SDK's own primitives do. If an extension
-  needs a private name, the kernel is wrong.
+  defines, which [the Python API reference](../reference/python.md) shows, and which 0.1.0 promises under the policy
+  below 1.0 that [CHANGELOG](../../CHANGELOG.md) states. An extension reaches the kernel by its `__all__`, as the SDK's
+  own primitives do. If an extension needs a private name, the kernel is wrong.
 - **An op waits on nothing.** An op is synchronous, does no I/O and runs inside one transaction. Work in the world is an
   effect: an op asks for it with `txn.effect`, and a daemon does it and reports
   ([architecture §5.4](../architecture.md#54-effects)).

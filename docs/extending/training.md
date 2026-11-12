@@ -179,7 +179,7 @@ out. What a trainer can count on:
 - **A sealed launch makes no call but its turns' and its compactions',** as it retries nothing and warms no cache.
 - **It is earned, never declared.** `doctor --check`, or `check_driver` with `write_conformance`, proves on `FakeModel` acting
   as a gateway that the first request goes under the bearer, holds none of the project's instructions and shows only our
-  tools and the environment's.
+  tools, the environment's, and those of the harness's own that act on nothing.
 
 ## Write rewards and credit
 

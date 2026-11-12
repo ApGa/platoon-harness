@@ -108,8 +108,9 @@ It exits 78, naming every problem at once, each at its dotted place in the team.
 platoon-harness: topology.program: `program` is not a key of [topology], and a preset is a table.
 ```
 
-Under `[topology]`, a table names a preset, and one no preset or extension gives is refused so. A topology names no
-program: control flow runs from a script, as [Run a program from Python](topologies.md#run-a-program-from-python) shows.
+`[topology]` has no key of that name, and a preset is written as a table of its own, `[topology.<name>]`. A topology names
+no program: control flow runs from a script, as [Run a program from Python](topologies.md#run-a-program-from-python)
+shows.
 
 ## A team a program owns
 
