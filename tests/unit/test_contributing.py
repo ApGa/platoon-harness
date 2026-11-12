@@ -50,7 +50,9 @@ BY_HAND = {
         "the commit-msg hook, on a message not committed"
     ),
     "git switch main && git pull --ff-only": "a maintainer's, before tagging a release",
-    'git tag -a v0.2.0 -m "platoon-harness 0.2.0"': "a maintainer's, as only maintainers make a release's tag",
+    'git tag -a v0.2.0 <release commit> -m "platoon-harness 0.2.0"': (
+        "a maintainer's, as only maintainers make a release's tag"
+    ),
     "git push origin v0.2.0": "a maintainer's, as the tag it pushes publishes the release",
 }
 """Each command the guide shows that neither CI nor a hook runs, and why it is run by hand."""

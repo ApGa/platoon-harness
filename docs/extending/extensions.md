@@ -395,8 +395,8 @@ $ uvx twine@7.0.0 check --strict dist/*
 $ uv publish
 ```
 
-`uv build` writes an sdist to `dist/`, then a wheel built from it. `twine check --strict` checks their metadata, and that
-the README renders as the index's description, failing on a warning too, as it does for the sample, which has no
+`uv build` writes an sdist to `dist/`, then a wheel built from it. `twine check --strict` checks their metadata and that
+a description and its content type are there, failing on a warning too, as it does for the sample, which has no
 `readme`. `uv publish` uploads `dist/` to PyPI, with a token, or from a CI workflow by trusted publishing. A person
 installs it beside the command line, as `uv tool install "platoon-harness[cli]" --with <your package>`, or beside a
 checkout, as step 8 does.

@@ -388,19 +388,21 @@ whose required reviewer, a maintainer, approves each deployment. A tag ruleset l
    - on each page that shows what `--version` prints, `platoon-harness 0.1.0` today: this guide, whose line a
      test holds to the version, and [Install](docs/getting-started/install.md).
 
-3. Check the pull request as the release workflow does, with the commands below, and run the slow tests, which need the
-   harness binaries CI does not have: `uv run pytest -q -m slow`, as [Run the tests](#run-the-tests) says. Then run the
-   Scale case alone, `uv run pytest -q -s -m scale`, which no other run includes: it holds the Scale case to budgets that
-   fit the hardware [Scale](docs/reference/scale.md) describes, so on other hardware, say in the pull request how what it
+3. Check the pull request as the release workflow does, with the commands below, run with `GITHUB_REF_NAME=vX.Y.Z` set
+   and skipping the `gh api` check, which only a tag's run can make. Run the slow tests too, which need the harness
+   binaries CI does not have: `uv run pytest -q -m slow`, as [Run the tests](#run-the-tests) says. Then run the Scale
+   case alone, `uv run pytest -q -s -m scale`, which no other run includes: it holds the Scale case to budgets that fit
+   the hardware [Scale](docs/reference/scale.md) describes, so on other hardware, say in the pull request how what it
    printed compares.
 
 4. Merge it once CI and the release workflow pass on it. The release workflow runs again on the commit on `main`.
 
-5. A maintainer tags the merged commit and pushes the tag:
+5. Once ci.yml's `lint`, `test` and `e2e` jobs are green for the merged commit on `main`, run again where a later push
+   cancelled them, a maintainer tags that commit by its SHA and pushes the tag:
 
    ```bash
    git switch main && git pull --ff-only
-   git tag -a v0.2.0 -m "platoon-harness 0.2.0"
+   git tag -a v0.2.0 <release commit> -m "platoon-harness 0.2.0"
    git push origin v0.2.0
    ```
 
@@ -433,11 +435,11 @@ uv run pytest -q -m slow tests/integration/test_installed.py
 ```
 
 Each step checks what an install from PyPI would get, on Python 3.12, the oldest the distribution names: a wheel built
-from the sdist, so an sdist that leaves out a file the wheel needs fails; metadata and a description that render on PyPI;
-the library imported alone and the command run with its `cli` extra, each in an environment of its own; and the
-`openhands` extra resolved with `lmnr-claude-code-proxy` excluded, as the checkout's lock has it.
-`tests/integration/test_installed.py` builds the wheel again and installs it as a person does, taking no network,
-so uv's cache must hold what it installs, as the steps before it leave it; where it does not, it fails, saying so.
+from the sdist, so an sdist that leaves out a file the wheel needs fails; their metadata, with a description and its
+content type present; the library imported alone and the command run with its `cli` extra, each in an environment of its
+own; and the `openhands` extra resolved with `lmnr-claude-code-proxy` excluded, as the checkout's lock has it.
+`tests/integration/test_installed.py` builds the wheel again and installs it as a person does, taking no network, so
+uv's cache must hold what it installs, as the steps before it leave it; where it does not, it fails, saying so.
 
 The job keeps `dist/` as an artifact of the run. On a tag pushed to this repository, and on no other event, the
 `publish` job uploads it to PyPI with `pypa/gh-action-pypi-publish`, in the `pypi` environment. That job asks for an
