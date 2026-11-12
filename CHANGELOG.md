@@ -13,9 +13,9 @@ The first release. platoon-harness runs the agent harnesses you already use, suc
 OpenHands, as one team, in durable sessions you can watch, steer, resume and read back.
 
 - **Drivers for Claude Code, Codex, pi and OpenHands**, which can share a session, each harness on its own login or an
-  auth profile, and a driver for agents that speak ACP. All are experimental: the four rest on upstream surfaces that
-  change, and the ACP driver has passed its checks only on a scripted agent, OpenCode on it being implemented only
-  ([Compatibility](docs/reference/compatibility.md)).
+  auth profile, and a driver for agents that speak ACP. All are experimental, the four resting on upstream surfaces
+  that change; no real ACP agent has passed the ACP driver's checks: OpenCode 2.2.6, run by hand on 2026-11-08, failed 7
+  of 18 ([Compatibility](docs/reference/compatibility.md)).
 - **Durable sessions.** A session is a folder holding one journal, so it can be watched from several clients at once,
   stopped, resumed, recovered after a crash and read back ([Concepts](docs/getting-started/concepts.md)).
 - **Coordination.** Messages, channels, leased task queues, boards and waits as each agent's tools, with approvals a

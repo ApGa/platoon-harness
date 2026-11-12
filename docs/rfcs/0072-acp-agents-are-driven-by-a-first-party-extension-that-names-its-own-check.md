@@ -160,13 +160,14 @@ it against `FakeModel` in a home of the check's own, through a provider given in
 ## The hard parts
 
 - **OpenCode runs, and fails 7 of its checks.** On OpenCode 2.2.6 against FakeModel, run by hand on 2026-11-08, its check passed 11 checks and failed 7: it reaches FakeModel past `initialize`, starts on its pinned model, which a role names as OpenCode does, `fake/fake-model`, takes delivered text, ends, resumes and stops its turns, and reports a malformed frame as a gap; it failed our tool in the first request, the shell checks, approvals and the interrupt, because OpenCode's first request is a title of the session that it asks of the model on the side, with no tools, and because it shows an MCP server that `session/new` gives it only through its `execute` tool, Code Mode, not as a tool of its own. Its check is
-  written from the 2026-11-02 transcript and the 2.2.6 files, UNVERIFIED: the provider's shape, the names its model sees our tool and its shell by,
-  and the values its model option takes, which may be `provider/model`, so that a start naming `fake-model` is refused. An ACP
-  server reached the model behind Code Mode in that probe, so our tool may not be in the first request.
+  written from the 2026-11-02 transcript and the 2.2.6 files. That run showed the provider's shape right, its shell named `shell`,
+  and its model option taking `provider/model`, as a role naming `fake/fake-model` started; the name its model sees our tool by,
+  and the rule that has its shell ask first, are UNVERIFIED. An ACP server reached the model behind Code Mode in the probe of
+  2.2.5, so our tool may not be in the first request.
 - **What a tool is called.** In that probe OpenCode showed a server its configuration named as `<server>_<tool>`, and one ACP
   gave it behind Code Mode, neither of which a value of `tool_names` says. The driver declares the default, `namespaced`, as for
   any ACP agent, so our words name its tools `mcp__<ns>__<tool>`, and its check calls our tool by that name, so that it fails
-  where OpenCode's model knows our tool by another, UNVERIFIED until it runs. A value of `tool_names` for OpenCode's naming waits
+  where OpenCode's model knows our tool by another, UNVERIFIED, as no run has reached our tool. A value of `tool_names` for OpenCode's naming waits
   for a run that shows it.
 - **A whole ask can be large.** A diff's text is part of the ask, so a body can pass 64 KiB; the host keeps its first 64 KiB and
   counts the rest in `cut`, and refuses one the journal will not hold, as RFC 0066 says.
@@ -191,7 +192,7 @@ it against `FakeModel` in a home of the check's own, through a provider given in
 ## Consequences
 
 - An ACP agent can run as a team's harness, with a level earned only by a check on its machine, and an agent of any other ACP
-  harness needs only a subclass naming its command. `opencode`, the one so named, passes 11 of its checks on OpenCode 2.2.6 and fails 7.
+  harness needs only a subclass naming its command. `opencode`, the one so named, passed 11 of its checks and failed 7 on OpenCode 2.2.6, run by hand on 2026-11-08.
 - `doctor` lists `opencode`, and `--check` checks it, as it does the SDK's other harnesses.
 - A result kept for any driver outside the SDK made before this pinned no distribution, so it reads `unverified` until checked
   again.
@@ -224,5 +225,5 @@ it against `FakeModel` in a home of the check's own, through a provider given in
   `uv pip compile` its 1.0.0rc3 cannot share an environment with `openhands-sdk` 1.59.0.
 - A recording of OpenCode 2.2.5 through ACP against a scripted fake server, not published: a permission request's `toolCall` and
   options, a cancelled prompt, and -32603 for a second prompt.
-- The tests the rollout plan names, run on a scripted ACP agent that is `ScriptedDriver` behind ACP on `FakeModel`. Nothing here
-  ran on OpenCode.
+- The tests the rollout plan names, run on a scripted ACP agent that is `ScriptedDriver` behind ACP on `FakeModel`.
+- OpenCode 2.2.6's check against `FakeModel`, run by hand on 2026-11-08: 11 passed and 7 failed, as The hard parts says.

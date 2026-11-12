@@ -407,9 +407,10 @@ What an OpenHands agent does differently from the others:
 ## ACP agents
 
 `AcpDriver(command)`, the SDK's `platoon_harness.drivers.acp`, drives an agent that speaks the Agent Client Protocol on
-stdio, at protocol 1 alone, over the SDK's `Peer`, adding no dependency. It is experimental, as only a stand-in agent has
-run on it ([STATUS](../STATUS.md)). `harness = "opencode"` is that driver on `opencode acp`, and a driver for another
-agent of ACP is a subclass that names its command, as `OpenCodeDriver` does:
+stdio, at protocol 1 alone, over the SDK's `Peer`, adding no dependency. It is experimental: no real ACP agent has
+passed its checks, and OpenCode 2.2.6, run by hand on 2026-11-08, failed 7 of 18 ([STATUS](../STATUS.md)).
+`harness = "opencode"` is that driver on `opencode acp`, and a driver for another agent of ACP is a subclass that names
+its command, as `OpenCodeDriver` does:
 
 ```python
 from platoon_harness.drivers.acp import AcpDriver
