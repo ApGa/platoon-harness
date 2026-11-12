@@ -1,5 +1,5 @@
 """The compatibility page says of our own drivers and dependencies only what holds: each driver's state is the one
-STATUS gives it, and each pin it spells is one the lock holds."""
+STATUS gives it, the driver wire's pin is the protocol the SDK speaks, and each pin it spells is one the lock holds."""
 
 import re
 import tomllib
@@ -7,6 +7,8 @@ import tomllib
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 from packaging.version import Version
+
+from platoon_harness.config import WIRE_PROTOCOL
 
 from .support import ROOT
 
@@ -64,6 +66,12 @@ def test_each_driver_s_state_on_the_compatibility_page_is_the_one_status_gives()
 
     assert states.keys() == DRIVERS.keys()
     assert states == {driver: status_state(begins) for driver, begins in DRIVERS.items()}
+
+
+def test_the_driver_wire_is_pinned_at_the_protocol_the_sdk_speaks():
+    [row] = [line for line in PAGE.splitlines() if line.startswith("| **Driver wire** |")]
+
+    assert cells(row)[1].startswith(f"`protocol: {WIRE_PROTOCOL}`")
 
 
 def test_the_compatibility_page_names_no_pin_the_lock_does_not_hold():
