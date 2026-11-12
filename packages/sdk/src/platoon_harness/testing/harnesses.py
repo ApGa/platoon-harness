@@ -168,11 +168,11 @@ def _opencode_config(model: FakeModel) -> str:
 
 
 def _opencode(folder: Path) -> dict[str, Any]:
-    """What it gives OpenCode no run has shown (RFC 0072): the provider's shape, the rule that has its shell ask first
-    and the name its model knows its shell by, from a probe of 2.2.5 against another fake server and the 2.2.6
-    release's files. It calls our tool by the name the driver declares and our words use, `mcp__<namespace>__<tool>`, so
-    that it fails where OpenCode's model knows our tool by another. A role names FakeModel by its provider, and OpenCode
-    asks FakeModel for `fake-model`."""
+    """What it gives OpenCode (RFC 0072), from a probe of 2.2.5 against another fake server and the 2.2.6 release's
+    files: the provider's shape and the name its model knows its shell by, which a run of 2.2.6 has shown, and what no
+    run has shown: the rule that has its shell ask first. It calls our tool by the name the driver declares and our
+    words use, `mcp__<namespace>__<tool>`, so that it fails where OpenCode's model knows our tool by another. A role
+    names FakeModel by its provider, and OpenCode asks FakeModel for `fake-model`."""
 
     def access(model: FakeModel) -> dict[str, Secret]:
         home = _home(folder)
