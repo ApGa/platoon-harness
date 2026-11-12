@@ -1,16 +1,89 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
 [project]
 name = "platoon-harness"
-# The workspace's root is never built, and the SDK's version file sets the version of both packages.
 dynamic = ["version"]
 description = "Run the agent harnesses you already use, such as Claude Code, Codex, pi and OpenHands, as one team, in durable sessions you can watch, steer, resume and read back."
 requires-python = ">=3.12"
 license = "MIT"
-dependencies = ["platoon-harness-sdk", "platoon-harness-cli"]
+license-files = ["LICENSE"]
+authors = [{ name = "Apurva Gandhi", email = "apurvasgandhi@gmail.com" }]
+keywords = ["agents", "claude-code", "codex", "llm", "multi-agent", "openhands"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# The library needs pydantic alone, so what is built on it, as Platoon's teams bridge is, brings nothing more.
+dependencies = ["pydantic>=2.10,<3"]
+
+[project.optional-dependencies]
+# The command line, its terminal UI and the page it serves.
+cli = [
+    "cyclopts>=4,<5",
+    "markdown-it-py>=2.2",
+    "rich>=14",
+    "swarmchat==0.1.0",
+    "textual>=8.2,<9",
+    "tomlkit>=0.15,<0.16",
+]
+openhands = ["openhands-sdk==1.59.0", "openhands-tools==1.59.0"]
+
+# The description PyPI shows, written here, as the repository's README links its pages relatively.
+[project.readme]
+content-type = "text/markdown"
+text = """
+# platoon-harness
+
+Run the agent harnesses you already use, such as Claude Code, Codex, pi and OpenHands, as one team, in durable sessions
+you can watch, steer, resume and read back. It runs on Linux.
+
+The command line, as a tool of its own, which puts the `platoon-harness` command on your PATH:
+
+```console
+$ uv tool install "platoon-harness[cli]"
+```
+
+The library alone, which needs pydantic and nothing more: `uv add platoon-harness`, or `pip install platoon-harness`.
+[The project's README](https://github.com/ApGa/platoon-harness#readme) says what it gives you and how to start, and
+[its documentation](https://github.com/ApGa/platoon-harness/tree/main/docs) the rest.
+
+Its `openhands` extra pins OpenHands' SDK and tools. `openhands-sdk` requires `lmnr`, which requires
+`lmnr-claude-code-proxy`, a binary under Laminar's own terms. A checkout's lock leaves it out, but installed from this
+package's wheel, the extra brings `lmnr-claude-code-proxy` unless you exclude it, as uv's `exclude-dependencies` setting
+or `uv pip install --excludes` does. Either way, platoon-harness itself stays under the MIT license.
+"""
+
+[project.urls]
+Homepage = "https://github.com/ApGa/platoon-harness"
+Documentation = "https://github.com/ApGa/platoon-harness/tree/main/docs"
+Changelog = "https://github.com/ApGa/platoon-harness/blob/main/CHANGELOG.md"
+Issues = "https://github.com/ApGa/platoon-harness/issues"
+
+# Without the cli extra, the command says what to install, and exits 78.
+[project.scripts]
+platoon-harness = "platoon_harness_cli.launcher:main"
+
+[project.entry-points."platoon_harness.drivers"]
+claude = "platoon_harness.drivers.claude:ClaudeDriver"
+codex = "platoon_harness.drivers.codex:CodexDriver"
+pi = "platoon_harness.drivers.pi:PiDriver"
+openhands = "platoon_harness.drivers.openhands:OpenHandsDriver"
+opencode = "platoon_harness.drivers.opencode:OpenCodeDriver"
+exec = "platoon_harness.drivers.exec:ExecDriver"
+wire = "platoon_harness.drivers.wire:WireDriver"
+
+[project.entry-points."platoon_harness.extensions"]
+bwrap = "platoon_harness.bwrap:extension"
 
 [dependency-groups]
 dev = [
     "hypothesis>=6",
-    "platoon-harness-sdk[openhands]",
+    "platoon-harness[cli,openhands]",
     "playwright==1.64.1",
     "pre-commit>=4",
     "pyte>=0.8",
@@ -23,21 +96,21 @@ dev = [
     "ty==0.0.87",
 ]
 
-# The root is never built, but uv reads its metadata through setuptools, the default backend, which must find no
-# package in the workspace's folders to read it.
-[tool.setuptools]
-packages = []
+[tool.hatch.version]
+path = "packages/sdk/src/platoon_harness/version.py"
+
+# One distribution of two layers, each a source tree of its own: the SDK, which never imports the command line, and the
+# command line, for which the cli extra installs what it needs.
+[tool.hatch.build.targets.wheel]
+packages = ["packages/sdk/src/platoon_harness", "packages/cli/src/platoon_harness_cli"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["packages/sdk/src/platoon_harness", "packages/cli/src/platoon_harness_cli"]
 
 [tool.uv]
-package = false
 exclude-dependencies = ["lmnr-claude-code-proxy"]
-
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-platoon-harness-sdk = { workspace = true }
-platoon-harness-cli = { workspace = true }
+# uv makes the package's metadata again when its version changes, as it does when this file changes.
+cache-keys = [{ file = "pyproject.toml" }, { file = "packages/sdk/src/platoon_harness/version.py" }]
 
 [tool.ruff]
 line-length = 120

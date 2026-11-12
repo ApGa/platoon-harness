@@ -55,10 +55,9 @@ a `<placeholder>` for the account; a key, Anthropic's, then OpenAI's, a GitHub t
 after a name's underscore or an escape too, their letters bracketed so that this file does not match itself; and an
 email address."""
 ALLOWED: dict[tuple[str, str], str] = {
-    (f"packages/{package}/pyproject.toml", "7fccfaca2ed8a3a9110f45f36230e10f0a66acf1eb1051407532bc492279bde8"): (
-        "the author's contact, which each package publishes"
+    ("pyproject.toml", "7fccfaca2ed8a3a9110f45f36230e10f0a66acf1eb1051407532bc492279bde8"): (
+        "the author's contact, which the distribution publishes"
     )
-    for package in ("sdk", "cli")
 }
 """(file, the SHA-256 digest of a text the scan catches there) -> why the file may hold that text. A digest, so that
 this file does not hold the text either, and another text in its place fails until it is reviewed; the words inside an
@@ -126,7 +125,7 @@ def test_the_scan_covers_every_text_file():
     names = {path.as_posix() for path in FILES}
 
     assert {"README.md", "AGENTS.md", "CONTRIBUTING.md", "pyproject.toml", "uv.lock"} <= names
-    assert {".pre-commit-config.yaml", "docs/README.md", "packages/sdk/pyproject.toml"} <= names
+    assert {".pre-commit-config.yaml", "docs/README.md", "packages/sdk/src/platoon_harness/version.py"} <= names
     assert "tests/unit/test_no_internal_references.py" in names
     for prefix in ("packages/sdk/src/", "packages/cli/src/", "docs/research/", "examples/", "tests/", ".github/"):
         assert any(name.startswith(prefix) for name in names), prefix

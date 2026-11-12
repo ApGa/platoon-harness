@@ -31,9 +31,8 @@ from platoon_harness.runtime.paths import (
 )
 from platoon_harness.schema import Problem, dumps
 from platoon_harness.testing import check_harness
-from platoon_harness.version import __version__ as sdk_version
+from platoon_harness.version import __version__
 
-from . import __version__
 from .exits import CONFIGURATION, REFUSED
 from .ops import commandless
 from .output import note, safe, say, shown
@@ -97,7 +96,7 @@ def _checked(result: Conformance | None, version: str | None, made_by: str) -> d
         return None
     states = [check.state for check in result.checks]
     pinned = (result.implementation, result.sdk, result.host)
-    here = result.version is not None and pinned == (made_by, sdk_version, socket.gethostname())
+    here = result.version is not None and pinned == (made_by, __version__, socket.gethostname())
     return {
         "version": result.version,
         "sdk": result.sdk,
@@ -220,7 +219,7 @@ def doctor(*, json: bool = False, check: bool = False) -> int:
         Check each harness found that a check ships for, and keep what its checks found.
     """
     report: dict[str, Any] = {
-        "versions": {"cli": __version__, "sdk": sdk_version},
+        "version": __version__,
         "root": _root(),
         "installed": _installed(),
     }
@@ -245,7 +244,7 @@ def doctor(*, json: bool = False, check: bool = False) -> int:
 
 
 def _say_report(report: dict[str, Any], problems: list[str]) -> None:
-    lines = [f"platoon-harness {__version__}, SDK {sdk_version}"]
+    lines = [f"platoon-harness {__version__}"]
     for harness in report["harnesses"]:
         lines.append(f"{harness['name']:<10} {_said(harness)}")
         if "unchecked" in harness:

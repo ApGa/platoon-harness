@@ -11,9 +11,9 @@ from rich.console import Console
 
 from platoon_harness import ConfigError, JournalError, Refused
 from platoon_harness.runtime.paths import find_root, session_folder
-from platoon_harness.version import __version__ as sdk_version
+from platoon_harness.version import __version__
 
-from . import __version__, annotations, machine, running, sessions, teams
+from . import annotations, machine, running, sessions, teams
 from .exits import CONFIGURATION, INTERRUPTED, JOURNAL, REFUSED, USAGE, Usage
 from .ops import extension_groups, groups
 from .output import note, refused
@@ -191,7 +191,7 @@ def build() -> App:
     app = App(
         name="platoon-harness",
         help=HELP,
-        version=f"platoon-harness {__version__}, SDK {sdk_version}",
+        version=f"platoon-harness {__version__}",
         default_parameter=_FLAGS,
         console=Console(),
         error_console=Console(stderr=True),

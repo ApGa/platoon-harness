@@ -164,7 +164,7 @@ async def test_without_the_extra_the_worker_refuses_to_start_naming_the_interpre
     spec = make_spec(tmp_path, model="m", access={"OPENAI_API_KEY": Secret("k")})
     said = f"{missing} is not installed for {sys.executable}: install the SDK's `openhands` extra there, "
 
-    with pytest.raises(DriverError, match=f"^{re.escape(said)}`platoon-harness-sdk\\[openhands\\]`$"):
+    with pytest.raises(DriverError, match=f"^{re.escape(said)}`platoon-harness\\[openhands\\]`$"):
         await worker.Worker().start(spec, Heard())
 
 

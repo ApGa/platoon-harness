@@ -27,7 +27,7 @@ RIVAL = {
         name = "rival"
         version = "1.0.0"
         requires-python = ">=3.12"
-        dependencies = ["platoon-harness-sdk>=0.1,<0.2"]
+        dependencies = ["platoon-harness>=0.1,<0.2"]
 
         [project.entry-points."platoon_harness.extensions"]
         ballot = "rival:extension"

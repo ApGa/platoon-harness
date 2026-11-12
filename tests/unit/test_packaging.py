@@ -1,9 +1,12 @@
-"""What the packages publish: one version, set in one place, and the command line requiring the SDK of its own minor
-release; the project's one sentence, after what each package is; the license in each wheel, and every license of what
-installing them brings on the allowlist, but those the `openhands` extra brings that the owner has yet to rule on; and
-classifiers that claim no system STATUS has not seen run and no Python CI does not test."""
+"""What platoon-harness publishes: one distribution of two layers, its version set in one place; a library that needs
+pydantic alone, and a command line whose imports its `cli` extra installs, run by a launcher that needs nothing more to
+say so; the project's one sentence as its description; the license in its wheel, and every license of what installing
+it brings on the allowlist, but those the `openhands` extra brings that the owner has yet to rule on; and classifiers
+that claim no system STATUS has not seen run and no Python CI does not test."""
 
+import ast
 import re
+import sys
 import tomllib
 from importlib import metadata
 from pathlib import Path
@@ -13,22 +16,17 @@ import pytest
 import yaml
 from packaging.licenses import InvalidLicenseExpression, canonicalize_license_expression
 from packaging.requirements import Requirement
-from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
-from packaging.version import Version
 
 import platoon_harness
-import platoon_harness_cli
 
 ROOT = Path(__file__).parents[2]
 VERSION = ROOT / "packages" / "sdk" / "src" / "platoon_harness" / "version.py"
-"""The file that sets the version of both packages."""
+"""The file that sets the version."""
 SETS = re.compile(r'^__version__ = "(.+)"$', re.M)
-PACKAGES = {
-    "packages/sdk": "The Python SDK of platoon-harness",
-    "packages/cli": "The terminal UI and command line of platoon-harness",
-}
-"""Each package's folder, and what its description says it is before the project's sentence."""
+CLI = ROOT / "packages" / "cli" / "src" / "platoon_harness_cli"
+LAUNCHER = CLI / "launcher.py"
+"""The module the `platoon-harness` command runs."""
 ALLOWED = {
     "Apache-2.0",
     "BSD-2-Clause",
@@ -63,17 +61,27 @@ UNSETTLED = {
 LGPL, or words that name none. Whether a published extra may bring them is the owner's to rule on: the owner's ruling
 that it may bring `lmnr-claude-code-proxy` names that alone."""
 KEPT = "Either way, platoon-harness itself stays under the MIT license."
-"""What the install guide and the SDK's description, its README, say of the extra that brings Laminar's proxy."""
-SDK_README = ROOT / "packages" / "sdk" / "README.md"
+"""What the install guide and the distribution's description say of the extra that brings Laminar's proxy."""
 IDENTIFIER = re.compile(r"[^\s()]+")
 
 
-def project(folder: Path) -> dict[str, Any]:
-    return tomllib.loads((folder / "pyproject.toml").read_text())["project"]
+def project() -> dict[str, Any]:
+    return tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
 
 
-def tool(folder: Path) -> dict[str, Any]:
-    return tomllib.loads((folder / "pyproject.toml").read_text())["tool"]
+def tool() -> dict[str, Any]:
+    return tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]
+
+
+def imported(path: Path) -> set[str]:
+    """The top-level modules `path` imports, by absolute imports anywhere in it."""
+    roots: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.Import):
+            roots |= {alias.name.partition(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.level == 0:
+            roots.add((node.module or "").partition(".")[0])
+    return roots
 
 
 def required(*roots: tuple[str, tuple[str, ...]]) -> tuple[set[str], set[str]]:
@@ -122,73 +130,95 @@ def unlisted(names: set[str]) -> dict[str, tuple[str, ...]]:
     return {name: terms for name, terms in said.items() if not terms or not set(terms) <= ALLOWED}
 
 
-def test_each_version_is_set_once_and_the_sdk_and_cli_share_it():
-    """Each package reads its version from the SDK's version file, and uv makes its metadata again when that file
-    changes, so what a checkout's metadata says is what the file sets. The workspace's root is never built."""
-    for folder in (ROOT, *(ROOT / folder for folder in PACKAGES)):
-        assert "version" not in project(folder) and project(folder)["dynamic"] == ["version"]
-    for folder in PACKAGES:
-        path = tool(ROOT / folder)["hatch"]["version"]["path"]
-        assert (ROOT / folder / path).resolve() == VERSION
-        assert tool(ROOT / folder)["uv"]["cache-keys"] == [{"file": "pyproject.toml"}, {"file": path}]
+def test_the_version_is_set_once():
+    """The distribution reads its version from the SDK's version file, and uv makes its metadata again when that file
+    changes, so what a checkout's metadata says is what the file sets."""
+    path = tool()["hatch"]["version"]["path"]
     setters = {path: SETS.findall(path.read_text()) for path in (ROOT / "packages").rglob("*.py")}
     version = platoon_harness.__version__
 
+    assert "version" not in project() and project()["dynamic"] == ["version"]
+    assert ROOT / path == VERSION
+    assert tool()["uv"]["cache-keys"] == [{"file": "pyproject.toml"}, {"file": path}]
     assert {path: found for path, found in setters.items() if found} == {VERSION: [version]}
-    assert platoon_harness_cli.__version__ == version
-    assert metadata.version("platoon-harness-cli") == metadata.version("platoon-harness-sdk") == version
+    assert metadata.version("platoon-harness") == version
 
 
-def test_the_cli_requires_the_sdk_s_own_minor_release():
-    """Below 1.0 a minor release may change the SDK's API, as CHANGELOG says, so the command line takes any patch of its
-    own minor release and no other."""
-    release = Version(platoon_harness.__version__)
-    requirements = [Requirement(line) for line in project(ROOT / "packages" / "cli")["dependencies"]]
-    [sdk] = [requirement for requirement in requirements if requirement.name == "platoon-harness-sdk"]
+def test_the_layers_are_one_distribution():
+    """The SDK and the command line are source trees of one wheel, and neither has packaging of its own."""
+    held = tool()["hatch"]["build"]["targets"]
 
-    assert release.major == 0
-    assert sdk.specifier == SpecifierSet(f">={release.major}.{release.minor},<{release.major}.{release.minor + 1}")
+    assert held["wheel"]["packages"] == ["packages/sdk/src/platoon_harness", "packages/cli/src/platoon_harness_cli"]
+    assert held["sdist"]["only-include"] == held["wheel"]["packages"]
+    assert sorted(path.name for path in (ROOT / "packages").glob("*/*") if path.is_file()) == []
 
 
-def test_each_package_is_described_by_what_it_is_and_the_projects_sentence():
-    sentence = project(ROOT)["description"]
+def test_the_library_needs_pydantic_alone_and_the_cli_extra_holds_what_the_command_line_imports():
+    """`import platoon_harness` needs pydantic and nothing more, so what is built on the library brings nothing else,
+    and each distribution a module of the command line imports is pydantic or one the `cli` extra requires."""
+    extras = project()["optional-dependencies"]
+    cli = {canonicalize_name(Requirement(line).name) for line in extras["cli"]}
+    providers = metadata.packages_distributions()
+    roots = {root for path in CLI.rglob("*.py") for root in imported(path)}
+    outside = roots - set(sys.stdlib_module_names) - {"platoon_harness", "platoon_harness_cli"}
+    needed = {canonicalize_name(name) for root in outside for name in providers.get(root, [root])}
+
+    assert [Requirement(line).name for line in project()["dependencies"]] == ["pydantic"]
+    assert sorted(extras) == ["cli", "openhands"]
+    assert needed - {"pydantic"} <= cli
+
+
+def test_the_command_runs_a_launcher_that_needs_only_the_standard_library():
+    """Without the `cli` extra the command must still say what to install, so the module it names, and what that module
+    imports before the command line, import nothing outside the standard library."""
+    relative = [
+        node.module
+        for node in ast.parse(LAUNCHER.read_text()).body
+        if isinstance(node, ast.ImportFrom) and node.level == 1
+    ]
+    first = [LAUNCHER, CLI / "__init__.py", *(CLI / f"{module}.py" for module in relative)]
+
+    assert project()["scripts"] == {"platoon-harness": "platoon_harness_cli.launcher:main"}
+    assert relative == ["exits"]
+    assert [path.name for path in first if not imported(path) <= set(sys.stdlib_module_names)] == []
+
+
+def test_the_distribution_is_described_by_the_project_s_sentence():
+    """The README opens on it, and the description PyPI shows does too."""
+    sentence = project()["description"]
+    readme = (ROOT / "README.md").read_text().split("\n\n")[1]
 
     assert sentence.startswith("Run the agent harnesses you already use")
-    for folder, what in PACKAGES.items():
-        assert project(ROOT / folder)["description"] == f"{what}: {sentence[0].lower()}{sentence[1:]}"
+    assert " ".join(readme.split()) == sentence
+    assert sentence in " ".join(project()["readme"]["text"].split())
 
 
-def test_each_wheel_ships_a_copy_of_the_license():
-    """A package's license files must be inside its own folder, so each holds a copy."""
-    for folder in PACKAGES:
-        assert project(ROOT / folder)["license-files"] == ["LICENSE"]
-        assert (ROOT / folder / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
+def test_the_wheel_ships_the_license():
+    assert project()["license-files"] == ["LICENSE"] and (ROOT / "LICENSE").is_file()
 
 
-def test_no_package_names_macos_while_nothing_has_run_there():
+def test_no_classifier_names_macos_while_nothing_has_run_there():
     assert "Nothing has run on macOS" in (ROOT / "docs" / "STATUS.md").read_text()
-    for folder in PACKAGES:
-        assert [kind for kind in project(ROOT / folder)["classifiers"] if "MacOS" in kind] == []
+    assert [kind for kind in project()["classifiers"] if "MacOS" in kind] == []
 
 
-def test_the_packages_name_the_pythons_ci_tests_and_nothing_else():
+def test_the_classifiers_name_the_pythons_ci_tests_and_nothing_else():
     workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
     tested = workflow["jobs"]["test"]["strategy"]["matrix"]["python"]
-    sdk, cli = (project(ROOT / folder)["classifiers"] for folder in PACKAGES)
+    named = [kind.removeprefix("Programming Language :: Python :: ") for kind in project()["classifiers"]]
 
-    assert cli == sdk
-    assert [kind.removeprefix("Programming Language :: Python :: ") for kind in sdk if "Python ::" in kind] == tested
+    assert [kind for kind in named if "::" not in kind] == tested
 
 
 def test_every_runtime_dependency_s_license_is_on_the_allowlist():
-    """What installing the two packages brings states a license on the allowlist, every one. The `openhands` extra
-    brings besides only what `UNSETTLED` names, and the proxy the workspace excludes, whose license nothing here can
-    read, as it is not installed."""
-    plain, missing = required(("platoon-harness-sdk", ()), ("platoon-harness-cli", ()))
-    extra, excluded = required(("platoon-harness-sdk", ("openhands",)), ("platoon-harness-cli", ()))
+    """What installing platoon-harness with its `cli` extra brings states a license on the allowlist, every one. The
+    `openhands` extra brings besides only what `UNSETTLED` names, and the proxy the checkout excludes, whose license
+    nothing here can read, as it is not installed."""
+    plain, missing = required(("platoon-harness", ("cli",)))
+    extra, excluded = required(("platoon-harness", ("cli", "openhands")))
 
-    assert missing == set() and excluded == set(tool(ROOT)["uv"]["exclude-dependencies"])
-    assert {"platoon-harness-sdk", "platoon-harness-cli", "pydantic", "swarmchat", "textual"} <= plain < extra
+    assert missing == set() and excluded == set(tool()["uv"]["exclude-dependencies"])
+    assert {"platoon-harness", "pydantic", "swarmchat", "textual"} <= plain < extra
     assert unlisted(plain) == {}
     assert unlisted(extra) == UNSETTLED
 
@@ -196,9 +226,9 @@ def test_every_runtime_dependency_s_license_is_on_the_allowlist():
 def test_the_workspace_excludes_the_proprietary_dependency_and_install_md_says_a_published_install_brings_it():
     """OpenHands' SDK requires `lmnr`, which requires Laminar's proxy. The workspace's lock leaves it out, so no
     checkout installs it, and the install guide says so, and that the extra installed from a wheel brings it, which the
-    owner has ruled a published install may. The guide and the SDK's description say that platoon-harness stays MIT
-    either way."""
-    excluded = tool(ROOT)["uv"]["exclude-dependencies"]
+    owner has ruled a published install may. The guide and the distribution's description say that platoon-harness stays
+    MIT either way."""
+    excluded = tool()["uv"]["exclude-dependencies"]
     lock = tomllib.loads((ROOT / "uv.lock").read_text())
     guide = " ".join((ROOT / "docs" / "getting-started" / "install.md").read_text().split())
 
@@ -210,4 +240,4 @@ def test_the_workspace_excludes_the_proprietary_dependency_and_install_md_says_a
     assert "`openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`" in guide
     assert "The checkout's lock leaves it out with `exclude-dependencies`, so a checkout never installs it" in guide
     assert "the extra installed from the SDK's wheel, as a published install would be, brings" in guide
-    assert KEPT in guide and KEPT in " ".join(SDK_README.read_text().split())
+    assert KEPT in guide and KEPT in " ".join(project()["readme"]["text"].split())

@@ -8,11 +8,6 @@ resolution-markers = [
 ]
 
 [manifest]
-members = [
-    "platoon-harness",
-    "platoon-harness-cli",
-    "platoon-harness-sdk",
-]
 excludes = ["lmnr-claude-code-proxy"]
 
 [[package]]
@@ -3051,16 +3046,29 @@ wheels = [
 
 [[package]]
 name = "platoon-harness"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
-    { name = "platoon-harness-cli" },
-    { name = "platoon-harness-sdk" },
+    { name = "pydantic" },
+]
+
+[package.optional-dependencies]
+cli = [
+    { name = "cyclopts" },
+    { name = "markdown-it-py" },
+    { name = "rich" },
+    { name = "swarmchat" },
+    { name = "textual" },
+    { name = "tomlkit" },
+]
+openhands = [
+    { name = "openhands-sdk" },
+    { name = "openhands-tools" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "hypothesis" },
-    { name = "platoon-harness-sdk", extra = ["openhands"] },
+    { name = "platoon-harness", extra = ["cli", "openhands"] },
     { name = "playwright" },
     { name = "pre-commit" },
     { name = "pyte" },
@@ -3075,14 +3083,22 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "platoon-harness-cli", editable = "packages/cli" },
-    { name = "platoon-harness-sdk", editable = "packages/sdk" },
+    { name = "cyclopts", marker = "extra == 'cli'", specifier = ">=4,<5" },
+    { name = "markdown-it-py", marker = "extra == 'cli'", specifier = ">=2.2" },
+    { name = "openhands-sdk", marker = "extra == 'openhands'", specifier = "==1.59.0" },
+    { name = "openhands-tools", marker = "extra == 'openhands'", specifier = "==1.59.0" },
+    { name = "pydantic", specifier = ">=2.10,<3" },
+    { name = "rich", marker = "extra == 'cli'", specifier = ">=14" },
+    { name = "swarmchat", marker = "extra == 'cli'", specifier = "==0.1.0" },
+    { name = "textual", marker = "extra == 'cli'", specifier = ">=8.2,<9" },
+    { name = "tomlkit", marker = "extra == 'cli'", specifier = ">=0.15,<0.16" },
 ]
+provides-extras = ["cli", "openhands"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "hypothesis", specifier = ">=6" },
-    { name = "platoon-harness-sdk", extras = ["openhands"], editable = "packages/sdk" },
+    { name = "platoon-harness", extras = ["cli", "openhands"] },
     { name = "playwright", specifier = "==1.64.1" },
     { name = "pre-commit", specifier = ">=4" },
     { name = "pyte", specifier = ">=0.8" },
@@ -3094,51 +3110,6 @@ dev = [
     { name = "ruff", specifier = "==0.14.5" },
     { name = "ty", specifier = "==0.0.87" },
 ]
-
-[[package]]
-name = "platoon-harness-cli"
-source = { editable = "packages/cli" }
-dependencies = [
-    { name = "cyclopts" },
-    { name = "markdown-it-py" },
-    { name = "platoon-harness-sdk" },
-    { name = "rich" },
-    { name = "swarmchat" },
-    { name = "textual" },
-    { name = "tomlkit" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cyclopts", specifier = ">=4,<5" },
-    { name = "markdown-it-py", specifier = ">=2.2" },
-    { name = "platoon-harness-sdk", editable = "packages/sdk" },
-    { name = "rich", specifier = ">=14" },
-    { name = "swarmchat", specifier = "==0.1.0" },
-    { name = "textual", specifier = ">=8.2,<9" },
-    { name = "tomlkit", specifier = ">=0.15,<0.16" },
-]
-
-[[package]]
-name = "platoon-harness-sdk"
-source = { editable = "packages/sdk" }
-dependencies = [
-    { name = "pydantic" },
-]
-
-[package.optional-dependencies]
-openhands = [
-    { name = "openhands-sdk" },
-    { name = "openhands-tools" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "openhands-sdk", marker = "extra == 'openhands'", specifier = "==1.59.0" },
-    { name = "openhands-tools", marker = "extra == 'openhands'", specifier = "==1.59.0" },
-    { name = "pydantic", specifier = ">=2.10,<3" },
-]
-provides-extras = ["openhands"]
 
 [[package]]
 name = "playwright"

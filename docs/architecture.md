@@ -2287,7 +2287,7 @@ A preset is a plain function returning a topology fragment. Its name is the func
 take the name of a built-in preset or a topology key.
 
 Two entry-point groups: `platoon_harness.drivers` (name → driver) and `platoon_harness.extensions` (name → `Extension`). A kind gets a group when a
-second independent user needs a short name. Discovery reads metadata with no import, so duplicates and incompatible `platoon-harness-sdk` requirements
+second independent user needs a short name. Discovery reads metadata with no import, so duplicates and incompatible `platoon-harness` requirements
 are caught before any code loads or any cost is spent. Installing activates nothing: a role names a harness, a team names `extensions = [...]`,
 `name@version` is always accepted, and `module:attr` is accepted from a trusted layer, since it imports. First-party and third-party extensions use
 the same contracts.

@@ -54,7 +54,7 @@ classes, and `platoon_harness.extensions`, whose names are extensions' names and
 of code gets a group when a second independent user needs a short name for it. Discovery reads installed metadata and
 imports nothing, so before any code loads or any cost is spent it refuses a name that two distributions both register,
 unless the team pins one as `name@version` by a version the other does not have, and a distribution whose requirement on
-`platoon-harness-sdk` excludes the SDK that runs. `platoon-harness extension list` shows what each group holds, from
+`platoon-harness` excludes the release that runs. `platoon-harness extension list` shows what each group holds, from
 metadata alone.
 
 `module:attr` imports, so it is taken only from a layer you trust: Python, your user config, `--set` and the

@@ -16,7 +16,7 @@ watch and steer it from another shell, and stop and resume it.
 
 ```console
 $ platoon-harness doctor
-platoon-harness 0.1.0, SDK 0.1.0
+platoon-harness 0.1.0
 claude     2.1.319 (Claude Code), plan login, checked on 2.1.319: 26 passed, 4 skipped, none failed
 codex      codex-cli 0.167.0, plan login, checked on 0.167.0: 25 passed, 5 skipped, none failed
 openhands  1.59.0, login unknown, checked on 1.59.0: 26 passed, 4 skipped, none failed

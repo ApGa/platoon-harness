@@ -37,7 +37,7 @@ openhands  openhands-sdk is not installed for /path/to/platoon-harness/.venv/bin
 
 OpenHands runs on the runtime's own interpreter, and the extra that loads it is not installed for that one. In a
 checkout the interpreter is the checkout's own: `uv sync` installs the extra with the dev group, and
-`UV_NO_DEV=1 uv sync --all-packages --extra openhands` installs it without the group. OpenHands keeps no login, so its
+`UV_NO_DEV=1 uv sync --extra cli --extra openhands` installs it without the group. OpenHands keeps no login, so its
 role also needs an auth profile that names its key.
 
 ## init says none is on PATH

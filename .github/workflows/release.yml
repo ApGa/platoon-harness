@@ -1,8 +1,7 @@
 name: Release
 
-# Builds the sdists and wheels of the SDK and the command line, and checks them, on the events ci.yml runs on: what a
-# release would publish, checked before anything is published. It publishes nothing: the names, the tags and the trusted
-# publisher a release would publish with are the owner's to rule on (CONTRIBUTING.md, "Releases").
+# Builds platoon-harness's sdist and wheel, and checks them, on the events ci.yml runs on: what a release would publish,
+# checked before anything is published. It publishes nothing (CONTRIBUTING.md, "Releases").
 on:
   pull_request:
   push:
@@ -14,8 +13,8 @@ concurrency:
 
 # As in ci.yml: a token that reads the repository and nothing more, and a Python that uv manages. Each action is pinned
 # to a commit, the release beside it, and the checkout keeps no credentials for the build backend to read. Every step
-# runs on 3.12, the oldest Python the packages name, uvx's too, which would take the newest, so the tests of the
-# installed wheels find in uv's cache, offline, what uvx left there.
+# runs on 3.12, the oldest Python the distribution names, uvx's too, which would take the newest, so the tests of the
+# installed wheel find in uv's cache, offline, what the steps before them left there.
 permissions:
   contents: read
 
@@ -36,21 +35,27 @@ jobs:
         with:
           enable-cache: false
 
-      # Each wheel is built from its sdist, and --no-sources builds each package as PyPI would, without the
-      # workspace's sources.
-      - name: Build every distribution
-        run: uv build --all-packages --no-sources
+      # The wheel is built from the sdist, and --no-sources builds it as PyPI would.
+      - name: Build the sdist and the wheel
+        run: uv build --no-sources
 
-      - name: Check their metadata and their PyPI descriptions
+      - name: Check their metadata and their PyPI description
         run: uvx twine@7.0.0 check --strict dist/*
 
-      - name: Run the command line from the wheels in an environment of its own
-        run: uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
+      - name: Import the library from the wheel alone, in an environment of its own
+        run: uv run --isolated --no-project --with dist/*.whl python -I -c "import platoon_harness"
+
+      - name: Run the command line from the wheel with its cli extra, in an environment of its own
+        run: uv run --isolated --no-project --with "$(echo dist/*.whl)[cli]" platoon-harness --version
+
+      # As the install guide says: the openhands extra resolves with Laminar's proxy excluded.
+      - name: Resolve the openhands extra with lmnr-claude-code-proxy excluded
+        run: echo "platoon-harness[openhands] @ ./$(echo dist/*.whl)" | uv pip compile --excludes <(echo lmnr-claude-code-proxy) -
 
       - name: Install dependencies
         run: uv sync --locked
 
-      # Wheels built again from this commit, installed in an environment of their own, offline, from what the steps
-      # above left in uv's cache.
-      - name: Test the wheels as a person installs them
+      # The wheel built again from this commit and installed in environments of its own, offline, from what the steps
+      # above left in uv's cache: alone, with its cli extra, and as a tool.
+      - name: Test the wheel as a person installs it
         run: uv run pytest -q -m slow tests/integration/test_installed.py

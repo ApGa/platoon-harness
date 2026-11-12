@@ -884,7 +884,7 @@ async def test_doctor_and_a_start_without_the_openhands_extra_name_one_interpret
     interpreter = re.match(r"openhands +openhands-sdk is not installed for (.+?): ", told)
     assert doctor.code == 0 and "claude     9.9.9 (fake), login unknown, not checked" in doctor.stdout
     assert interpreter is not None and Path(interpreter[1]).is_file(), told
-    assert told.endswith("install the SDK's `openhands` extra there, `platoon-harness-sdk[openhands]`")
+    assert told.endswith("install the SDK's `openhands` extra there, `platoon-harness[openhands]`")
     assert (run.code, reason) == (1, f"its spawn failed: {told.removeprefix('openhands').lstrip()}")
 
 
@@ -932,7 +932,7 @@ async def test_extension_list_reads_what_is_installed_from_metadata(cli: Cli):
 
     listed = json.loads(done.stdout)
     assert done.code == 0
-    assert {"kind": "driver", "name": "claude", "distribution": "platoon-harness-sdk"} in [
+    assert {"kind": "driver", "name": "claude", "distribution": "platoon-harness"} in [
         {key: component[key] for key in ("kind", "name", "distribution")} for component in listed["components"]
     ]
     assert listed["problems"] == []

@@ -25,24 +25,24 @@ $ git clone https://github.com/ApGa/platoon-harness.git && cd platoon-harness
 $ uv sync
 ```
 
-`uv sync` installs the two packages of the workspace, the SDK, `platoon-harness-sdk`, and the command line,
-`platoon-harness-cli`, at the versions `uv.lock` names, with the `dev` group. The dev group holds the tests' tools,
-Playwright and the SDK's `openhands` extra: what you need to work on platoon-harness, which
-[CONTRIBUTING.md](../../CONTRIBUTING.md) goes on from.
+`uv sync` installs platoon-harness from the checkout, at the versions `uv.lock` names, with the `dev` group, which
+holds the tests' tools, Playwright and platoon-harness's `cli` and `openhands` extras: what you need to work on
+platoon-harness, which [CONTRIBUTING.md](../../CONTRIBUTING.md) goes on from.
 
 To leave the dev group out, set `UV_NO_DEV=1` in your shell before `uv sync`, and keep it set: `uv run` brings the
 environment in step with the lock file before it runs anything, with the dev group unless the variable says otherwise.
+Name the `cli` extra, which the command line needs:
 
 ```console
 $ export UV_NO_DEV=1
-$ uv sync
+$ uv sync --extra cli
 ```
 
 | You want | Run | It installs |
 |---|---|---|
-| To use it, and to work on it | `uv sync` | Both packages, and the dev group with the SDK's `openhands` extra among it |
-| To use it alone | `UV_NO_DEV=1 uv sync` | Both packages |
-| To use it with OpenHands | `UV_NO_DEV=1 uv sync --all-packages --extra openhands` | Both packages, and the SDK's `openhands` extra |
+| To use it, and to work on it | `uv sync` | platoon-harness, and the dev group with its `cli` and `openhands` extras |
+| To use it alone | `UV_NO_DEV=1 uv sync --extra cli` | platoon-harness with its `cli` extra |
+| To use it with OpenHands | `UV_NO_DEV=1 uv sync --extra cli --extra openhands` | platoon-harness with its `cli` and `openhands` extras |
 
 ## OpenHands
 
@@ -50,10 +50,10 @@ $ uv sync
 worker alone loads OpenHands, which the SDK's `openhands` extra brings, pinning `openhands-sdk` and `openhands-tools` at
 1.59.0 exactly. Install the extra for the interpreter that runs the runtime, which is the command line's when it starts
 a session: in a checkout, that is the checkout's own, and `uv sync` installs the extra with the dev group. Without the
-dev group, name the extra across the workspace:
+dev group, name it with the `cli` extra:
 
 ```console
-$ UV_NO_DEV=1 uv sync --all-packages --extra openhands
+$ UV_NO_DEV=1 uv sync --extra cli --extra openhands
 ```
 
 `openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`, a binary under Laminar's own terms. The
@@ -68,7 +68,7 @@ Either way, platoon-harness itself stays under the MIT license. OpenHands keeps 
 
 ```console
 $ uv run platoon-harness --version
-platoon-harness 0.1.0, SDK 0.1.0
+platoon-harness 0.1.0
 $ uv run platoon-harness doctor
 ```
 
@@ -78,7 +78,7 @@ the form they take for the default root, with `<home>`, `<filesystem>` and `<uid
 line per driver and extension:
 
 ```text
-platoon-harness 0.1.0, SDK 0.1.0
+platoon-harness 0.1.0
 claude     2.1.319 (Claude Code), plan login, checked on 2.1.319: 26 passed, 4 skipped, none failed
 codex      codex-cli 0.167.0, plan login, checked on 0.167.0: 25 passed, 5 skipped, none failed
 openhands  1.59.0, login unknown, checked on 1.59.0: 26 passed, 4 skipped, none failed

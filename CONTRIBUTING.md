@@ -54,15 +54,16 @@ The fast and browser tests need no harness, login or model key.
    git clone https://github.com/ApGa/platoon-harness.git && cd platoon-harness
    ```
 
-2. Install the packages and the `dev` group from `uv.lock`, as CI does:
+2. Install platoon-harness and the `dev` group from `uv.lock`, as CI does:
 
    ```bash
    uv sync --locked
    ```
 
-   The `dev` group holds pytest and its plugins, hypothesis, pyte, Playwright, pre-commit, ruff, ty, and the SDK's
-   `openhands` extra. `--locked` refuses when `uv.lock` is out of date with a `pyproject.toml`: after changing a
-   requirement, run `uv lock` and commit `uv.lock` with it. If you set `UV_NO_DEV=1` to use the packages alone, as
+   The `dev` group holds pytest and its plugins, hypothesis, pyte, Playwright, pre-commit, ruff, ty, and
+   platoon-harness's `cli` and `openhands` extras. `--locked` refuses when `uv.lock` is out of date with
+   `pyproject.toml`: after changing a requirement, run `uv lock` and commit `uv.lock` with it. If you set `UV_NO_DEV=1`
+   to use platoon-harness alone, as
    [Install](docs/getting-started/install.md#install-from-a-checkout) has it, unset it first: while it is set, `uv sync`
    leaves the group out, and the hooks and the tests run from it.
 
@@ -85,7 +86,7 @@ The fast and browser tests need no harness, login or model key.
    ```
 
    ```text
-   platoon-harness 0.1.0, SDK 0.1.0
+   platoon-harness 0.1.0
    ```
 
 **Next:** [run the tests](#run-the-tests).
@@ -321,7 +322,7 @@ A driver presents one harness session to the runtime. Most harnesses need no cha
 Whichever way, prove it with `check_driver` from `platoon_harness.testing`, which runs named checks against `FakeModel`
 and reports every failure at once; a skip is never a pass. A driver the SDK ships also needs:
 
-- its entry point in `packages/sdk/pyproject.toml`;
+- its entry point in `pyproject.toml`;
 - its name in `CHECKED`, in `packages/sdk/src/platoon_harness/drivers/levels.py`, and how to check it in
   `packages/sdk/src/platoon_harness/testing/harnesses.py`, so that `platoon-harness doctor --check` checks it where it
   finds it;
@@ -431,7 +432,7 @@ The list of changes that start with an RFC is in [the RFC index](docs/rfcs/READM
 
 ## Releases
 
-The SDK and the command line release together, at one version. Below 1.0, as [CHANGELOG.md](CHANGELOG.md) says, a minor
+platoon-harness is one distribution, at one version. Below 1.0, as [CHANGELOG.md](CHANGELOG.md) says, a minor
 release may change the Python API, the team file or the command line, and a patch release only fixes bugs. Nothing is
 published or tagged yet. Only the owner tags or publishes, and the names, the tags and the trusted publisher a
 release would publish with are the owner's to rule on.
@@ -445,18 +446,15 @@ built and checked, ready for the owner to tag and publish.
 
 2. In one pull request, set it:
 
-   - in `packages/sdk/src/platoon_harness/version.py`, the one place either package's version is set;
-   - for a minor release, in the command line's requirement on the SDK in `packages/cli/pyproject.toml`, to that minor
-     release's range, such as `platoon-harness-sdk>=0.2,<0.3`, with `uv lock` run after it, as the requirement is in
-     `uv.lock` too;
+   - in `packages/sdk/src/platoon_harness/version.py`, the one place the version is set;
    - in [CHANGELOG.md](CHANGELOG.md), by dating the release's heading, `## 0.2.0 (unreleased)` becoming
      `## 0.2.0 (YYYY-MM-DD)` with the day it merges;
-   - on each page that shows what `--version` prints, `platoon-harness 0.1.0, SDK 0.1.0` today: this guide, whose line a
+   - on each page that shows what `--version` prints, `platoon-harness 0.1.0` today: this guide, whose line a
      test holds to the version, [Install](docs/getting-started/install.md) and
      [the headless quickstart](docs/how-to/headless.md).
 
-   For the first release, also say how to install from PyPI where the package READMEs, the install guide and
-   CHANGELOG's opening say that nothing is published or released yet, and keep it to Linux: its notes, like the install
+   For the first release, also say how to install from PyPI where the README, the install guide and CHANGELOG's
+   opening say that nothing is published or released yet, and keep it to Linux: its notes, like the install
    guide and each package's classifiers, name Linux alone, as nothing has run on macOS, whose CI the owner has put on
    hold.
 
@@ -473,27 +471,31 @@ built and checked, ready for the owner to tag and publish.
 
 ### The release workflow
 
-The release workflow, `.github/workflows/release.yml`, builds every distribution and checks it, on each pull request and
+The release workflow, `.github/workflows/release.yml`, builds platoon-harness and checks it, on each pull request and
 each push to `main`, as CI's other jobs run. Its `build` job runs:
 
 ```bash
-uv build --all-packages --no-sources
+uv build --no-sources
 uvx twine@7.0.0 check --strict dist/*
-uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
+uv run --isolated --no-project --with dist/*.whl python -I -c "import platoon_harness"
+uv run --isolated --no-project --with "$(echo dist/*.whl)[cli]" platoon-harness --version
+echo "platoon-harness[openhands] @ ./$(echo dist/*.whl)" | uv pip compile --excludes <(echo lmnr-claude-code-proxy) -
 uv sync --locked
 uv run pytest -q -m slow tests/integration/test_installed.py
 ```
 
-`uv build` writes each package's sdist to `dist/`, then its wheel, built from the sdist, so an sdist that leaves out a
-file the wheel needs fails here. `--no-sources` builds each as PyPI would, without the workspace's sources.
-`twine check --strict`, at the release the workflow pins, checks each distribution's metadata, and that its README renders as its PyPI description, failing
-on a warning too. `uvx` runs the command line from the two wheels in an environment of its own, installing only what
-their metadata requires, so a requirement only the workspace gave fails there. The workflow runs every step on Python
-3.12, the oldest the packages name, with `UV_PYTHON=3.12`.
+`uv build` writes the sdist to `dist/`, then the wheel, built from the sdist, so an sdist that leaves out a file the
+wheel needs fails here. `twine check --strict`, at the release the workflow pins, checks their metadata, and that the
+description renders on PyPI, failing on a warning too. Each `uv run --isolated` installs the wheel in an environment of
+its own, with only what its metadata requires: alone, the library imports, and with the `cli` extra, the command runs.
+`uv pip compile` resolves the `openhands` extra with `lmnr-claude-code-proxy` excluded, as
+[Install](docs/getting-started/install.md#openhands) says. The workflow runs every step on Python 3.12, the oldest the
+distribution names, with `UV_PYTHON=3.12`.
 
-`tests/integration/test_installed.py`, slow tests, build the wheels again and install them in an environment of their
-own: the command line runs and says its version, a headless run of [examples/sdk-script](examples/sdk-script/README.md)
-settles on the `exec` driver and the command line reads it back, each wheel holds every file git tracks in its package,
-and the SDK's `openhands` extra requires what [Install](docs/getting-started/install.md#openhands) says. They take no
-network, so uv's cache must hold the build backend and each requirement, as the steps before them leave it; where it
-does not, they fail, saying so, and never skip.
+`tests/integration/test_installed.py`, slow tests, build the wheel again and install it in environments of their own.
+With the `cli` extra, the command line says its version, a headless run of
+[examples/sdk-script](examples/sdk-script/README.md) settles on the `exec` driver and the command line reads it back,
+and `uv tool install` puts the command on PATH. Alone, the library imports with nothing of the extra, and the command
+says what to install. The wheel holds every file git tracks in each layer's package, and the `openhands` extra
+requires what the install guide says. The tests take no network, so uv's cache must hold the build backend and each
+requirement, as the steps before them leave it; where it does not, they fail, saying so, and never skip.

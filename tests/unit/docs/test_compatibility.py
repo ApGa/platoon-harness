@@ -55,9 +55,8 @@ def held(pin: Requirement) -> bool:
 
 
 def extras() -> set[str]:
-    """Every extra a package of the workspace declares."""
-    projects = (tomllib.loads(path.read_text())["project"] for path in (ROOT / "packages").glob("*/pyproject.toml"))
-    return {extra for project in projects for extra in project.get("optional-dependencies", {})}
+    """Every extra platoon-harness declares."""
+    return set(tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["optional-dependencies"])
 
 
 def test_each_driver_s_state_on_the_compatibility_page_is_the_one_status_gives():

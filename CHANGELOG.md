@@ -2,7 +2,7 @@
 
 What each release of platoon-harness changes. Nothing is released yet: everything below goes into the first release, 0.1.0.
 Below 1.0, a minor release may change the Python API, the team file or the command line, and a patch release only fixes
-bugs; require a range such as `platoon-harness-sdk>=0.1,<0.2`.
+bugs; require a range such as `platoon-harness>=0.1,<0.2`.
 
 ## 0.1.0 (unreleased)
 
@@ -452,27 +452,28 @@ named here is closed.
   never below the true one; and the CPU and peak memory of its process, the memory None anywhere but Linux. A read-only
   kernel measures nothing, so it has None. These were the writer's private fields, which no op could read, and `Txn` now
   has six members. A command that asks for them is refused, so nothing it does or records rests on them. See [RFC 0069](docs/rfcs/0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md), a draft.
-- **A release workflow, which publishes nothing.** `.github/workflows/release.yml` builds the SDK's and the command
-  line's sdists and wheels on each pull request and each push to `main`, each wheel from its sdist, checks every one with
-  `twine check --strict`, and runs the command line from the wheels in an environment of its own. Nothing checked what a
+- **A release workflow, which publishes nothing.** `.github/workflows/release.yml` builds the sdist and the wheel on
+  each pull request and each push to `main`, the wheel from the sdist, checks both with `twine check --strict`, and runs
+  the command line from the wheel with its `cli` extra in an environment of its own. Nothing checked what a
   release would publish. CONTRIBUTING says under Releases how to cut a release, and shows the workflow's commands, which
   pass when run by hand; that they pass on GitHub's runners is inferred until a run shows it. It publishes nothing, as
   the names, the tag and the trusted publisher a release would publish with are the owner's to rule on.
-- **The packages tested as a person installs them.** Slow tests, `tests/integration/test_installed.py`, build the
-  wheels and install them, offline, in an environment of their own: the command line says its version, a headless run
-  of `examples/sdk-script` settles on the `exec` driver and the command line reads it back, each wheel holds every file
-  its package tracks, and the SDK's `openhands` extra requires what the install guide says. The release workflow runs
-  them. Where uv's cache lacks what they install, they fail, saying so. The install guide, and the SDK's description,
-  now say that the extra installed from a wheel brings `lmnr-claude-code-proxy` unless you exclude it, as the
-  checkout's exclusion does not travel in a wheel.
-- **A license check of what installing the packages brings.** A test reads the license each distribution the two
-  packages require states, with the `openhands` extra and without, and holds it to an allowlist of permissive licenses
-  and MPL-2.0. A plain install brings nothing else. The extra brings five distributions that state no license on the
-  list, which the test names with what each states: OpenHands' SDK and tools and `agent-client-protocol` state none,
-  `func-timeout` the LGPL and `lupa` "MIT style", besides `lmnr-claude-code-proxy`, under Laminar's own terms, which no
-  checkout installs. The owner has ruled that a published extra may bring the proxy, and platoon-harness stays MIT;
-  whether it may bring the five others is the owner's to rule on, and admitting MPL-2.0 is the default until the owner
-  confirms it.
+- **platoon-harness tested as a person installs it.** Slow tests, `tests/integration/test_installed.py`, build the wheel
+  and install it, offline, in environments of its own: with the `cli` extra the command line says its version, a
+  headless run of `examples/sdk-script` settles on the `exec` driver and the command line reads it back, and
+  `uv tool install` puts the command on PATH; alone, the library imports and the command says what to install. The wheel
+  holds every file each layer tracks, and the `openhands` extra requires what the install guide says. The release
+  workflow runs them. Where uv's cache lacks what they install, they fail, saying so. The install guide, and the wheel's
+  description, now say that the extra installed from a wheel brings `lmnr-claude-code-proxy` unless you exclude it, as
+  the checkout's exclusion does not travel in a wheel.
+- **A license check of what installing platoon-harness brings.** A test reads the license each distribution
+  `platoon-harness[cli]` requires states, with the `openhands` extra and without, and holds it to an allowlist of
+  permissive licenses and MPL-2.0. A plain install brings nothing else. The extra brings five distributions that state
+  no license on the list, which the test names with what each states: OpenHands' SDK and tools and
+  `agent-client-protocol` state none, `func-timeout` the LGPL and `lupa` "MIT style", besides `lmnr-claude-code-proxy`,
+  under Laminar's own terms, which no checkout installs. The owner has ruled that a published extra may bring the proxy,
+  and platoon-harness stays MIT; whether it may bring the five others is the owner's to rule on, and admitting MPL-2.0
+  is the default until the owner confirms it.
 - **A review and verification team.** [examples/review-verification](examples/review-verification/README.md): a Codex
   author commits a change in a worktree of its own, a Claude Code reviewer reads the commit with its own git and through
   `repo.commit`, and a Codex verifier in Codex's read-only sandbox asks you to test the commit, as no agent can have the
@@ -1089,7 +1090,7 @@ named here is closed.
   tools by their own names, as OpenHands does, says `bare`, and its agents are told them by those names, in their instructions,
   handovers and refusals, through `?surface=mcp`.
 - **OpenHands as a harness.** The `openhands` harness: a wire worker per agent on OpenHands SDK and tools 1.59.0, which the
-  SDK's `openhands` extra, `platoon-harness-sdk[openhands]`, pins exactly, and which `harness = "openhands"` runs as
+  SDK's `openhands` extra, `platoon-harness[openhands]`, pins exactly, and which `harness = "openhands"` runs as
   `python -P -m platoon_harness.drivers.openhands` on the runtime's own interpreter, finding its modules where the runtime does,
   `PYTHONPATH` among them. Only the worker loads OpenHands, in its own process, and an environment that cannot hold its pins
   runs the worker from one of its own as a wire command. [RFC 0030](docs/rfcs/0030-openhands-is-an-extra-of-the-sdk.md). It
@@ -1106,6 +1107,12 @@ named here is closed.
 
 ### Changes
 
+- **One distribution, `platoon-harness`, with the command line as its `cli` extra.** The library needs pydantic alone,
+  and `platoon-harness[cli]` adds the command line. Without the extra, the `platoon-harness` command says what to
+  install and exits 78. `--version` and `doctor` print one version, `doctor --json` gives `version` in place of
+  `versions`, and an extension requires `platoon-harness`. Before, the SDK and the command line were two distributions,
+  `platoon-harness-sdk` and `platoon-harness-cli`. See
+  [RFC 0081](docs/rfcs/0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md).
 - **A click on a transcript line chooses it.** A click on its `▸` or `▾` opens or closes it, as Enter does, and a click on
   the rest of it, chosen already or not, opens nothing. Before, a click opened the line it was on.
 - **Ctrl+O opens every fold of the transcript.** It opens each turn's calls, thoughts and spawns, and again closes them
@@ -1172,10 +1179,8 @@ named here is closed.
   commit is the one its tag named, so nothing CI runs changed, and the release workflow runs `twine` at a release it
   names. Each workflow's token reads the repository and nothing more, a job that needs more asks only to read, and
   each checkout keeps no credentials for a later step to read.
-- **One version for the SDK and the command line, set in one place.** `packages/sdk/src/platoon_harness/version.py` sets
-  the version both packages release at, and each package's `pyproject.toml` reads it, where five places set it, which a
-  release had to change alike. A test holds the command line to requiring the SDK of its own minor release. That the two
-  release together is the default, pending the owner's ruling.
+- **One version, set in one place.** `packages/sdk/src/platoon_harness/version.py` sets the version, where five places
+  set it, which a release had to change alike.
 - **Each Git example runs on stand-ins of its own.** The worktree team's no-keys run took the test suite's stand-ins,
   `tests.integration.scripts:spawning_contributors` and the rest, with the checkout on `PYTHONPATH`, so a copy of the
   example could not run alone. Its stand-ins are now its own, in `examples/worktree-merge-queue/stand_ins.py`, as
@@ -1298,8 +1303,8 @@ named here is closed.
   the mixed team on no keys, the SDK in a script, the milestones, the documentation, the layout, contributing and the license.
   `tests/unit/docs/test_readme.py` holds its words to architecture section 2, its milestones to STATUS and its Python to
   `examples/sdk-script/run.py`, and `tests/integration/test_examples.py` runs its first steps. The mixed team's README has a
-  goal, what it needs, a table of its files and numbered steps, the output to expect from the run with no keys among them, and
-  each package's README says what it is and links the project.
+  goal, what it needs, a table of its files and numbered steps, and the output to expect from the run with no keys among
+  them.
 - **The no-keys run imports no test code.** The mixed team's scripted stand-ins live in the example,
   `examples/mixed-team/stand_ins.py`, on public names alone, so its no-keys run imports no test code:
   `PYTHONPATH=examples/mixed-team`, and `stand_ins:lead` and `stand_ins:worker` as the harnesses. Its tests run the README's

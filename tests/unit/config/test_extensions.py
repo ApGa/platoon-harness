@@ -51,7 +51,7 @@ def test_a_component_records_its_provenance(site):
         "ballot",
         "2.4.6",
         entry_points={EXTENSIONS: {"ballot": "b:extension"}},
-        requires=("platoon-harness-sdk>=0.1,<0.2",),
+        requires=("platoon-harness>=0.1,<0.2",),
     )
     assert find(EXTENSIONS, "ballot") == Component(
         EXTENSIONS, "ballot", "b:extension", "ballot", "2.4.6", (">=0.1,<0.2",)
@@ -102,10 +102,10 @@ def test_an_incompatible_requirement_is_caught_before_import(site):
     site.install(
         "old",
         entry_points={EXTENSIONS: {"old": "never_imported_c:e"}},
-        requires=("platoon-harness-sdk>=9,<10",),
+        requires=("platoon-harness>=9,<10",),
     )
-    assert any("needs platoon-harness-sdk>=9,<10" in str(problem) for problem in check_installed())
-    with pytest.raises(ConfigError, match="needs platoon-harness-sdk>=9,<10"):
+    assert any("needs platoon-harness>=9,<10" in str(problem) for problem in check_installed())
+    with pytest.raises(ConfigError, match="needs platoon-harness>=9,<10"):
         load(EXTENSIONS, "old")
     assert "never_imported_c" not in sys.modules
 
@@ -113,17 +113,17 @@ def test_an_incompatible_requirement_is_caught_before_import(site):
 @pytest.mark.parametrize(
     "requirement",
     [
-        "platoon-harness-sdk",
-        "platoon-harness-sdk>=0.1,<0.2",
-        "platoon_harness_sdk>=0.1",
+        "platoon-harness",
+        "platoon-harness>=0.1,<0.2",
+        "platoon_harness>=0.1",
         "Platoon.Harness.SDK==0.1.*",
-        "platoon-harness-sdk~=0.1.0",
-        "platoon-harness-sdk!=0.2",
-        "platoon-harness-sdk<1",
-        "platoon-harness-sdk==0.1",
-        "platoon-harness-sdk (>=0.1)",
-        "platoon-harness-sdk[tui]>=0.1",
-        "platoon-harness-sdk>=9; extra == 'future'",
+        "platoon-harness~=0.1.0",
+        "platoon-harness!=0.2",
+        "platoon-harness<1",
+        "platoon-harness==0.1",
+        "platoon-harness (>=0.1)",
+        "platoon-harness[cli]>=0.1",
+        "platoon-harness>=9; extra == 'future'",
         "something-else>=9",
     ],
 )
@@ -135,14 +135,14 @@ def test_requirements_this_sdk_meets(site, requirement):
 @pytest.mark.parametrize(
     "requirement",
     [
-        "platoon-harness-sdk>=0.2",
-        "platoon-harness-sdk<0.1",
-        "platoon-harness-sdk==0.2.*",
-        "platoon-harness-sdk!=0.1.*",
-        "platoon-harness-sdk~=0.2.0",
-        "platoon-harness-sdk>0.1.0",
-        "platoon-harness-sdk<=0.0.9",
-        "platoon-harness-sdk>=9 ; python_version >= '3'",
+        "platoon-harness>=0.2",
+        "platoon-harness<0.1",
+        "platoon-harness==0.2.*",
+        "platoon-harness!=0.1.*",
+        "platoon-harness~=0.2.0",
+        "platoon-harness>0.1.0",
+        "platoon-harness<=0.0.9",
+        "platoon-harness>=9 ; python_version >= '3'",
     ],
 )
 def test_requirements_this_sdk_fails(site, requirement):
@@ -152,7 +152,7 @@ def test_requirements_this_sdk_fails(site, requirement):
 
 def test_a_requirement_we_cannot_read_is_a_problem_not_a_pass(site):
     site.install(
-        "odd", entry_points={EXTENSIONS: {"odd": "odd:e"}}, requires=("platoon-harness-sdk @ https://x.test/a.whl",)
+        "odd", entry_points={EXTENSIONS: {"odd": "odd:e"}}, requires=("platoon-harness @ https://x.test/a.whl",)
     )
     assert "unreadable SDK requirement" in str(check_installed()[0])
 
@@ -235,11 +235,11 @@ def test_a_named_extensions_preset_works_from_metadata_to_grants(site):
 
 
 def test_team_check_reports_what_loading_an_extension_found(site):
-    site.install("old", entry_points={EXTENSIONS: {"old": "old:e"}}, requires=("platoon-harness-sdk>=9",))
+    site.install("old", entry_points={EXTENSIONS: {"old": "old:e"}}, requires=("platoon-harness>=9",))
     team = Team(roles={"a": Role(harness="pi")}, extensions=["old", "ghost"])
     report = team_check(team, capabilities={"pi": Capabilities(persistent=True)}, extensions=Installed())
     found = "\n".join(map(str, report))
-    assert "needs platoon-harness-sdk>=9" in found
+    assert "needs platoon-harness>=9" in found
     assert "no extension `ghost`" in found
     assert "Registered: bwrap, old." in found
 

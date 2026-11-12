@@ -11,7 +11,6 @@ from typing import Any
 import yaml
 
 import platoon_harness
-import platoon_harness_cli
 
 ROOT = Path(__file__).parents[2]
 GUIDE = ROOT / "CONTRIBUTING.md"
@@ -240,7 +239,7 @@ def test_the_paths_the_guide_names_exist():
 
 
 def test_the_version_shown_is_the_one_the_command_line_prints():
-    version = f"platoon-harness {platoon_harness_cli.__version__}, SDK {platoon_harness.__version__}"
+    version = f"platoon-harness {platoon_harness.__version__}"
 
     assert version in blocks("text")
 

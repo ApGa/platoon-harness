@@ -13,7 +13,7 @@ from platoon_harness.version import __version__
 DRIVERS = "platoon_harness.drivers"
 EXTENSIONS = "platoon_harness.extensions"
 
-_SDK = "platoon-harness-sdk"
+_SDK = "platoon-harness"
 _LABELS = {DRIVERS: "driver", EXTENSIONS: "extension"}
 _REQUIREMENT = re.compile(r"\s*([A-Za-z0-9][\w.-]*)\s*(?:\[[^]]*])?\s*\(?([^;)]*)\)?\s*(?:;(.*))?")
 _CLAUSE = re.compile(r"(~=|==|!=|<=|>=|<|>)\s*(\d+(?:\.\d+)*)(\.\*)?")

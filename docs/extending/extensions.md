@@ -36,7 +36,7 @@ version = "0.1.0"
 description = "A sample extension of platoon-harness: a vote on an agent's work, the view that holds each vote, and a preset that pairs an author with its reviewer."
 requires-python = ">=3.12"
 license = "MIT"
-dependencies = ["platoon-harness-sdk>=0.1,<0.2"]
+dependencies = ["platoon-harness>=0.1,<0.2"]
 
 # The entry point's name is the name a team gives in `extensions = [...]`, and its value is the Extension, imported only
 # when a team names it.
@@ -388,7 +388,7 @@ A package on an index is installed by name, so before you publish one:
 - **Choose its names.** The distribution's name is yours to make unique on the index. The entry point's name is what
   teams name, and another distribution may register the same: a team that names a name two installed distributions
   register is refused, saying both, and pins one as `name@version` where their versions differ.
-- **Say what it needs.** Require the SDK's minor releases you have tested on, as `platoon-harness-sdk>=0.1,<0.2` does.
+- **Say what it needs.** Require the minor releases of platoon-harness you have tested on, as `platoon-harness>=0.1,<0.2` does.
   Below 1.0, as [CHANGELOG](../../CHANGELOG.md) says, a minor release may change the Python API, the team file or the
   command line, and a patch release only fixes bugs.
 - **Describe it.** Give `readme`, which an index shows as its description, and the project's URLs. The sample, which is
@@ -405,5 +405,5 @@ $ uv publish
 `uv build` writes an sdist to `dist/`, then a wheel built from it. `twine check --strict` checks their metadata, and that
 the README renders as the index's description, failing on a warning too, as it does for the sample, which has no
 `readme`. `uv publish` uploads `dist/` to PyPI, with a token, or from a CI workflow by trusted publishing. Nothing of
-platoon-harness is published yet, so until it is, a package that requires `platoon-harness-sdk` installs beside a
+platoon-harness is published yet, so until it is, a package that requires `platoon-harness` installs beside a
 checkout, as step 8 does.

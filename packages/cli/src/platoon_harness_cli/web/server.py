@@ -29,8 +29,9 @@ from platoon_harness.http import Head, Rejected, Server, bearer, check_site, res
 from platoon_harness.kernel import Clock, Delta, Outcome, Refusal, first, is_held
 from platoon_harness.runtime.control import BODY_LIMIT
 from platoon_harness.session import CHECKPOINT_EVENTS
+from platoon_harness.version import __version__
 
-from .. import __version__, approvals, calls, channels, review
+from .. import approvals, calls, channels, review
 from ..ops import CONFIRMED, Form, body_ref, cut, forms
 from ..provenance import REF_IN_TEXT, no_interactions, no_provenance, read, who_reached_whom
 from ..replay import CONTROLS, SPEEDS, Player, nothing_acts, reads_no_diff

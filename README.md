@@ -56,9 +56,10 @@ $ git clone https://github.com/ApGa/platoon-harness.git && cd platoon-harness
 $ uv sync
 ```
 
-`uv sync` installs both packages with the `dev` group, which holds the tests' tools and the SDK's `openhands` extra. To
-leave the group out, set `UV_NO_DEV=1` for `uv sync` and for every `uv run` after it, as `uv run` installs the group
-otherwise. [Install](docs/getting-started/install.md) has the rest: OpenHands, and what `doctor` says.
+`uv sync` installs platoon-harness with the `dev` group, which holds the tests' tools and its `cli` and `openhands`
+extras. To leave the group out, set `UV_NO_DEV=1` for `uv sync --extra cli` and for every `uv run` after it, as
+`uv run` installs the group otherwise. [Install](docs/getting-started/install.md) has the rest: OpenHands, and what
+`doctor` says.
 
 ## Quickstart
 
@@ -181,12 +182,12 @@ Nothing is published to PyPI yet.
 
 | Path | Contents |
 |---|---|
-| `packages/sdk/` | `platoon-harness-sdk`, the Python SDK, `platoon_harness`: the kernel, the primitives, the runtime, the topology, the tool plane, the drivers and the testing kit |
-| `packages/cli/` | `platoon-harness-cli`, the `platoon-harness` command: the command line, the terminal UI and the server of SwarmChat's page |
+| `packages/sdk/` | The Python SDK, `platoon_harness`: the kernel, the primitives, the runtime, the topology, the tool plane, the drivers and the testing kit |
+| `packages/cli/` | The command line, `platoon_harness_cli`, the `platoon-harness` command, whose dependencies the `cli` extra installs: the command line, the terminal UI and the server of SwarmChat's page |
 | `examples/` | runnable examples on pi and OpenHands, each run on the real harnesses against FakeModel by `tests/integration/test_examples.py` and on a real model by `tests/live/test_examples.py`, the sample project they work on, and a sample extension package, installed from its wheel by `tests/integration/test_installed_extensions.py` |
 | `tests/` | `unit/` and `integration/`, on a CPU, with the slow ones marked; `e2e/`, the browser tests; `live/`, on real models and logins; `conformance/`, the conformance suite run on every driver |
 | `docs/` | the documentation, which [docs/README.md](docs/README.md) lists |
-| `pyproject.toml`, `uv.lock` | the uv workspace of the two packages, and the versions every checkout installs |
+| `pyproject.toml`, `uv.lock` | the one distribution, `platoon-harness`, built from both, and the versions every checkout installs |
 
 ## Contributing
 
