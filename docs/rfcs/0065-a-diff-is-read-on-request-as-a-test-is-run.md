@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/repo.py`](../../packages/sdk/src/platoon_harness/primitives/repo.py), [`runtime/git.py`](../../packages/sdk/src/platoon_harness/runtime/git.py), [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [`review.py`](../../packages/cli/src/platoon_harness_cli/review.py), [`tui/review.py`](../../packages/cli/src/platoon_harness_cli/tui/review.py), [`web/server.py`](../../packages/cli/src/platoon_harness_cli/web/server.py), [`web/overlay.js`](../../packages/cli/src/platoon_harness_cli/web/overlay.js), [architecture section 5.4](../architecture.md#54-effects) and [section 13](../architecture.md#13-workspaces), [RFC 0034](0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md), [RFC 0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md), [RFC 0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
-| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `feat: Read a commit's patch or a workspace's diff on request, as an effect`; `feat: Keep a commit's patch once and say when an uncommitted diff was read`; `refactor: Word what changed once for the terminal and the page`; `feat: Draw a commit's patch and a workspace's diff in the review, a page at a time`; `feat: Comment on a diff's lines as a message that cites them`; `feat: List what changed in the page, with each commit's test and patch` |
 
 ## Summary
@@ -31,7 +31,7 @@ what changed. The terminal's `/review` draws diffs disabled, saying they are pla
 ([STATUS](../STATUS.md)). A program that checks a worker's change before it merges it cannot read the change from the record
 either.
 
-The first draft of milestone 4's plan kept every commit's patch and every uncommitted diff at every look, on the premise that a
+A first design kept every commit's patch and every uncommitted diff at every look, on the premise that a
 look is the only place a patch can be read, since an op does no I/O (law 3). The premise is false. `repo.test` already asks the
 runtime to do I/O as an effect, and keeps what it came to as a body ([RFC 0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md)).
 A look runs at every turn's end and keeps the session from settling until it ends, so a patch at every look would make every
@@ -55,7 +55,7 @@ def diff(txn: Txn, a: Diffing) -> dict[str, Any]: ...  # {"effect": id}, and "re
 grammar, `@ada` for an agent's own and `shared` for the session's checkout, which no SHA can be. One argument, which every form
 and command derived from the op requires, leaves nobody a way to give both or neither. It is no tool. It refuses an agent
 whatever its grants, saying that an agent reads a commit through `repo.commit` or its own git: an agent's read is evidence (law
-9), and its read of a patch would be an exposure the record would have to account for, which milestone 4 does not take on. It
+9), and its read of a patch would be an exposure the record would have to account for, which this does not take on. It
 refuses `unsupported` when the session observes no repository, and `conflict` once the session is closing. It refuses
 `not_found` for a commit not recorded yet, as `repo.test` does, `invalid` for a name several commits begin with, and `not_found`
 for a workspace the session holds none of: `@ada` before its workspace is made, once its stop removed it, or when ada works in
@@ -154,7 +154,7 @@ A look goes on recording lines, files and paths, and no patch, so a handover cos
 
 ### 7. Reviewed in both clients (step 2)
 
-Reviewing, in milestone 4, is a person reading diffs and commenting on them, with no noun for a review: an agent reviewer is a
+Reviewing is a person reading diffs and commenting on them, with no noun for a review: an agent reviewer is a
 role in the review example. Both clients say what changed in the words of one module of the command line's package,
 `review.py`, as provenance's are ([RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md)):
 
@@ -213,7 +213,7 @@ Shift and a click a range, and Comment sends what is written below.
 | Keep a patch at every look | Every turn's handover would pay for patches nobody reads: up to 64 commits' and an uncommitted diff per look, which keeps the session from settling, at a cost unmeasured past 100,000 files or on Lustre; and the patch would clash with the body `workspace.changed` already carries |
 | Two arguments, `commit` and `workspace`, one of which is given | A form or a command derived from the op could give both or neither, and its example would show neither, since neither is required |
 | A query that reads the diff | An op does no I/O (law 3), and a query keeps nothing, so each client would read it again and no citation could name its lines |
-| A tool an agent calls | An agent's read of a patch is evidence the record would have to account for, as `blob.get` does by exposure, and milestone 4 does not take it on. An agent reads a commit through `repo.commit` and its own git. That an agent is refused is the default, pending the owner's ruling |
+| A tool an agent calls | An agent's read of a patch is evidence the record would have to account for, as `blob.get` does by exposure, and this does not take it on. An agent reads a commit through `repo.commit` and its own git |
 | Read every diff in your repository | A snapshot's commit may be only in its own repository, and an isolated agent's config, which names what git runs, is the agent's, so its git stays inside its isolation |
 | `git show` for a commit's patch | It verifies a signature where `log.showSignature` is set, which starts the program `gpg.program` names. `diff-tree` shows the same patch and starts nothing |
 | `git diff-tree --root --diff-merges=first-parent <sha>`, which finds the parent itself | Git takes a commit's parents from a graft or a shallow list where one names it, so whoever writes the repository's files could have another parent's patch, or the whole tree's, recorded for the SHA. Its own object names the parent, and for every commit of this repository the two print the same bytes |
@@ -229,8 +229,8 @@ Shift and a click a range, and Comment sends what is written below.
 | Read a patch a page at a time through `blob.get`, as an agent reads a body | A line longer than one result holds, 12 KiB, as a minified file's can be, comes back with no text, so it and every line after it could not be read, and how a page's first lines are toned turns on the pages before it, which a page read alone does not know. A kept patch is at most 64 KiB, so a person's client reads it whole |
 | A query that gives a diff's record by its ref, for a client given a kept patch's ref alone | A concept more, for one use: the record is past its effect's request, so `repo.diff` giving the effect beside the ref lets a client follow the journal to it, whichever it was given |
 | A client that says where a commit's patch was read from the workspace its look found it in | Once that workspace has gone the runtime reads it in yours, and only the runtime knows which it did, so its record says |
-| A review, a noun with its own ops, states and verdicts | Nothing in milestone 4 needs a review to be more than the messages that cite what they are about, and the default pending the owner's ruling has none |
-| A comment citing both the commit and the lines | A citation of lines names their record, whose gist names the commit, and the plan asks for the commit or the lines. One citation says what the comment is about |
+| A review, a noun with its own ops, states and verdicts | Nothing here needs a review to be more than the messages that cite what they are about |
+| A comment citing both the commit and the lines | A citation of lines names their record, whose gist names the commit, so one citation says what the comment is about |
 | A comment to whoever the person names | The composer already writes to anyone. A comment on a change goes to its maker, whom the record names, so it needs no address |
 
 ## Consequences
@@ -268,12 +268,12 @@ Shift and a click a range, and Comment sends what is written below.
 
 ## Open questions
 
-1. May an agent ask for a diff? M1 builds the default, pending the owner's ruling: no, as a diff is a person's or a program's,
-   as a test is, and an agent reads a commit through `repo.commit` or its own git. A yes would make `repo.diff` a tool and record
-   an agent's read of a patch as its exposure, and would remove nothing M1 builds. Needed before an agent may ask.
-2. What does reviewing mean in milestone 4? The default, pending the owner's ruling, is that a person asks for and reads diffs in
-   both clients and comments as a message that cites the commit or lines of its patch, with no noun for a review. M2 builds the
-   default. A noun for a review would sit beside the messages that cite a change, and would remove nothing M2 builds.
+1. Open: may an agent ask for a diff? Today it may not, as a diff is a person's or a program's, as a test is, and an agent reads a
+   commit through `repo.commit` or its own git. A yes would make `repo.diff` a tool and record an agent's read of a patch as its
+   exposure, and would remove nothing M1 builds.
+2. Open: should reviewing be more than reading? Today a person asks for and reads diffs in both clients and comments as a message
+   that cites the commit or lines of its patch, with no noun for a review. A noun for a review would sit beside the messages that
+   cite a change, and would remove nothing M2 builds.
 
 ## Evidence
 

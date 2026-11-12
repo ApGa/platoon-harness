@@ -10,7 +10,7 @@
 
 ## Motivation
 
-Claude Code and Codex can each start agents of their own, and the owner was concerned that agents would reach for that instead of
+Claude Code and Codex can each start agents of their own, and an agent could reach for that instead of
 `agent.spawn`. It was allowed and only observed, as `child.seen`. Such an agent is none of ours. Its calls reach us only in its
 parent's total, so a budget and a trainer cannot see them per child. No topology binds it, so a worker that may not spawn can. Its
 calls to our tools go out on its parent's token, so the journal records them as the parent's. Only its approvals still came through
@@ -37,7 +37,7 @@ the role's policy. In 36 live sessions a native child had run only where a test 
 | Tell agents in the preamble to start agents only with ours | Words a model can ignore. Both harnesses have a setting that removes the tools, so the words would be the weaker of two ways |
 | `features.multi_agent = false` for Codex | Takes the V1 tools alone, and a catalog model gets V2 |
 | Disallow `Agent` alone on Claude Code | `Workflow` starts agents too, and `SendMessage` reaches sessions no topology knows of |
-| Refuse a role that allows them | A user may want them, as run 26 did. A warning says what it costs |
+| Refuse a role that allows them | A user may want them, as one live run did. A warning says what it costs |
 
 ## Consequences
 
@@ -49,5 +49,5 @@ the role's policy. In 36 live sessions a native child had run only where a test 
 
 - `tests/integration/test_claude.py` and `test_codex.py`, on the real binaries against FakeModel, a catalog model's V2 tools among
   them, and `check_driver` on each driver.
-- `tests/live/test_launch.py`, run 34: asked to hand a search to a sub-agent of its own, neither harness started one.
-- [compatibility.md](../reference/compatibility.md), the evidence for each driver and the native features table.
+- `tests/live/test_launch.py`: asked to hand a search to a sub-agent of its own, neither harness started one.
+- [compatibility.md](../reference/compatibility.md), its native features table.

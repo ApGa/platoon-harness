@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-04; amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) (drafts) |
+| Status | Accepted, 2026-11-04; amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) |
 
-**Its "starts and resumes nothing" is amended by [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md)**, a
-draft, 2026-11-08: `web SESSION` still starts and resumes nothing, and `web` with no session serves a page of your sessions, on loopback
+**Its "starts and resumes nothing" is amended by [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md)**,
+2026-11-08: `web SESSION` still starts and resumes nothing, and `web` with no session serves a page of your sessions, on loopback
 alone, from one link the command says, which lists, starts, resumes and stops them and opens each on a control link of its own
 
-**Amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md)**, a draft, 2026-11-08:
+**Amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md)**, 2026-11-08:
 tools and live text still enter no chat, and an agent's page shows its tool calls and what it is saying now in a pane of their
 own, read through `x_read`
 
@@ -77,7 +77,7 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
   with. It reads what the page may do from `view_info` before the page starts, says delivered where SwarmChat says read,
   tells agents and people apart, and shows every act disabled with its reason. Serve-time edits are exact-match, once
   against the pinned file or nothing is served, and are used only to put the page together as upstream's server does: the
-  overlay reached every string this stage needed.
+  overlay reached every string the page needed.
 
 ## Alternatives
 
@@ -89,7 +89,7 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
 | An agent's status folded from lifecycle events | That computes a status the roster already says, and could say it otherwise |
 | A user entry in the feed for each roster read | Feed numbers would depend on when the page asked, so a rebuild could renumber them under the same `feed_id` |
 | The board layout over `view_posts` | Our boards are objects with versions, and a post layout over messages would read as one. The tasks and board views are planned |
-| A per-browser principal | The brief's browser acts as the person, through the terminal's op path. A second person is another credential nobody asked for |
+| A per-browser principal | The browser acts as the person, through the terminal's op path. A second person is another credential nobody asked for |
 | Copying the tool server's HTTP | Two copies of what keeps a request bounded would drift |
 
 ## Consequences
@@ -108,5 +108,6 @@ token before anything else, and a CSP that lets only scripts it names by hash ru
 
 ## Evidence
 
-- [swarmchat.md](../research/swarmchat.md): the wire contract, the overlay technique, the traps and the eleven implications.
+- Design-phase research of SwarmChat 0.1.0, not published: its viewer is read-only on its server, eight mutating requests with a
+  view token gave 401, its messages take no idempotency key, and its CSP stops the page from reaching another origin.
 - `tests/unit/web/`, `tests/integration/test_web.py`, `tests/e2e/test_web.py`. [web.md](../how-to/web.md) is the guide.

@@ -10,9 +10,8 @@ Model access as variables or a `Gateway` that only a sealed driver is given, the
 
 ## Motivation
 
-[RFC 0013](0013-platoon-bridge.md) put a Platoon bridge in an extension of ours, `platoon-harness-platoon`. The owner decided that
-the bridge is a first-party extension of Platoon's, `platoon-teams`, built in Platoon's repository, and that this repository holds
-only the contract it builds on, naming nothing after Platoon. That contract was too thin to build on. `Admission` held a token and
+[RFC 0013](0013-platoon-bridge.md) put a Platoon bridge in an extension of ours, `platoon-harness-platoon`. A training system owns
+its bridge, and this repository holds only the contract it builds on, naming no training system. That contract was too thin to build on. `Admission` held a token and
 variables by name, so a gateway's origin, bearer and model had no typed home, and a URL with a path secret could have reached a
 driver as a variable. `Host._admit` returned None, so nothing in the journal tied an agent of ours to the agent the training system
 knows. `SpawnRequest` named no parent and no goal, which a training authority needs to spawn a child through its parent or mint a
@@ -58,7 +57,7 @@ budget unit, which no authority uses: a training system limits steps per agent a
 | Reusing an agent's first admission on a resume, without asking the authority | `LocalAuthority` reads its access again, and an authority hears that a harness came back; holding what it gives to what the agent had keeps both |
 | Leaving a resumed admission's access to the authority | Nothing would hold it, and an authority that mints again would put calls on an identity the record never names |
 | Keeping `budget_owner` for tokens and usd | No authority owns either, and a limit the session silently does not enforce is a promise nothing keeps |
-| Keeping a Platoon extension of ours | The owner's decision: the bridge is Platoon's first-party extension, and ours stays Platoon-agnostic |
+| Keeping a Platoon extension of ours | The bridge is the training system's, and the SDK stays agnostic of any training system |
 
 ## Consequences
 

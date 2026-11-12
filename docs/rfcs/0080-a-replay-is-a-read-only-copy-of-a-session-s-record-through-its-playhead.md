@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-09 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`kernel.py`](../../packages/sdk/src/platoon_harness/kernel/kernel.py), [`session.py`](../../packages/sdk/src/platoon_harness/session.py), [`tui/workspace.py`](../../packages/cli/src/platoon_harness_cli/tui/workspace.py), [`web/server.py`](../../packages/cli/src/platoon_harness_cli/web/server.py), [architecture sections 3, 4, 5 and 12](../architecture.md#12-clients), [RFC 0003](0003-events-are-the-only-truth.md), [RFC 0011](0011-annotations-beside-the-journal.md), [RFC 0027](0027-the-browser-on-our-backend.md) and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) |
-| Discussion | The owner's request of 2026-11-09: "I was wondering if we have a replay functionality, where we can replay a session's history in a streaming way, with ability to move forward and backward". The owner's rulings of the same day: a replay plays in both clients, the terminal and the browser; and rewards and credit, which estimators write beside the journal after the session, are shown while replaying, each when the playhead reaches the event it is about, labelled with when it was written, so it is never passed off as known at that moment. The rest is this design's, and waits for the owner's acceptance |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `docs: Add RFC 0080 on replaying a session`; `feat: Replay a session from copies of its record that a seek moves either way`; `feat: Replay a session in the terminal`; `feat: Replay a session in the browser`; and after review, `fix: Answer a replay's queries at the time its playhead stood`, `fix: Keep a replay's copy going through checkpoints and take back what a killed replay left`, `fix: Draw a replay's banner where its client has drawn it, from a fold the page keeps at each checkpoint` and `docs: Say who a replay's links read as and that it alone is served past loopback on a plan login` |
 
 ## Summary
@@ -199,7 +199,7 @@ titled with what it does; a control link moves the replay, and a view link watch
 `A view link watches the replay: a control link moves it.` `/x/replay` takes a control and answers how the replay stands.
 Every act of the session's is disabled, saying why, as `x.cannot` says it for a replay, and `/x/command`, `/x/body` and a
 diff are refused. As a replay's links act on nothing, not even as you, it is served past loopback whatever login its
-agents ran on, by question 3's default.
+agents ran on (question 3).
 
 The page's projection is its own fold of the record, in a folder of its own in the replay's folder, never a copy's. It
 folds the copy as it grows, and folds on into the same projection across a copy started anew that holds all it has
@@ -269,9 +269,9 @@ projection holds where the replay went.
   terminal ask a replay for nothing a session's owner does not read on a normal `web` page or in the terminal: the
   record's events through `events`, its views, provenance, and the panes a control link reads, as the owner reads every
   event already. The runtime's grants also reach its own query ops, which a person's do not, though no pane asks for
-  one. Served past loopback, by question 3's default, a holder of a replay's view or control link reads what the runtime
+  one. Served past loopback, a holder of a replay's view or control link reads what the runtime
   reads of the record through its playhead, and acts on nothing.
-- What is unknown: how this behaves at the Scale case's 100,000 events, which nothing has measured; and on macOS, where
+- What is unknown: how this behaves at the scale test's 100,000 events, which nothing has measured; and on macOS, where
   nothing has run.
 
 ## Rollout plan
@@ -284,19 +284,18 @@ projection holds where the replay went.
 
 ## Open questions
 
-Each is taken at the default below, pending the owner's ruling, and none is built so that another answer would tear it out.
+Each is built as it says below, and none so that another answer would tear it out.
 
-1. **Where a replay opens.** Default: `attach SESSION --replay` and `web SESSION --replay`, and an act on each client's
-   sessions list, rather than the `platoon-harness replay SESSION` the brief named, so a person learns one flag for both
-   clients. Adding the command would be one more name for the same thing.
-2. **Who moves a page's replay.** Default: a control link moves it and a view link watches, as a view link acts on
+1. **Where a replay opens.** Open. Today: `attach SESSION --replay` and `web SESSION --replay`, and an act on each client's
+   sessions list, rather than a command, `platoon-harness replay SESSION`, so a person learns one flag for both clients. Adding the command would be one more name for the same thing.
+2. **Who moves a page's replay.** Open. Today: a control link moves it and a view link watches, as a view link acts on
    nothing; every page of one `web` shares one playhead.
-3. **Past loopback.** Default: a replay is served past loopback whatever login its session's agents ran on, as its links
+3. **Past loopback.** Decided on 2026-11-12: a replay is served past loopback whatever login its session's agents ran on, as its links
    act on nothing, not even as you. A holder of a view or control link to it reads what the runtime reads of the record
    through the playhead: every event and view, as the session's owner reads them, and nothing it could act on. Security
    and the web guide say this is the one exception to a plan login's loopback.
-4. **Idle skipped.** Default: the recorded pace at 1x, with every gap longer than a second cut to a second.
-5. **Checkpoints.** Default: at most eight, at least 1,024 events apart. A tighter spacing buys quicker seeks for disk.
+4. **Idle skipped.** Open. Today: the recorded pace at 1x, with every gap longer than a second cut to a second.
+5. **Checkpoints.** Open. Today: at most eight, at least 1,024 events apart. A tighter spacing buys quicker seeks for disk.
 
 ## Evidence
 
@@ -307,7 +306,7 @@ Each is taken at the default below, pending the owner's ruling, and none is buil
   copies under the root and takes them back, a killed one's by the next to open, seeks either way from the nearest
   checkpoint, goes on in its copy through a checkpoint, says a checkpoint it cannot make, replays a live session's
   record up to its opening, and keeps what estimators said as it stood then.
-- `tests/integration/test_replay.py`, slow: on this node, a seek on 10,008 events took 1 to 92 ms once the checkpoints
+- `tests/integration/test_replay.py`, slow: on one Linux machine, a seek on 10,008 events took 1 to 92 ms once the checkpoints
   were made, against 474 ms for a copy from nothing to the end, and 1.5 s before they were made; a seek in the page took
   16 to 270 ms once the page had folded that far, and its first jump to the end 2.8 s.
 - `tests/unit/cli/test_replay.py` and `tests/unit/cli/test_provenance.py`: pacing at each speed, steps, turns, jumps, a

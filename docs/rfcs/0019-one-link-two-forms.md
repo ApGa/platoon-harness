@@ -10,8 +10,8 @@
 
 ## Motivation
 
-A script owns a session in-process, a TUI is a guest of a detached runtime, and a guest may find the runtime gone. The brief asks for
-one implementation and semantics in each. The kernel already answers most of this: an `Outcome` is data, a key dedupes a retry, and a
+A script owns a session in-process, a TUI is a guest of a detached runtime, and a guest may find the runtime gone. The three must share
+one implementation and its semantics. The kernel already answers most of this: an `Outcome` is data, a key dedupes a retry, and a
 reader pulls. What was missing was how one class reaches a kernel in another process without a second code path, how a runtime starts
 and restarts, and what `settled` should do about an approval nobody will answer.
 
@@ -39,7 +39,7 @@ and restarts, and what `settled` should do about an approval nobody will answer.
 | Separate `SessionOwner` and `SessionClient` classes | Two facades to keep equal, which is what one link removes. The difference is what leaving does, so that is all that differs |
 | A parent process opening the session, then handing over | Two writers in the life of one journal, and the opening would not be resumable by what resumed it |
 | `settled(approvals=...)` | The policy is a durable session setting. Said at the wait, it would hold for nobody else and leave no record |
-| A timeout as the answer to an unanswerable `ask` | CI would wait out its budget for a question nobody can hear. The brief says it must never hang on an invisible confirmation |
+| A timeout as the answer to an unanswerable `ask` | CI would wait out its budget for a question nobody can hear. It must never hang on a confirmation nobody can see |
 | `Exited.code`, read at exit | It leaves a one-shot agent idle between its turn's end and its exit, where `settled` is true and wrong. Ending it with its turn removes the window and the field |
 
 ## Consequences

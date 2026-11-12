@@ -10,11 +10,12 @@ No preset and no place in `git-swarm`: a `merges` queue read by a merger in a wo
 
 ## Motivation
 
-The landscape survey proposed a merge-queue role, workers handing branches to one merger rather than merging themselves, after Gas
-Town's bisecting Refinery and Overstory's merge queue, and placed it in the `git-swarm` preset. GitSwarm never merges: it integrates
-by synthesis commits, each declaring what it rests on. The runtime never merges either (RFC 0032): a merge is a commit an agent or a
-person made, and a conflict is what a look found. A queue's `task.fail` returns the task to the queue's readers until `max_attempts`,
-which here is the merger itself, so a merger that failed a conflicting task would claim it again and its worker would never hear.
+A design-phase survey, not published, proposed a merge-queue role, workers handing branches to one merger rather than merging
+themselves, after Gas Town's bisecting Refinery and Overstory's merge queue, and placed it in the `git-swarm` preset. GitSwarm never
+merges: it integrates by synthesis commits, each declaring what it rests on. The runtime never merges either (RFC 0032): a merge is a
+commit an agent or a person made, and a conflict is what a look found. A queue's `task.fail` returns the task to the queue's readers
+until `max_attempts`, which here is the merger itself, so a merger that failed a conflicting task would claim it again and its worker
+would never hear.
 
 ## Proposal
 
@@ -25,7 +26,6 @@ which here is the merger itself, so a merger that failed a conflicting task woul
   while it rests on them.
 - **A conflict goes back through the task.** On a conflict the merger completes the task with a result naming the paths, and the
   worker reads it from its task, by `task.list` or a `wait` on `task/merges/<id>`, which whoever adds to a queue may do.
-- **landscape.md is corrected** to put the merge-queue role with worktree teams, written out, and not in `git-swarm`.
 
 ## Alternatives
 

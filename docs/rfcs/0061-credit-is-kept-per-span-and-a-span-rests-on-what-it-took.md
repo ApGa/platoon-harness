@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-07; extended by [RFC 0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) (a draft) |
+| Status | Accepted, 2026-11-07; extended by [RFC 0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) |
 | Created | 2026-11-07 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`credit.py`](../../packages/sdk/src/platoon_harness/credit.py), [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [architecture sections 11 and 14](../architecture.md#11-provenance), [RFC 0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md), [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md), [RFC 0038](0038-provenance-is-answered-from-the-record.md), [RFC 0037](0037-an-offer-is-confirmed-only-by-its-harness.md) and [RFC 0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) |
-| Discussion | The owner's request and a design review with two critiques, kept outside the repository |
+| Discussion | Decided by the maintainers on 2026-11-07 |
 | Implementation | `fix: Say a finished agent's last words by what its report carries`; `feat: Send each scripted tool call's id as a harness does`; `feat: Cut each agent's turns into spans at its writes`; `feat: Keep propagated credit per span`; `feat: Follow what a span took`; and the fixes the rollout plan lists beside them |
 
 ## Summary
@@ -21,12 +21,12 @@ report carries, ScriptedDriver sends each tool call's id as a harness does, and 
 
 ## Motivation
 
-The owner asked that only a particular span of a persistent agent's history be mapped to the message board task it did.
+A training system needs the span of a persistent agent's history that did a message board task mapped to that task alone.
 `propagate@1` ([RFC 0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md)) wrote one row per agent, so a
 worker that claimed and completed three tasks in one turn had one row for all three, and a training system could train it only on
 everything it did, or not at all.
 
-A GPU run of a mesh showed the second gap. Its peers never finished, so each closed on its last words: a message item, which
+A mesh shows the second gap. Its peers never finished, so each closed on its last words: a message item, which
 follows from nothing and cites nothing, as an answer given by ending a turn does. So `propagate@1` keeps each peer's share on that
 message and passes nothing on: on a scripted mesh of three such peers and a helper, each peer's last turn got a third and the
 helper that did the work got nothing. Declared edges can never leave such a closing; what reached the closing span is the
@@ -167,7 +167,7 @@ a part of a session. `primitives.Span`, `primitives.Spans` and `Session.spans` a
 | A carried entry passing everything through | It changes `propagate@1`'s walk, so `propagate@2`'s agent rows would no longer equal it |
 | `Made.span` on lineage, `Span.unjoined`, or each span's calls or takes in the answer | They restate the record, make every lineage answer pay for its turn's cuts, or make answers unbounded |
 | A `scope` value, an event, or a span named by its write | The schema stays; producers write no events; a span may hold several writes or none |
-| One `propagate@2` with spans and takes together | The reduction to `@1` would be conditional, and an arm would differ in two ways nobody could tell apart |
+| One `propagate@2` with spans and takes together | The reduction to `@1` would be conditional, and a change in credit would have two causes nobody could tell apart |
 | A span producer beside `propagate`, or a `taken` parameter | Two ways to do one thing |
 | Unconfirmed offers, or every take in an agent's history | Being handed something is not using it, and an earlier process's takes were never this one's |
 | Exempting native resumes from the launch bound | A branch on the resume's kind, to keep the takes between a native resume's last call and its crash |
@@ -213,13 +213,6 @@ on its row is a training system's to build, apart from this repository, as Conse
 | M4 `propagate@2` | Span rows beside agent rows on `@1`'s walk | `test_propagate_3_writes_propagate_2s_rows_where_no_span_took_another_principals_event`, over generated journals whose citations a read can make seen, which M5 put in the place of `test_propagate_2_writes_the_agent_rows_propagate_1_wrote` | `feat: Keep propagated credit per span`; `docs: Say an end out of a turn lies in the span of its call`; `test: Hold seen citations to propagate@1 in the reduction property` |
 | M5 `propagate@3` | The take and the older-edge rule | The take tests in `test_credit.py`, and `test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took` | `feat: Follow what a span took`; `fix: Give a carried entry no takes and a never-started agent no row` |
 
-## Open questions
-
-1. Should a fresh smoke run on a GPU, of the arm that trains on `propagate@3`, come before a longer run, given that the arm's
-   meaning changed after the last smoke's readout? The owner decides, before any GPU run of it.
-2. Should the ablation that tells spans from takes, the same arm pinned at `propagate@2`, be run? The owner decides, before the
-   longer run.
-
 ## Evidence
 
 - [tests/unit/runtime/test_credit.py](../../tests/unit/runtime/test_credit.py): a test named for each rule of sections 4 and 5,
@@ -228,9 +221,9 @@ on its row is a training system's to build, apart from this repository, as Conse
   journal, whose journals confirm reads in a span before the one that writes, so their citations can be seen while no span takes
   what lies in it, and `test_each_agent_row_is_at_least_its_span_rows_and_the_rest_was_kept_in_no_span`; one such journal always,
   `test_propagate_3_writes_propagate_1s_rows_along_a_citation_seen_by_a_read_an_earlier_span_took`;
-  the owner's case on ScriptedDriver against FakeModel acting as a gateway,
+  a persistent worker's case on ScriptedDriver against FakeModel acting as a gateway,
   `test_a_persistent_worker_credits_each_task_to_the_span_whose_call_completed_it`, with a claim made in the call that completed the
-  task before and two claims open at once; and the GPU run's failure on ScriptedDriver,
+  task before and two claims open at once; and the never-finishing mesh on ScriptedDriver,
   `test_a_mesh_whose_peers_never_finish_reaches_the_helpers_its_closing_spans_took`, where the helper gets three sixteenths of the
   reward. Before `propagate@3` replaced it, `test_propagate_2_writes_the_agent_rows_propagate_1_wrote` held `propagate@2`'s agent
   rows to `propagate@1`'s rule on generated journals that confirmed offers.
@@ -241,7 +234,7 @@ on its row is a training system's to build, apart from this repository, as Conse
 - [tests/unit/drivers/test_scripted.py](../../tests/unit/drivers/test_scripted.py) and the conformance suite, for section 2.
 - [tests/integration/test_contract.py](../../tests/integration/test_contract.py): a row for each agent and for the span its last
   words lie in, on ScriptedDriver in the fast pass and on pi 1.5.0 and OpenHands 1.59.0 against FakeModel in the slow pass.
-- A throwaway reimplementation of these rules, written for the design and kept outside the repository, gives the numbers these
-  tests assert on the owner's case, the claims made in a completing call and the never-finishing mesh, read off the same
+- A second implementation of these rules, written for the design and not published, gives the numbers these tests assert on
+  the persistent worker's case, the claims made in a completing call and the never-finishing mesh, read off the same
   sessions; on that mesh without takes it keeps each peer's half on its last span and gives the helper nothing. No live model and
-  no GPU run has produced a span row, and no real binary has shown a turn cut at a write.
+  no training run has produced a span row, and no real binary has shown a turn cut at a write.

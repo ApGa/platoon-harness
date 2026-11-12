@@ -10,7 +10,7 @@ A chord is a shortcut and never decides: each act has a typed command or a plain
 
 ## Motivation
 
-The owner, on a Mac in a Cursor window, found the TUI did not get its Ctrl keys: the editor took them. The terminal inside VS Code and
+On a Mac, in a Cursor window, the TUI did not get its Ctrl keys: the editor took them. The terminal inside VS Code and
 editors built on it hands a key bound to an editor command to the editor, and F1 opens the editor's own palette. On a Mac, Option
 types a character unless the terminal sends it as Meta, so every Alt key in the keymap arrived as a letter such as `å`. Several acts
 had a chord as their only key: going to the next place you must act, answering it, stopping the turns below an agent, opening the
@@ -69,5 +69,6 @@ Backspace.
 
 ## Evidence
 
-- The owner's report, and [tui-expectations.md](../research/tui-expectations.md) section 2 on terminal limits.
-- [tui.md](../how-to/tui.md), "Every act from any terminal" and "Terminals that keep keys". [Architecture section 12](../architecture.md).
+- That report from a Mac, and design-phase research of terminal limits, not published: legacy terminals send Ctrl+H as Backspace,
+  Ctrl+I as Tab, Ctrl+M as Enter and Ctrl+[ as Esc, Shift+Enter needs the Kitty protocol, and tmux needs `extended-keys`.
+- [tui.md](../how-to/tui.md). [Architecture section 12](../architecture.md).

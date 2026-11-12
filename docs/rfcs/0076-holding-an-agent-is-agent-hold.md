@@ -6,7 +6,7 @@
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/lifecycle.py`](../../packages/sdk/src/platoon_harness/primitives/lifecycle.py), [`primitives/reports.py`](../../packages/sdk/src/platoon_harness/primitives/reports.py), [`tui/keymap.py`](../../packages/cli/src/platoon_harness_cli/tui/keymap.py), [architecture sections 7](../architecture.md#lifecycle) and [11](../architecture.md#11-provenance), [RFC 0037](0037-an-offer-is-confirmed-only-by-its-harness.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
-| Discussion | The owner's ruling of 2026-11-08, kept outside this repository, which decided the rename and so accepted this RFC |
+| Discussion | Decided by the maintainers on 2026-11-08 |
 | Implementation | `refactor!: Rename agent takeover to agent hold, as it only holds deliveries` |
 
 ## Summary
@@ -87,8 +87,7 @@ gist of its `gap.recorded`. A journal is append-only, so these keep the old name
 
 ## Open questions
 
-1. What a takeover does once it is built, and whether it holds an agent first, is for the RFC that builds it, once the owner
-   rules on the terminal's features.
+1. Open: what a takeover does once it is built, and whether it holds an agent first, is for the RFC that builds it.
 
 ## Evidence
 

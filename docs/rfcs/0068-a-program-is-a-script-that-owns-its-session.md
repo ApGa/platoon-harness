@@ -6,7 +6,7 @@
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`topology/spec.py`](../../packages/sdk/src/platoon_harness/topology/spec.py), [`runtime/opening.py`](../../packages/sdk/src/platoon_harness/runtime/opening.py), [architecture section 5.1](../architecture.md#51-one-write), [section 6](../architecture.md#6-operations), [section 7](../architecture.md#completion) and [section 8](../architecture.md#8-topology), [RFC 0007](0007-topology-as-grants.md), [RFC 0048](0048-a-setting-nothing-carries-out-is-refused.md) and [RFC 0050](0050-a-script-is-a-person-or-a-program.md) |
-| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's ruling of 2026-11-08 on its first question, which accepted this design |
+| Discussion | Decided by the maintainers on 2026-11-08 |
 | Implementation | `refactor!: Remove the map-reduce preset, which no program runs`, `refactor!: Drop the program key from a topology, as a program is a script`, `docs: Show a program run from Python in the topologies guide`, `fix: Name the script way when run is given a team left to its program` and `feat: Refuse a person's resume of a session left to its program` |
 
 ## Summary
@@ -28,7 +28,7 @@ A topology could name an episode program, `program = "map_reduce"` or `Program(n
 [RFC 0048](0048-a-setting-nothing-carries-out-is-refused.md) made `team check` refuse every program, as a session left to one
 waited for what nothing did. Two presets name one: `map-reduce` names `map_reduce`, with `parallel`, and `git-swarm` names
 `population`, with `role`, `live`, `episodes`, `uncharged` and `readout`. So no team that uses either can run, and git-swarm, which
-milestone 4 runs under its population program, cannot be built on the key.
+runs under its population program, cannot be built on the key.
 
 A script can already own a session as a program. Since RFC 0050, `Session.start(team, principal="program:<name>")` gives a script
 the session, under a name the journal keeps, with every op a person holds, and a training system starts each rollout that way
@@ -108,7 +108,7 @@ it is in sight. Its channels, two queues the program adds to and a board, are a 
 
 `git-swarm` keeps its `role`, its `nominations` topic, its `inflight` board and `until = "program"`. Its `live` and `episodes` were
 arguments of its `population` program, which only the key carried, so they go with it, rather than be taken and carried out by
-nothing. The git-swarm rework, later in milestone 4, says what a population program takes, and where: [RFC 0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) gives `git-swarm` its
+nothing. The git-swarm rework says what a population program takes, and where: [RFC 0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) gives `git-swarm` its
 `live` again, required, as the topology's `max_live`, which the kernel holds, and makes `attempts` an argument of
 `platoon_harness.patterns.population`. `episodes` stays gone.
 
@@ -130,7 +130,7 @@ What changes for users:
 | A program named in the team file and resolved to code at load | It needs a registry of code, a process to run it in, arguments in TOML and a restart of its own: a second way to do what a script holding `program:<name>` does, with control flow back in config |
 | Keep the key, refused, as RFC 0048 left it | A key that is always refused is still a key the reference documents and a reader takes for a feature |
 | Read an old manifest's `program` and drop it | AGENTS.md forbids a compatibility shim, the project is unreleased, and only a session from before 13926da can hold one |
-| Keep `map-reduce` with a `platoon_harness.patterns.map_reduce` to run it | No user beyond the preset itself is in sight, and the brief's examples do not name it. A pattern built to keep a preset alive is an abstraction with one user |
+| Keep `map-reduce` with a `platoon_harness.patterns.map_reduce` to run it | No user beyond the preset itself is in sight, and no example names it. A pattern built to keep a preset alive is an abstraction with one user |
 | Keep `git-swarm`'s `live` and `episodes`, or carry `live` as `limits.max_live` | The first is a setting nothing carries out (RFC 0048). The second decides, ahead of the git-swarm rework, what a population's `live` means, which RFC 0070 then decided so |
 | Have `team check` refuse `until = "program"` | A team is checked before anyone starts it, and a script's team is sound. The refusal belongs where the principal is known |
 | Save a program's state for it, as a checkpoint | A second record beside the journal, which a crash can leave disagreeing with it. The journal already holds what the program did |
@@ -158,9 +158,9 @@ What changes for users:
 
 ## Open questions
 
-1. Where does a population program take its `live` and its `attempts`? The git-swarm rework's own RFC decides, later in milestone
-   4, before `git-swarm` takes either again. [RFC 0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) answers it: `live` is `git-swarm`'s, as its `max_live`, and `attempts` is
-   `population`'s.
+1. Where does a population program take its `live` and its `attempts`? Decided by
+   [RFC 0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md): `live` is `git-swarm`'s, as its
+   `max_live`, and `attempts` is `population`'s.
 
 ## Evidence
 

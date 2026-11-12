@@ -48,7 +48,7 @@ share. A design was reviewed twice, for taste and for safety; the safety review 
   refuses unmerged work, where the design named `-D`. A session folder inside the work tree and not ignored there is refused in every
   mode, since a shared agent's `git add -A` would commit the owner's token. Submodules and uncommitted changes, named, are warned of.
   So is a Codex role in a worktree or a snapshot under a sandbox that keeps `.git` read-only with approvals left to ask, naming the
-  three postures the owner chose to keep configurable: no sandbox, the sandbox with its escalations allowed, or asking each time; and
+  three postures a role may choose: no sandbox, the sandbox with its escalations allowed, or asking each time; and
   one under `approvals = "deny"`, whose commits would each be refused. A snapshot is refused where its git would see your tree
   otherwise: a tracked file with any `filter` attribute, LFS and git-crypt among them, a sparse checkout, which it would hold whole, an
   untracked repository inside the tree, which a capture leaves out, and a merge, rebase, cherry-pick, revert or bisect under way or a
@@ -103,8 +103,8 @@ share. A design was reviewed twice, for taste and for safety; the safety review 
 | `git worktree remove -f -f` for a half-written registration, as the design said | Verified to fail there, since git cannot validate a registration missing `commondir` or `HEAD`; `add -f -f` is git's own way to take one back |
 | No lock | A prune where the folder cannot be seen cuts a live worktree off from git, and session roots and repositories often sit on different filesystems |
 | Workspaces beside or inside your checkout | Inside, Claude Code reads untracked notes through ancestry; beside, nothing owns their removal |
-| Removing on an empty status | Detached commits, an amended commit's original, a stopped rebase and a skip-worktree edit were each lost so in the safety review |
-| Refs in your repository for each recorded commit | They write into your repository, and the owner's question was answered with a bundle in the session folder |
+| Removing on an empty status | Detached commits, an amended commit's original, a stopped rebase and a skip-worktree edit were each lost so in a review's probes |
+| Refs in your repository for each recorded commit | They write into your repository, where a bundle in the session folder writes nothing |
 | A snapshot captured with `GIT_DIR` set to it | It skipped your clean filters and `info/attributes`, so it held a tree your git would not |
 | A snapshot borrowing your objects alone, with no pack of its own | A blob only ever staged in your checkout was lost from it once you unstaged it and git pruned |
 | Copying your filter commands into a snapshot's config | It would run commands from a repository whose config an agent writes |
@@ -145,12 +145,12 @@ share. A design was reviewed twice, for taste and for safety; the safety review 
 - `tests/integration/test_claude.py`, `test_codex.py` and `test_pi.py`: a commit in a worktree, a killed runtime and a resume in the
   same folder, on each real binary against FakeModel; `runs_in_its_workspace` in `check_driver`.
 - `tests/live/test_worktrees.py`, live: a commit in a worktree, a `kill -9` of the runtime and a resume there, then an end that kept
-  the worktree for the file left uncommitted, in run 60 on `claude-haiku-5-5` in 4 calls and run 61 on `gpt-6-luna` in 4. In run
-  59 the model ended its agent after the commit, so the kill cut its stop, which the next runtime retried and finished, removing
-  the clean worktree and keeping its branch. In run 68 on `gpt-6-luna`, in 5 calls, the end named the uncommitted file and gave no
+  the worktree for the file left uncommitted, on `claude-haiku-5-5` in 4 calls and on `gpt-6-luna` in 4. In one more run the
+  model ended its agent after the commit, so the kill cut its stop, which the next runtime retried and finished, removing
+  the clean worktree and keeping its branch. In another on `gpt-6-luna`, in 5 calls, the end named the uncommitted file and gave no
   release.
 - `tests/live/test_worktrees.py`, live, in a snapshot of a tree with uncommitted work: a real agent's commit there, recorded as its
-  own, and an end that kept the snapshot whole, in run 64 on `claude-haiku-5-5` in 2 calls and run 65 on `gpt-6-luna` in 2; and its
-  release commands run after it, which left the commit on its branch in your repository and the snapshot gone, in run 66 on
-  `claude-haiku-5-5` in 2 calls and run 67 on `gpt-6-luna` in 2.
+  own, and an end that kept the snapshot whole, on `claude-haiku-5-5` in 2 calls and on `gpt-6-luna` in 2; and its release
+  commands run after it, which left the commit on its branch in your repository and the snapshot gone, on `claude-haiku-5-5` in 2
+  calls and on `gpt-6-luna` in 2.
 - Git 2.47.3 is the only version run. [compatibility.md](../reference/compatibility.md) has what each harness sees in a worktree.

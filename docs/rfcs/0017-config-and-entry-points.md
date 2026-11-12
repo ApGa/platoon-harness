@@ -2,7 +2,10 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-02 |
+| Status | Accepted, 2026-11-02; amended by [RFC 0081](0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md) |
+
+**Amended by [RFC 0081](0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md)**, 2026-11-12: the SDK and the command line are one distribution, `platoon-harness`, so an extension's
+requirement names `platoon-harness` where this says `platoon-harness-sdk`, a name never published.
 
 ## Summary
 
@@ -25,7 +28,7 @@ Config is pydantic, frozen, `extra="forbid"`, loaded from TOML with stdlib `toml
 | One group for everything | A role's `harness = "claude"` selects one adapter per agent by short name, and `extensions` selects ops and views for a whole team. They resolve to different things at different times |
 | A group per kind: primitives, presets, workspaces, exporters | The bar is that a kind gets a group when a second independent user needs a short name. Until then these are fields of `Extension` |
 | Duplicate detection at registration, as in Platoon | It fires only when the name is used, after import. Metadata lets us catch it before any code loads or any cost is spent |
-| Activating on install | The brief forbids it |
+| Activating on install | An installed package must not change a run that does not select it |
 
 ## Consequences
 
@@ -37,5 +40,5 @@ Config is pydantic, frozen, `extra="forbid"`, loaded from TOML with stdlib `toml
 
 ## Evidence
 
-- [platoon-platform.md](../research/platoon-platform.md), section 1 and its implications: discovery rule, the duplicate gap, the group bar, the validator.
-- [Architecture sections 15 and 17](../architecture.md), [brief section 11](../spec/BRIEF.md).
+- Platoon 0.5.0's extensions, read at `efe3b277c82c`: components selected explicitly and loaded lazily, a duplicate name caught only once used, and a hand-written validator of about 1,800 lines.
+- [Architecture sections 15 and 17](../architecture.md).

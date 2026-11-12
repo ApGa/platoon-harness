@@ -2,7 +2,10 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-04 |
+| Status | Accepted, 2026-11-04; amended by [RFC 0081](0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md) |
+
+**Amended by [RFC 0081](0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md)**, 2026-11-12: the extra is `platoon-harness[openhands]`, of the one distribution `platoon-harness`, where
+this says `platoon-harness-sdk[openhands]`, of a distribution never published.
 
 ## Summary
 
@@ -14,8 +17,8 @@
 cannot share one with `mcp` 2.3.0 or ACP 1.0.0rc3. Its worker became a distribution apart, `platoon-harness-openhands` in
 `extensions/openhands`, which the runtime found on `PATH`. Nothing was published, so the one install that ran was a second
 environment built from a checkout's lock, which every user and every slow run had to build, and a run without one skipped. The
-worker's command needed a case of its own in the naming law, and the workspace's one lock held OpenHands' pins all the same. The
-owner chose otherwise: "I am actually ok with importing openhands sdk in our package, making it an optional/extra dependency."
+worker's command needed a case of its own in the naming law, and the workspace's one lock held OpenHands' pins all the same. So
+OpenHands becomes an optional extra of the SDK.
 
 ## Proposal
 

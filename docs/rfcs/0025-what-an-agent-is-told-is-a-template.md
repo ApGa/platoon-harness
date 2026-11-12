@@ -4,7 +4,7 @@
 |---|---|
 | Status | Accepted, 2026-11-03; amended, and extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) |
 
-**Amended the same day**: `peers`, `roles` and `channels` are values, as the owner was told. Amended
+**Amended the same day**: `peers`, `roles` and `channels` are values. Amended
 again: an empty `peers` or `channels` is an empty value, where the code before said `nobody yet` and `none yet`, so that the slot
 rule is one rule. Extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md): a ninth slot, `citing`, which the default
 fills.
@@ -15,7 +15,7 @@ fills.
 
 ## Motivation
 
-The owner asked to configure what agents are told at launch. Only a role's own `instructions` could be set. The generated part, the
+A team needs to configure what its agents are told at launch. Only a role's own `instructions` could be set. The generated part, the
 preamble, was fixed code; nothing recorded what an agent was told; and a role's words did not name tools as the agent's harness does.
 The preamble's wording mattered more than any mechanism in the live runs, so a team must be able to change it without losing what
 the runtime knows: the exact tool names, who can be reached, and how to end.
@@ -50,7 +50,7 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 | Append that line after the line holding `{tools}` | A rule a template writer cannot see or move |
 | `str.format` with its full grammar | Attributes, indexes and format specs fill nothing here, and a template is a user's text: a slot is a word, and anything else is refused |
 | Drop a user's sentence that names a tool the role lacks, as ours are | Words a user wrote are theirs. A warning before any cost says what is wrong |
-| `peers`, `roles` and `channels` as sentences of ours, and a template's own words kept whatever their slots came to | A template could not word a line around a value, and the owner had been told they would be values. A line around a value that came out empty, as `You can message: .`, says nothing, so it goes, words and all |
+| `peers`, `roles` and `channels` as sentences of ours, and a template's own words kept whatever their slots came to | A template could not word a line around a value. A line around a value that came out empty, as `You can message: .`, says nothing, so it goes, words and all |
 | Warn of a template line that can come out empty | Whether it does depends on the agent and the moment, and going is what a line of words around a value asks for |
 | Render the text again at a resume | Claude Code and Codex keep what a session began with, so the journal would hold words no model heard |
 | Record the whole system prompt | It is the harness's and the user's, and on a native login only the harness sees it |
@@ -68,5 +68,5 @@ the runtime knows: the exact tool names, who can be reached, and how to end.
 - `tests/unit/runtime/test_host.py`, `tests/unit/topology/test_check.py`, and `tests/integration/` on the real Claude Code, Codex and
   pi binaries against FakeModel, at a launch and after a resume. Resumed with other text, Claude Code 2.1.316 and Codex 0.164.0 sent
   the text the session began with, and pi 1.5.0 the text it was passed.
-- `tests/live/test_launch.py`, run 34: a team's template with one sentence more was told and acted on, on Claude Code and Codex.
+- `tests/live/test_launch.py`: a team's template with one sentence more was told and acted on, on Claude Code and Codex.
 - [Architecture section 10](../architecture.md), the everyday instruction surface.

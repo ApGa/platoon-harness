@@ -2,7 +2,7 @@
 
 > New here? Read [Concepts](getting-started/concepts.md) first.
 
-This is the design of record. When code and this page disagree, one of them has a bug. Status lives in
+This is the design. When code and this page disagree, one of them has a bug. Status lives in
 [STATUS.md](STATUS.md); decisions and their alternatives live in [rfcs/](rfcs/); upstream facts live in
 [compatibility.md](reference/compatibility.md).
 
@@ -275,7 +275,7 @@ source's as they stood then, as law 1 promises. Its first copy writes `copy_of` 
 command and runs no daemon, refusing `submit`, `put_body`, `recover` and `supervise` `unsupported`, goes on only from that
 source, refusing another's `conflict`, and only grows, so going back is a copy of its own. A query of a copy works out
 what is due, spent or stalled at the wall time of its newest event, not its clock's, so a copy answers as its source did
-then ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md), a draft).
+then ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)).
 `gauges()` is what the kernel has measured since it opened its journal for writing, the writer's depth, the commands in flight
 by principal, the writes refused `busy` and each write's ack latency, and what its process has used, as a `Gauges`; a read-only
 kernel measures nothing, so it has None (§16).
@@ -919,7 +919,7 @@ does not join that barrier. **Lock** and **semaphore** are tokens in a queue, wh
   taken once that stop has run, which its authority hears of last, holds neither (§14); what stays of them, as a symlink an agent
   planted is not followed, it says in the runtime's log. A stop that has not begun when its runtime goes, or that a killed
   runtime cut off, runs only at a resume. A rest and the owner's stop remove nothing, as the agent comes back. See
-  [RFC 0075](rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft.
+  [RFC 0075](rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md).
 - **A parent hears of a child's end once its authority has.** The ended agent's `stop` tells the authority how it ended last, even
   when a step before fails, and nothing reaches its parent while that stop is under way: no wake, steer or notice is handed to it,
   and a `wait` it holds open in a call does not answer `released`, so neither its report, the notice of a wait that holds on its end
@@ -1351,9 +1351,8 @@ for it.
 ## 10. Tool plane
 
 The SDK ships a tiny tools-only MCP server: Streamable HTTP on loopback with a per-agent bearer token, plus a stdlib stdio
-shim for harnesses without HTTP. It is ours rather than the `mcp` package because `mcp` 2.3.0 cannot share an environment
-with `platoon[ors]` or OpenHands, and because we need strict argument refusal and token-only identity. It is contract-tested
-against the official client and against each real harness.
+shim for harnesses without HTTP. It is ours rather than the `mcp` package because we need strict argument refusal and
+token-only identity. It is contract-tested against the official client and against each real harness.
 
 - Tokens are per `(session, agent)` and per incarnation, revoked at `agent.ended`, and hashed in the journal. Re-supplied on resume.
 - Identity never comes from `clientInfo`, `_meta` or arguments. `_meta` anchors are correlation evidence only.
@@ -1537,8 +1536,8 @@ await session.contributors("task/tasks/1@3")                                    
   the id its harness reported delivering that input under and `unsaid` otherwise, as a read always is. It answers `NotSeen` when nothing offered the event there, a
   stored conformance result proves every coverage surface observed, and no gap content could come through lies below the bound. Else it
   answers `Unknown`, listing the offers not confirmed below the bound, the surfaces no result proves observed, the gaps content could have come
-  through and the offers from before payload 3, which no event can be tied to. No check proves a surface yet, so **at M2 nothing answers
-  `NotSeen`**, and an agent with a shell never will. `Seen` means handed over and taken, never understood, and a compaction never undoes
+  through and the offers from before payload 3, which no event can be tied to. No check proves a surface yet, so **nothing answers
+  `NotSeen` yet**, and an agent with a shell never will. `Seen` means handed over and taken, never understood, and a compaction never undoes
   it.
 - **`lineage(ref)`** is one hop back: the event; its maker, turn and the person who drove that turn if one held the agent; the model
   call that chose it, with the tool item that joins them and how many of its agent's ops share that tool call; each citation, with the
@@ -1565,7 +1564,7 @@ The queries ask about events, so a range or a body's hash is refused `invalid`, 
 person or a program, whose reading is no evidence. They read the journal alone, never an annotation, and answer alike after a rebuild
 and on a closed copy, which refuses them `unavailable` while its views are behind its journal (§5.8). A client's query runs on a
 reader of its own off the runtime's event loop, so a long one keeps no report or tool call waiting. What qualifies every answer is
-said beside it and never hidden: which request held a ref is the gateway's to know (G12), a native child's reads are unseen, a read
+said beside it and never hidden: which request held a ref is the gateway's to know, a native child's reads are unseen, a read
 through a shell, a file or git makes an answer `Unknown`, a read's `Seen` means its result returned to the harness, or under Codex's
 `callId` to the Code Mode script that made the call, and words an agent copied into another entry show only in that entry's
 lineage.
@@ -1782,7 +1781,7 @@ place carries such an action or says in its gist what settles it. A lost turn, a
 conflict, which its next turn settles, offer to write to it, as a person's message is no hop; a mention is read, and offers a reply
 while its sender takes one, until it ends; a dead task offers to add it again, citing it, which closes it; your checkout's conflict and a daemon
 that keeps failing say in their gist what settles them; and a failure of no agent's says that nothing tries it again, and stands
-([RFC 0064](rfcs/0064-an-act-is-one-form-and-a-read-one-route.md), a draft).
+([RFC 0064](rfcs/0064-an-act-is-one-form-and-a-read-one-route.md)).
 
 - **TUI.** Textual, in the CLI package, which `platoon-harness` opens on a terminal and a headless command never imports. It starts a
   session on a detached runtime and is its guest. One coalescer between the journal and widgets draws at most 15 frames a second,
@@ -1828,8 +1827,8 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   `team show`'s sentences and the diff a save makes, in the words the page's editor says; each change is checked as it is
   made, a save asks first what only trust may take, in the page's question, and Start saves first, then opens the screen's
   own start. A field typed in whose value holds a control a terminal would act on is not changed there, saying why, as its
-  form would draw that control itself ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md),
-  a draft). `attach SESSION --replay`, or `R` on the sessions screen, opens a replay of a session, drawn as the session
+  form would draw that control itself ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md)).
+  `attach SESSION --replay`, or `R` on the sessions screen, opens a replay of a session, drawn as the session
   is, under a banner saying it is one, with its controls on plain keys where nothing is typed and as typed commands, as
   Replays below says. [tui.md](how-to/tui.md) is its guide.
 - **Replays.** `Replay`, in the SDK, is a read-only copy of a session, whose journal is the original's through a
@@ -1846,7 +1845,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   draws the copy as it draws a session, its agents moving, and draws a copy started anew as a session joined anew, its
   banner naming where what it draws stands, never where the replay went before that is drawn. An estimate in an event's
   provenance says when it was written, and whether that was after the event the replay stands at, or of a trace past it
-  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md), a draft).
+  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)).
   [replay.md](how-to/replay.md) is its guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
   control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
@@ -1879,8 +1878,8 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   agents on one plan login. Its team editor draws the project's team file where `web` runs as the fields `team_editor.py`
   makes from the team's schema, which the terminal's draws too, each problem the loader and `team check` find at its
   field, `team show`'s sentences and the diff a save makes, and saves the file in place, asking once before it writes what
-  only trust may take ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md),
-  a draft). `web SESSION --replay`, or the sessions page's Replay, serves the page over a replay, its banner and
+  only trust may take ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md)).
+  `web SESSION --replay`, or the sessions page's Replay, serves the page over a replay, its banner and
   controls under the top bar, which `/x/replay` takes from a control link alone, every act of the session's disabled,
   saying why. A copy started anew is folded on into the page's projection, which it holds all of, and where the replay
   went back the page's projection is started anew from the nearest copy of it the page kept, one each checkpoint's
@@ -1890,7 +1889,7 @@ that keeps failing say in their gist what settles them; and a failure of no agen
   [web.md](how-to/web.md) is its guide, and
   [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
   [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
-  and [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md), a draft, its decisions.
+  and [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md) its decisions.
 
 ## 13. Workspaces
 
@@ -2046,8 +2045,7 @@ Uncommitted work is never discarded, and no branch an agent has is ever moved. G
 ## 14. Training
 
 The SDK owns execution and evidence. A training system owns training-data construction, optimization and what trains. The kernel
-has no training branch: standalone and managed differ only in the `Authority` object. The first managed authority is Platoon's
-`platoon-teams` extension, which builds on this contract alone, and nothing here names Platoon.
+has no training branch: standalone and managed differ only in the `Authority` object, and nothing here names a training system.
 
 ```python
 class Authority(Protocol):

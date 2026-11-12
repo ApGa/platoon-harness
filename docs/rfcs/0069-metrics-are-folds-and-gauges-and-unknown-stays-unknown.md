@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
-| Builds on | [`kernel/writer.py`](../../packages/sdk/src/platoon_harness/kernel/writer.py), [`kernel/txn.py`](../../packages/sdk/src/platoon_harness/kernel/txn.py), [`primitives/clients.py`](../../packages/sdk/src/platoon_harness/primitives/clients.py), [architecture sections 5, 6 and 16](../architecture.md#16-observability), [the brief's section 12](../spec/BRIEF.md#12-reliability-security-and-scale), [RFC 0004](0004-one-operation-table.md), [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) and [RFC 0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) |
-| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
+| Builds on | [`kernel/writer.py`](../../packages/sdk/src/platoon_harness/kernel/writer.py), [`kernel/txn.py`](../../packages/sdk/src/platoon_harness/kernel/txn.py), [`primitives/clients.py`](../../packages/sdk/src/platoon_harness/primitives/clients.py), [architecture sections 5, 6 and 16](../architecture.md#16-observability), [RFC 0004](0004-one-operation-table.md), [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) and [RFC 0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `feat: Give the kernel's writer gauges public names`, `feat: Answer session.metrics, unknown where nothing measured`, `fix: Let only a query read the kernel's gauges` |
 
 ## Summary
@@ -27,13 +27,11 @@ which nothing measures. A person or a program reads it, on a view credential too
 
 [Architecture section 16](../architecture.md#16-observability) names `session.metrics` and what it reads: throughput, ack
 latency, queue depth, failures, active and blocked agents, resource use, provenance coverage and training eligibility, with
-counters as folds, so that instrumentation adds no journal write. [The brief's section
-12](../spec/BRIEF.md#12-reliability-security-and-scale) asks for the same list and for bounded instrumentation overhead. None of
-it exists. The numbers the writer keeps, `_depth`, `_inflight` and `_batch_seconds`, are private, and a primitive may use only
+counters as folds, so that instrumentation adds no journal write and its overhead stays bounded. None of it exists. The numbers the writer keeps, `_depth`, `_inflight` and `_batch_seconds`, are private, and a primitive may use only
 public kernel names (law 11), so no op can read them. `session.status` says where a session stands and what blocks it, not how
 much or how fast. A person watching a long session cannot tell a busy writer from a stuck one, or whether the runtime's memory
-grows. A program supervising one has nothing to poll, and milestone 4's scale tests need throughput, ack latency and memory
-read through public names.
+grows. A program supervising one has nothing to poll, and the scale test needs throughput, ack latency and memory read
+through public names.
 
 The danger is the one law 10 names. A closed session has no writer, so a depth and a latency of zero would say an idle writer
 where nothing measured one. A host whose memory we cannot read would report no memory. And the harnesses' processes, which
@@ -153,14 +151,14 @@ Each such field is None, never zero.
 
 A person or a program reads it, on a view credential too, and it writes nothing. No agent does: no grant a preset compiles
 reaches it for an agent, it is no tool, so neither MCP nor `ph` lists it, and it refuses an agent `not_permitted` whatever its
-grants, as `repo.test` does. An agent's read is evidence (law 9), and a query records none. That is the default, pending the
-owner's ruling (Open questions).
+grants, as `repo.test` does. An agent's read is evidence (law 9), and a query records none (Open
+questions).
 
 ## The hard parts
 
 - **What it costs the writer.** One upsert per event in the writer's transaction, and per write a clock reading and a bisection
-  under a lock it already takes. Measured below, the difference is inside the noise of a loaded host. Milestone 4's scale tests
-  measure it on the real stack and hold it to a budget, as the brief asks.
+  under a lock it already takes. Measured below, the difference is inside the noise of a loaded host. The scale test measures it
+  on the real stack and holds it to a budget.
 - **What it costs to read.** The agents' groups are the roster's, drawn by the roster's own function, which reads every open
   attention row. At 20,000 open mentions a reading took about 110 ms, nearly all of it there, and everything else under 5 ms.
   A second, cheaper way to group agents would drift from what the roster draws. If the scale tests find the roster past its
@@ -169,9 +167,9 @@ owner's ruling (Open questions).
   as often as they like. A reading runs on a read connection, off the runtime's event loop, and a reader of the WAL blocks no
   commit; it takes the writer's lock only to copy its counters, as briefly as admitting a write does. But its Python shares
   the interpreter's lock with the writer's thread, so a client that polls it fast takes time from the writer, as one that
-  polls the roster snapshot does today. Law 8 holds here no better and no worse than there. Milestone 4's scale tests
-  measure what a reading costs the writer on the real stack, `test_metrics_cost_the_writer_no_more_than_their_budget`, and
-  hold it to a budget set from what they measure; past it, the remedy is the roster's, above.
+  polls the roster snapshot does today. Law 8 holds here no better and no worse than there. The scale test measures
+  what a reading costs the writer on the real stack, `test_metrics_cost_the_writer_no_more_than_their_budget`, and holds
+  it to a budget set from what it measures; past it, the remedy is the roster's, above.
 - **Three horizons.** Counters cover the record since the session began, the views stand now, and the gauges run since the
   runtime started, so a resumed session's gauges start again. Each field says which it is. The gauges are read as they stand,
   so they may be past `head`, which says where the record was read.
@@ -189,7 +187,7 @@ owner's ruling (Open questions).
 | Gauges read by a second route, a `Session` method on the kernel or a field of the link | Every surface derives from the op table ([RFC 0004](0004-one-operation-table.md)), so an op reaches the command line, Python and a view link at once, where a second route would be a surface of its own on each |
 | Exact percentiles over every ack | Memory grows with the writes. A window of the latest acks would mix a second horizon into one answer. Buckets are bounded and never understate |
 | Resident memory now, from `/proc/self/status` | A file read inside an op, which law 3 keeps out. The peak, from a system call, is what a budget on bounded memory needs |
-| Measuring each agent's harness processes, through a registry of gauges the host writes | A second kernel concept with one user. The host knows a harness's process group, but a process that leaves the group is not counted, and an in-process driver shares the runtime's. Unknown now, pending the owner's ruling on per-agent limits |
+| Measuring each agent's harness processes, through a registry of gauges the host writes | A second kernel concept with one user. The host knows a harness's process group, but a process that leaves the group is not counted, and an in-process driver shares the runtime's. Unknown now |
 | `eligibility`'s whole verdict for each agent | It reads each agent's stream, which grows with its turns, on every reading. The trainable level is the bar a fold already holds, and the sentence says what it leaves to `eligibility` |
 | A tool agents may read | An agent's read is evidence, and a query records none. No agent has asked for it |
 | Leaving out what nothing measured | An absent field reads as nothing to report. None with why says what is not known |
@@ -216,12 +214,11 @@ owner's ruling (Open questions).
 
 ## Open questions
 
-1. Who may read `session.metrics`, and are per-agent resource limits in milestone 4? M1 and M2 build the default, pending the
-   owner's ruling: a person's or a program's query, which a view credential reads and no agent holds, and resource use reported
-   and never limited, the runtime's own, with an agent's harness unknown. A ruling for agents adds a tool and drops one refusal.
-   A ruling for limits needs each harness's processes measured first, which nothing here builds and nothing here would have to
-   undo. Needed before milestone 4 closes.
-2. Should each agent's harness processes be measured, and how is a process that leaves its group counted? Until a ruling, it
+1. Open: should agents read `session.metrics`, and should resources be limited per agent? Today it is a person's or a
+   program's query, which a view credential reads and no agent holds, and resource use is reported and never limited, the
+   runtime's own, with an agent's harness unknown. Letting agents read it adds a tool and drops one refusal. Limits need each
+   harness's processes measured first, which nothing here builds and nothing here would have to undo.
+2. Open: should each agent's harness processes be measured, and how would a process that leaves its group be counted? Today it
    reads unknown.
 
 ## Evidence
@@ -232,7 +229,7 @@ owner's ruling (Open questions).
 - `tests/unit/primitives/test_metrics.py`: `test_counters_are_folds_that_add_no_journal_write`,
   `test_a_metric_nothing_measured_is_unknown_never_zero`, `test_active_and_blocked_agents_are_the_roster_s_groups`,
   `test_metrics_on_a_view_credential_write_nothing` and `test_no_agent_holds_a_grant_for_metrics`.
-- The writer's cost, measured with a script kept outside this repository: 20 agents through the kernel's ops, then 20,000
+- The writer's cost, measured with a script that is not published: 20 agents through the kernel's ops, then 20,000
   `message.send`s to a person, 256 at a time, four runs of each build in turn. With this change, 3,709 to 4,028 events a second;
   with the counters fold taken out, 2,976 to 3,826; at the commit before it, 3,816 to 4,089. The spread within each build is
   wider than any difference between them. A reading of `session.metrics` at the end, 20,264 events with 20,000 open mentions,

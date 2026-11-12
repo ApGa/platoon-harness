@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-09 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`config.py`](../../packages/sdk/src/platoon_harness/config.py), [`team.py`](../../packages/sdk/src/platoon_harness/team.py), [`team_file.py`](../../packages/cli/src/platoon_harness_cli/team_file.py), [`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py), [`teams.py`](../../packages/cli/src/platoon_harness_cli/teams.py), [`web/sessions.py`](../../packages/cli/src/platoon_harness_cli/web/sessions.py), [architecture sections 12 and 17](../architecture.md#12-clients), [RFC 0017](0017-config-and-entry-points.md), [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md), [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) and [RFC 0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) |
-| Discussion | The owner's request of 2026-11-09: "it'd be great if we can configure the team from within the team, harnesses, topology, models, efforts, etc. from within the tui/web ui instead of forcing us to write a config file a priori". The owner's rulings of the same day, in summary, as their words were not kept: the editor edits the project's `platoon-harness.toml`; a start from the editor saves first; and switching a running session's model or effort comes later. The rest, which keys a person sets among it, is this design's. The request accepts no design: this one waits for the owner's acceptance |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `docs: Add RFC 0079 on editing the project's team from a client`; `feat: Edit the project's team file in place from fields made from its schema`; `feat: Edit the project's team from the browser's sessions page`; and the fixes the review asked for. The terminal's: `refactor: Keep the words both team editors say in the shared module`; `feat: Let a click on a key in the footer or a dialog do what the key does`; `feat: Edit the project's team from the terminal's sessions screen` |
 
 ## Summary
@@ -31,7 +31,7 @@ Today a team starts as a file written by hand, or by `init`, which writes one st
 ([`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py) `Starter`). Changing a role's model, a lead's effort
 or a topology's limits means opening the file in an editor, knowing its keys from [the reference](../reference/team-file.md),
 and running `team check` to learn what is wrong. Agent terminals and browsers people already use let them choose a model or a
-setting in the interface, and the owner asked for that here. What the existing pieces do not settle:
+setting in the interface, and a team needs that here. What the existing pieces do not settle:
 
 - **Which file.** A team comes from layers: the user's config, the project file, a team file, the environment and `--set`
   lines ([architecture section 17](../architecture.md#17-extensions-and-configuration)). A client that kept settings of its
@@ -213,14 +213,14 @@ choice, the form's keys, the footer's keys and a question's.
 
 | Alternative | Why not |
 |---|---|
-| Settings kept by each client, beside the file | A sixth layer `run` and `team check` never read, and a team the terminal and the browser could hold differently: the owner ruled for the file |
+| Settings kept by each client, beside the file | A sixth layer `run` and `team check` never read, and a team the terminal and the browser could hold differently |
 | The whole file rewritten through `schema.dumps` | Loses every comment and the person's order |
 | A format-preserving writer of our own, by line | TOML's dotted keys, inline tables, arrays of tables and strings over several lines make that a parser of our own |
 | `tomlkit`'s own placement | It puts a new key after the comments that end a table, which are about what follows, as the evidence shows |
-| Edits sent as the file's text, typed by the person | A text editor in the page, which the person has already; the schema's forms are what the owner asked for |
+| Edits sent as the file's text, typed by the person | A text editor in the page, which the person has already; the need is a form made from the schema |
 | A draft kept on the server between checks | State a reload or a second tab would contend for, where the edits are small enough to send whole |
 | Checks of the editor's own, in Python or in JavaScript | A second set of rules beside the loader and `team check`, which would drift from what `run` refuses |
-| Every key of the schema a field | Keys that run code as the person would be set unseen in a form. The owner asked for harnesses, topology, models and efforts; this design adds the budget, labels, auth profiles and test command, and leaves the rest to the file |
+| Every key of the schema a field | Keys that run code as the person would be set unseen in a form. The need is harnesses, topology, models and efforts; this design adds the budget, labels, auth profiles and test command, and leaves the rest to the file |
 | A model chosen from a list | No driver lists the models its harness takes: a list made here would be invented |
 | Saving without asking about trust, as writing runs nothing | The page acts as the person, and what it writes runs at the next start: never trusting silently means asking where it writes such a value |
 | The words both clients say sent by the page's server with each answer | A second way to carry words a static page already holds: the page keeps its copy, and a test holds it to the module's |
@@ -258,18 +258,15 @@ SDK keeps reading TOML with `tomllib` alone, and the read back with `tomllib` ch
 
 ## Open questions
 
-1. Whether a save that writes a value only trust may take, and the start after it, each ask, or the save's yes covers the
-   start too, is the owner's. The default, pending the owner's ruling, is that each asks, as a save writes and a start runs;
-   the other answer drops one question and tears nothing out.
-2. Whether more keys become fields, such as `allow_native_children`, which a role on an ACP harness must set and which the
-   editor now leaves to the file, saying what `team check` says, is the owner's. The default, pending the owner's ruling,
-   is the keys section 1 lists and no more.
-3. Whether the driver contract gains an optional list of the models a harness takes, which the model field would offer, is
-   the owner's, and an RFC of its own. The default, pending the owner's ruling, is none, and a model is free text.
-4. Whether the terminal's start, from the editor and from `n` alike, asks for trust by the page's question naming each
-   value, rather than by its form's field that takes a typed yes, is the owner's. The default, pending the owner's ruling,
-   is the form as it stands, so the editor's Start saves, then hands the start to it; the other answer changes that form
-   and tears nothing of the editor out.
+1. Open: whether a save that writes a value only trust may take, and the start after it, each ask, or the save's yes covers the
+   start too. Today each asks, as a save writes and a start runs; the other answer drops one question and tears nothing out.
+2. Open: whether more keys become fields, such as `allow_native_children`, which a role on an ACP harness must set and which the
+   editor now leaves to the file, saying what `team check` says. Today the fields are the keys section 1 lists and no more.
+3. Open: whether the driver contract gains an optional list of the models a harness takes, which the model field would offer,
+   in an RFC of its own. Today there is none, and a model is free text.
+4. Open: whether the terminal's start, from the editor and from `n` alike, asks for trust by the page's question naming each
+   value, rather than by its form's field that takes a typed yes. Today the form stands as it is, so the editor's Start saves,
+   then hands the start to it; the other answer changes that form and tears nothing of the editor out.
 
 ## Evidence
 

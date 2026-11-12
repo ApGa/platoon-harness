@@ -18,7 +18,7 @@ the parent held open in a call answered as soon as the end was journaled, to the
 end failed before it told the authority at all.
 
 A training authority settles a child in `finish`. Under Platoon's linear agents budget, a parent's call made before its child's spawn
-returns is charged that child's reservation, and Platoon's `platoon-teams` bridge returns the spawn once it hears of the end. So a
+returns is charged that child's reservation, and a training system's bridge returns the spawn once it hears of the end. So a
 serialized tree through the bridge could be stopped where a native one is not, by how the two effects raced, and the bridge refuses
 the linear budget for a team whose agents spawn.
 

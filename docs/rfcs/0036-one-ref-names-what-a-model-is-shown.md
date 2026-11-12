@@ -13,7 +13,7 @@ asks agents to cite, and by [RFC 0041](0041-a-commit-cites-what-informed-it-by-i
 
 ## Motivation
 
-Provenance is to be a selling point of the harness: which agents contributed to an outcome is to be read from the record. A
+Which agents contributed to an outcome is to be read from the record. A
 citation is the cheapest edge an agent can give, and models copy what they are shown. Before this, what they were shown named one
 act several ways. A body was a 71-character hash, which names bytes and no act, so a citation of one named no maker, and two
 events could carry one body. A board write reached its readers as an announce on the channel's own stream, so a wake handed over

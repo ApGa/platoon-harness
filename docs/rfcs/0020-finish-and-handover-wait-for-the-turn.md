@@ -24,7 +24,7 @@ A harness reports its usage and last message at turn end, so an `agent.finish` t
 |---|---|
 | End the agent in the call and take its reports late | A revoked token and a returned reservation would each need an exception for an agent that has ended, and what it reported would land after the end it belongs to |
 | Refuse `agent.finish` in a turn | A model is only ever in a turn, so it could never finish |
-| Hold an agent in a `completing` state until its children are done | A hold needs an escape, a live harness or a report kept undelivered, and a second meaning of ended. The [Pi Durable review](../research/pi-durable.md) rejected it for a refusal at the call |
+| Hold an agent in a `completing` state until its children are done | A hold needs an escape, a live harness or a report kept undelivered, and a second meaning of ended. A review rejected it for a refusal at the call |
 | Finish `deliver` at the handover, and let recovery sweep `waking` | That is a second recovery path, and it does nothing for a harness that goes quiet with no crash |
 
 ## Consequences

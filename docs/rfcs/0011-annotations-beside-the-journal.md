@@ -37,5 +37,5 @@ Annotations live in `annotations.sqlite`, beside the journal. A row attaches to 
 ## Evidence
 
 - [Architecture sections 4, 11 and 14](../architecture.md).
-- [platoon-training.md](../research/platoon-training.md), section 7: G5 and G6 on provenance and rewards reaching credit. [distributed-primitives.md](../research/distributed-primitives.md), taste notes: GitSwarm keeps nomination records outside the computation graph.
-- [Research index](../research/README.md), brief section 7 gap: keeping reward and judge data out of policy-visible context.
+- Platoon 0.5.0 at `efe3b277c82c`: its worker returns only `result`, so provenance cannot reach credit (`platoon/train/workers/run.py`), and a `Trajectory` holds one scalar reward per agent, never `None` (`platoon/trajectory.py`). GitSwarm keeps nomination records outside the computation graph.
+- Reward and judge data must stay out of policy-visible context, which nothing upstream covered.

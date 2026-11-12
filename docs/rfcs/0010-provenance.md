@@ -41,5 +41,5 @@ Credit estimators and a human asking "why" both need dependencies between action
 
 ## Evidence
 
-- [platoon-training.md](../research/platoon-training.md), section 3. [acp-mcp.md](../research/acp-mcp.md), "Call anchors".
-- [tools-and-parking.md](../research/spikes/tools-and-parking.md): 0 of 2 Codex `callId`s equalled the model's id, and 8 of 8 Claude Code anchors did. [distributed-primitives.md](../research/distributed-primitives.md), vector clocks row. [swarm-patterns.md](../research/swarm-patterns.md): `informed_by` kept apart from Git ancestry. [Architecture section 11](../architecture.md).
+- Platoon 0.5.0's records carry no attribution or purpose, and only Codex and Claude Code give an MCP anchor that joins a tool call to its model call.
+- A spike of 2026-11-02, not published: 0 of 2 Codex `callId`s equalled the model's id, and 8 of 8 Claude Code anchors did. GitSwarm keeps `informed_by` apart from Git ancestry. [Architecture section 11](../architecture.md).

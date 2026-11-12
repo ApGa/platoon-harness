@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-05; amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) (a draft) |
+| Status | Accepted, 2026-11-05; amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
 
-**Amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)**, a draft: the pane reads `x_read`'s `provenance` pane, the page's one read of its own, where it read
+**Amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)**: the pane reads `x_read`'s `provenance` pane, the page's one read of its own, where it read
 `x_provenance`, which goes.
 
 ## Summary
@@ -16,7 +16,7 @@ One wording for both clients, the terminal's `/provenance` on the chosen line an
 [RFC 0038](0038-provenance-is-answered-from-the-record.md) made the record answer `exposure`, `lineage`, `uses` and `contributors`
 for people and programs, and [RFC 0039](0039-estimators-write-beside-the-journal-at-m2.md) let estimators write credit beside the
 journal. Only the command line and `Session` could ask. A person reads a session in the terminal's transcript or in the browser's
-chats, and the owner wants provenance to be a selling point there: from any line, what it rests on, what came of it and whose work it
+chats, and that is where provenance must be read: from any line, what it rests on, what came of it and whose work it
 reaches, each link labelled by how it is known, with credit only as what an estimator said. The browser drew a Provenance button,
 disabled ([RFC 0028](0028-acting-from-the-page.md)), and the terminal had no act for it.
 
@@ -75,7 +75,7 @@ disabled ([RFC 0028](0028-acting-from-the-page.md)), and the terminal had no act
 | The panel's own back stack in the browser | The address is SwarmChat's place for a pane, so Back, a reload and a copied address all work as they do for a thread |
 | Credit beside each contributor | An annotation is about the event it targets, at a head, with its own params; drawing one beside a maker would read as that maker's share of this outcome |
 | A line for each surface of the maker's harness | Every surface is unproved until a stored conformance result proves one, which each `unknown` and each contributor already says |
-| The interaction graph, a child under the call that spawned it, refs in message text followed, search by ref | Milestone 4, as the design keeps them |
+| The interaction graph, a child under the call that spawned it, refs in message text followed, search by ref | Later, as the design keeps them |
 
 ## Consequences
 

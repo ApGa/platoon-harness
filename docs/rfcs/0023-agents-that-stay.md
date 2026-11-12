@@ -17,14 +17,14 @@ cut.
 
 ## Motivation
 
-The owner asked for a spawned agent that stays for follow-ups: a parent spawns one for a task, it answers, and later the parent sends
+A team needs a spawned agent that stays for follow-ups: a parent spawns one for a task, it answers, and later the parent sends
 it another task or asks what it meant. The runtime nearly allowed it. A turn that ends leaves an agent idle with its process and its
 conversation, and a message wakes it. Three things stood in the way. The preamble told every agent with a parent to make
 `agent.finish` its last call. The monitor woke a parent at most once per causal chain for each child, so the answer to a follow-up
 reached nobody: a scripted parent that re-tasked its child by message stalled after the second round. And an idle child that ended
 with its parent was recorded `cancelled`, which Platoon drops from training, though it was cut off from nothing.
 
-[The review](../research/persistent-agents.md) found that most systems keep a child after its first task, none lets the spawner
+A review of other systems' persistent subagents, not published, found that most keep a child after its first task, none lets the spawner
 choose, several notify a parent for the first task only, and almost none bounds a loop by mechanism.
 
 ## Proposal
@@ -65,18 +65,18 @@ choose, several notify a parent for the first task only, and almost none bounds 
 
 | Alternative | Why not |
 |---|---|
-| Tell a child to message its answer | It leans on the model, it says what the monitor already posts, and a child's message wakes a parent its report would have left to a join: a turn per worker, in the spike |
+| Tell a child to message its answer | It leans on the model, it says what the monitor already posts, and a child's message wakes a parent its report would have left to a join: a turn per worker, on real harnesses |
 | Keep once per causal chain, with a parent's message starting its child's chain afresh | A turn hears several entries, and one from a peer's chain spends the wake the parent's message asked for. A human's message would start one too, which brings back the return rule's loop |
 | Ask at a message sent, not one that lands | A second message sent while the child answers the first is answered by that first report, and the second answer wakes nobody |
 | Ask at a message handed over, not one that lands | A steer a harness takes during one turn can land in the next, and the first turn's report would spend the ask |
 | Answer only at a report that wakes the parent | A report a wait counts wakes nobody, so the ask would stay open, and a turn a human started later would wake the parent |
 | Count asks, and spend one per report | Two messages handed in one turn leave an ask over for a later turn that nobody asked for |
 | Answer at any turn's end | A turn that parks, or one cut short, has answered nothing yet, and the turn after it would wake nobody |
-| Flag only roles that say `stays = true` | `agent.spawn` can ask any persistent child to stay, and the owner's flow does just that, so nothing it does would be flagged |
+| Flag only roles that say `stays = true` | `agent.spawn` can ask any persistent child to stay, and the flow this is for does just that, so nothing it does would be flagged |
 | Refuse the cycle, as a peer cycle is | Every tree team with a persistent child and no `max_hops` would be refused for using a follow-up |
 | Refuse `wait` with `agents` on a staying child for humans and programs too | They can end it themselves, and a program's control flow is its own |
 | A verb that releases a child, besides `retire` and `cancel` | `interrupt` stops a turn, `finish` and `retire` end an agent with a report or quietly, and `cancel` is the kill |
-| End every agent left idle when a session closes | That is M3's close of idle children, below, and an agent the session started is someone's conversation |
+| End every agent left idle when a session closes | That is the cooperative close of idle children deferred below, and an agent the session started is someone's conversation |
 
 ## Consequences
 
@@ -88,23 +88,23 @@ choose, several notify a parent for the first task only, and almost none bounds 
 - A session that closes ends no agent. One left idle has no end in the journal, which is unknown and not `cancelled`.
 - A child that waits on its parent keeps its answer from it: a turn that parks posts no report, and one that holds a `wait` has not
   ended. Twice on Codex a child told it stays for the next message did that, so the words for a child that stays say what a root's
-  have said since run 17, and nothing of waiting, and every agent is taught `wait` as how to wait for something named, never as what
+  say, and nothing of waiting, and every agent is taught `wait` as how to wait for something named, never as what
   to do with nothing to do. On those words the Codex child a human spawned answered twice by ending its turn, called no `wait`, and
-  finished when told, once, in run 33. A Codex lead and helper settled on them in run 36, and passed in run 38 once the steps
-  could not be read as sending the follow-up at once.
-- Deferred, at M2: an idle child's process is released, and resumed natively at its next message, by the path a harness that dies
+  finished when told, once. A Codex lead and helper settled on them, and passed once the steps could not be read as sending the
+  follow-up at once.
+- Deferred, and done since by [RFC 0045](0045-an-agent-s-process-is-not-its-identity.md): an idle child's process is released, and resumed natively at its next message, by the path a harness that dies
   while idle will take.
-- Deferred, at M3: Platoon gives one trajectory one reward, so a child's several tasks share one reward unless each becomes its own
+- Deferred: Platoon gives one trajectory one reward, so a child's several tasks share one reward unless each becomes its own
   spawn, and idle children are closed cooperatively before a rollout returns.
 
 ## Evidence
 
-- [persistent-agents.md](../research/persistent-agents.md): the systems reviewed, and the scripted runs of cases A to G.
+- The review of other systems' persistent subagents, not published, and its scripted runs of seven cases.
 - `tests/unit/primitives/test_lifecycle.py`, `test_waits.py`, `tests/unit/tools/test_surface.py`, `tests/unit/topology/test_check.py`
-  and `tests/unit/runtime/test_session.py` hold each promise. The owner's flow ran on the real Claude Code, Codex and pi binaries
+  and `tests/unit/runtime/test_session.py` hold each promise. The flow of a lead and a helper that stays ran on the real Claude Code, Codex and pi binaries
   against FakeModel in `tests/integration`: one process, three turns, the lead woken by each answer and by nothing else.
-- On real models, [the spike](../research/spikes/real-harness.md), sections 13 to 15: the owner's flow passed on Claude Code in 13
+- On real models, in live runs not kept in this repository: that flow passed on Claude Code in 13
   calls, and failed on Codex, where a child held a `wait` for its parent instead of answering. A Codex agent spawned with `stays`
   answered and stayed, in `tests/live/test_codex.py`, where without it a role's words alone did not keep it from finishing, and the
-  Codex child of `tests/live/test_stays.py` passed in run 33 once `wait` was taught for something named.
+  Codex child of `tests/live/test_stays.py` passed once `wait` was taught for something named.
 - [Architecture section 7](../architecture.md), the monitor and Lifecycle, and section 8, `team check`.

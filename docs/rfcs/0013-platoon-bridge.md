@@ -19,7 +19,7 @@ Exact model calls can only come from Platoon's gateway, and training must run th
 The bridge is an optional extension, `platoon-harness-platoon`, on Platoon's stable function-harness and program seam. The kernel has no Platoon branch: standalone and managed differ only in the `Authority` object and the role's trainable profile. Our topology check runs first and Platoon's refusal wins.
 
 - **Two admission routes.** Tree children use `ctx.agents.spawn` with a member harness, which gives forks, grading and depth. Peers with no fork use `POST /v1/platoon/agents`. Mint is never retried.
-- **Root rule.** A single-entry tree uses `ctx.endpoint`, which preserves RAO's depth and row shape. Mesh and git-swarm use a zero-call root, labelled as a mapping artifact. The root samples the default policy, so `team check --trainable` refuses a mismatch.
+- **Root rule.** A single-entry tree uses `ctx.endpoint`, which preserves the depth and row shape of Recursive Agent Optimization (RAO). Mesh and git-swarm use a zero-call root, labelled as a mapping artifact. The root samples the default policy, so `team check --trainable` refuses a mismatch.
 
 ## Alternatives
 
@@ -36,9 +36,9 @@ The bridge is an optional extension, `platoon-harness-platoon`, on Platoon's sta
 - A mesh's root is visibly an artifact, not a privileged agent. Message edges stay in our journal as non-tree evidence.
 - `POST /v1/platoon/agents` carries no stated stability promise, so the bridge pins `platoon>=0.5,<0.6`.
 - The default mint cap of 64 is below the 100-agent case, so recipes must set `PLATOON_MAX_MINTED_AGENTS`.
-- G1, G3, G4 and G5 block token-level and graph credit and go upstream as amendments. Until then provenance is a labelled out-of-band export. A session inside `rollout_isolation: process` is untested.
+- Four of Platoon's gaps block token-level and graph credit and go upstream as amendments: a minted child cannot report its end, status or reward; records carry no attribution or purpose; rows carry no call spans; and provenance cannot reach credit. Until then provenance is a labelled out-of-band export. A session inside `rollout_isolation: process` is untested.
 
 ## Evidence
 
-- [platoon-training.md](../research/platoon-training.md), sections 5, 6 and 7: identity, seams A to F, gaps G1 to G12.
-- [platoon-platform.md](../research/platoon-platform.md): `ctx.agents.spawn`, packaging, gateway limits. [Research index](../research/README.md), claims 6 and 7. [distributed-primitives.md](../research/distributed-primitives.md), section 4.10. [Architecture section 14](../architecture.md).
+- Platoon 0.5.0, read at `efe3b277c82c`: one root and a single parent in `platoon/gateway/trace.py`, a worker that returns only `result` in `platoon/train/workers/run.py`, and one scalar reward per agent in `platoon/trajectory.py`.
+- Design-phase research, not published, on Platoon's real gateway: calls land on the minted key's agent, and an `agent_id` spoofed in a body or a header was ignored. OpenHands on SDK 1.59.0, under a zero-call root, gave 2 exact records with logprobs and 2 datums tagged to its minted child. [Architecture section 14](../architecture.md).

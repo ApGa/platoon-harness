@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
-| Builds on | [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [architecture section 11](../architecture.md#11-provenance), [the brief's section 6](../spec/BRIEF.md#6-provenance-is-a-first-class-protocol-feature), [RFC 0010](0010-provenance.md), [RFC 0038](0038-provenance-is-answered-from-the-record.md) and [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) |
-| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
+| Builds on | [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [architecture section 11](../architecture.md#11-provenance), [RFC 0010](0010-provenance.md), [RFC 0038](0038-provenance-is-answered-from-the-record.md) and [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `feat: Count who reached whom from the record, kind by kind, at a head`; step 2, `feat: Draw who reached whom in the terminal's provenance panel` and `feat: Draw who reached whom in the page's pane` |
 
 ## Summary
@@ -21,11 +21,9 @@ agents at a time, and every page of one answer is read at that head. Nothing is 
 
 ## Motivation
 
-The brief asks for the agent interaction graph apart from the time-expanded dependency graph
-([section 6](../spec/BRIEF.md#6-provenance-is-a-first-class-protocol-feature)): A's post reaches B, whose answer reaches A, which
-is a cycle between agents, while every reference in the record points back (law 7). [Architecture section
-11](../architecture.md#11-provenance) names the graph as the quotient by agent and plans it for milestone 4, and until then the
-clients show one event's hop at a time. Nothing answers it today. `lineage` and `uses` are one hop from one event, and
+Provenance needs the agent interaction graph apart from the time-expanded dependency graph: A's post reaches B, whose answer
+reaches A, which is a cycle between agents, while every reference in the record points back (law 7). [Architecture section
+11](../architecture.md#11-provenance) names the graph as the quotient by agent, and the clients show one event's hop at a time. Nothing answers it today. `lineage` and `uses` are one hop from one event, and
 `contributors` walks back from one outcome ([RFC 0038](0038-provenance-is-answered-from-the-record.md)). Nobody can ask who
 reached whom across a session, and a client may not walk the record to find out (section 12).
 
@@ -77,7 +75,7 @@ A pair names whose events reached, `who`, and whose events rest on them, `whom`,
 program, or the runtime for an event it wrote about no agent. None is nobody the record names, as for a commit no single
 workspace made, and is no one maker, so an edge between two such commits is counted under nobody on both sides. A maker's events
 that rest on its own are its history, which `lineage` and `spans` show, and pair it with nobody. A pair is directed: A reached B
-and B reached A are two pairs, each counted its own way, and the cycle the brief asks to keep is there.
+and B reached A are two pairs, each counted its own way, and the cycle between agents is kept there.
 
 ### 3. Four kinds, counted apart
 
@@ -133,8 +131,8 @@ ended, nothing more can confirm it.
 
 Each page walks the journal once, oldest first, to its head: each event's edges back, each offer's items, each confirmation, and
 each spawn and end. Nothing is stored and the writer pays nothing. The cost grows with the journal, measured at about 25 µs an
-event here (see Evidence), and the scale tests of milestone 4 measure it on the real stack at 100,000 events and hold it to a
-budget set from that measurement.
+event here (see Evidence), and the scale test measures it on the real stack at 100,000 events and holds it to a budget set
+from that measurement.
 
 ### 7. Drawn once for both clients
 
@@ -164,9 +162,9 @@ link reaches ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), wher
 | Alternative | Why not |
 |---|---|
 | A fold, a view counting each pair's edges as events commit | A fold sees one event (law 2), so it would keep a row naming each event's maker to know whose event an edge leads from, one more write per event, which RFC 0038 declined. Its counters stand at the live head alone, so a second page, read later, would mix heads, and holding them at any head means a row per edge, which is the graph stored. The writer would pay for every session whether anyone asks or not |
-| SwarmChat's Map extended | The Map is who is in which chat and how much each wrote ([RFC 0035](0035-the-board-and-the-map-over-messages.md)), a graph of messages, and reach by a citation, a take, a cause or a version is not one. The query is listed in both clients' provenance instead, which is the default pending the owner's ruling |
+| SwarmChat's Map extended | The Map is who is in which chat and how much each wrote ([RFC 0035](0035-the-board-and-the-map-over-messages.md)), a graph of messages, and reach by a citation, a take, a cause or a version is not one. The query is listed in both clients' provenance instead |
 | One strength or total per pair | Summing a claim, a take, a cause and a version weighs them, and reads one claimed citation as a fact about two agents. Weighing is an estimator's, as an annotation |
-| An undirected pair | A reached B and B reached A are two facts, and the cycle the brief asks to keep is between them |
+| An undirected pair | A reached B and B reached A are two facts, and the cycle between agents is between them |
 | Counting the events of `whom` that rest on `who` | One event citing two of `who`'s would count as one, and the counts would no longer be the edges `lineage` and `uses` show |
 | Counting an offer as observed | Being handed is not taking: an offer is observed only once its harness said it took it. Counted apart, an unconfirmed offer reads as unknown |
 | Leaving out a pair known only by unconfirmed offers | The record holds an offer between them, and leaving it out would read as no reach |
@@ -181,7 +179,7 @@ link reaches ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), wher
 ## Consequences
 
 - A person or a program asks who reached whom in a session, each kind apart, with what is unknown said as unknown. The terminal's
-  provenance panel and a pane of the page draw it in milestone 4, through the wording both clients share.
+  provenance panel and a pane of the page draw it, through the wording both clients share.
 - Each page costs a walk of the journal to its head, about 2.3 s at 91,670 events here, and nothing else: no view, no writer
   cost, no stored graph.
 - A confirmation reported later moves an offer from `unconfirmed` to `observed` at a later head. A page read at an earlier head
@@ -199,16 +197,13 @@ link reaches ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), wher
 
 ## Open questions
 
-1. Should who reached whom be a pane over a new query, or SwarmChat's Map extended, and which edges count? M1 builds the default,
-   pending the owner's ruling: a query listed in both clients' provenance and not on the Map, counting declared, observed, cause
-   and ancestry edges apart, with each agent's unknowns. A Map drawn from the same query would remove nothing M1 builds, and a
-   different set of edges would change what the walk counts, not the answer's shape. The ruling was needed before M2, and M2
-   was built on the default while it waits, as milestone 4's plan says. A different set of edges would remove none of M2's
-   wording, which draws what the answer holds. A ruling for the Map would remove the page's Who reached whom button and its
-   `interactions` pane of `x_read`, while keeping the wording both clients share and the terminal's `/reached`. Needed
-   before this RFC is accepted.
-2. Is a walk per page cheap enough at scale? The scale tests of milestone 4 measure it at 100,000 events on the real stack and
-   set its budget. Past that budget, a fold under an RFC of its own. Needed before the budget is set.
+1. Open: should who reached whom be drawn on SwarmChat's Map too, and which edges count? Today it is a query listed in both
+   clients' provenance and not on the Map, counting declared, observed, cause and ancestry edges apart, with each agent's unknowns.
+   A Map drawn from the same query would remove nothing built, and a different set of edges would change what the walk counts, not
+   the answer's shape or the wording that draws it. Moving it to the Map would remove the page's Who reached whom button and its
+   `interactions` pane of `x_read`, while keeping the wording both clients share and the terminal's `/reached`.
+2. Is a walk per page cheap enough at scale? The scale test measured 2.0 to 2.6 s a page at 100,000 events on the real stack, and
+   holds it to 5.2 s ([scale.md](../reference/scale.md#each-query-that-pages)). Past that budget, a fold under an RFC of its own.
 
 ## Evidence
 
@@ -226,7 +221,7 @@ link reaches ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)), wher
   `tests/unit/tui/test_snapshots.py`, `test_who_reached_whom_draws_each_kind_apart`; `tests/e2e/test_provenance.py`,
   `test_the_pane_lists_who_reached_whom_on_a_view_link_too`, in Chromium and Firefox; and `tests/unit/web/test_server.py`,
   `test_every_pane_reads_through_x_read_and_a_view_credential_reaches_it_and_never_x_command`.
-- The cost of the walk, measured with a script kept outside this repository on journals written through the kernel's ops: a ring
+- The cost of the walk, measured with a script that is not published on journals written through the kernel's ops: a ring
   of agents in which each turn hands an agent what waits for it and its harness confirms it, reports a model call and a tool
   item, and sends the next agent a message citing the last one it got, and every fifth round every tenth agent posts or revises
   a board entry. At 20 agents for 10 rounds, 2,464 events, a page took 53 ms; at 100 agents for 82 rounds, 91,670 events and 110

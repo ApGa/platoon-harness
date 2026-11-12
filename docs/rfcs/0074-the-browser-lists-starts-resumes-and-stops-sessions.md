@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`web/__init__.py`](../../packages/cli/src/platoon_harness_cli/web/__init__.py), [`web/server.py`](../../packages/cli/src/platoon_harness_cli/web/server.py), [`web/credentials.py`](../../packages/cli/src/platoon_harness_cli/web/credentials.py), [`tui/sessions.py`](../../packages/cli/src/platoon_harness_cli/tui/sessions.py), [`teams.py`](../../packages/cli/src/platoon_harness_cli/teams.py), [architecture sections 12 and 15](../architecture.md#12-clients), [security.md](../security.md), [RFC 0016](0016-plan-logins-and-credentials.md), [RFC 0027](0027-the-browser-on-our-backend.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
-| Discussion | The owner's ruling of 2026-11-08 on milestone 4's plan, which reversed its default for this question and asked for a security design, kept outside this repository. The ruling accepts no design: this one waits for the owner's acceptance |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `feat: List and open your sessions from the browser with web and no session`; `feat: Start, resume and stop a session from the browser's sessions page` |
 
 ## Summary
@@ -25,11 +25,11 @@ has it, and starts and resumes nothing.
 
 `web SESSION` starts and resumes nothing ([RFC 0027](0027-the-browser-on-our-backend.md)), so a person who works in a browser
 needs a shell to `run`, `serve`, `session resume` or `session stop` a session, then a `web` of its own for each session, as the page
-keeps one session per address. The terminal has had a sessions screen since milestone 1
+keeps one session per address. The terminal has had a sessions screen from the start
 ([`tui/sessions.py`](../../packages/cli/src/platoon_harness_cli/tui/sessions.py)): every session and how it stands, and `n` to start
 one from the project's team or a team file, trust asked once, a plan login asked about once, `r` to resume, warning it can spend
-money, and `s` to stop, with one confirmation. On 2026-11-08 the owner ruled that the browser may do the same, which milestone 4's
-plan had left out by default, and asked for a security design first. What the existing pieces do not settle:
+money, and `s` to stop, with one confirmation. The browser may do the same, which was left out at first, once a
+security design says how. What the existing pieces do not settle:
 
 - **Who.** A control link of one session acts in that session, as you, and a person may make one and hand it on. A page that
   starts sessions acts on this machine: what a team file names to run runs as you.
@@ -210,7 +210,7 @@ as the session's page does, so nothing under the pointer moves.
 - A team file's trust is asked for each start and shown first, where the terminal's form and `--trust` take it unseen.
 - The SDK gains `load_trusted`, a team loaded trusted with what its trust took, from one read, for a client that shows what it
   trusts before it runs it.
-- The terminal's start form keeps its trust field: asking the page's way there too waits for the owner (open question 2).
+- The terminal's start form keeps its trust field (open question 2).
 - From another machine each session opened needs its own forward, which `web` says.
 - Nothing here has run on macOS, in WebKit, or on a real model.
 
@@ -223,14 +223,13 @@ as the session's page does, so nothing under the pointer moves.
 
 ## Open questions
 
-1. That other users on this machine are out of scope, which every loopback service of ours rests on, is the default pending the
-   owner's ruling on the threat model. The sessions page's bearer keeps another user from reading or acting, and nothing keeps one
-   from holding its connections. A ruling the other way would need a transport only you can reach, for this page and for every
+1. Open: other users on this machine are out of scope, which every loopback service of ours rests on. The sessions page's bearer
+   keeps another user from reading or acting, and nothing keeps one from holding its connections. Bringing them in scope would need
+   a transport only you can reach, for this page and for every
    session it opens, each on a loopback port of its own as `web SESSION` serves one, which this RFC does not design: a browser
    opens no Unix socket without something between, so what it would change is not known.
-2. Whether the terminal's start form should ask for trust as the page does, naming what it trusts once the team needs it, is the
-   owner's. The default, pending the owner's ruling, is that it keeps its field, which no test or guide of this RFC changes. A ruling
-   the other way would change that form, and tear nothing here out.
+2. Open: should the terminal's start form ask for trust as the page does, naming what it trusts once the team needs it? Today it
+   keeps its field, which no test or guide of this RFC changes. Asking would change that form, and tear nothing here out.
 
 ## Evidence
 

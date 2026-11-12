@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
-| Builds on | [`main.py`](../../packages/cli/src/platoon_harness_cli/main.py), [`ops.py`](../../packages/cli/src/platoon_harness_cli/ops.py), [`extensions.py`](../../packages/sdk/src/platoon_harness/extensions.py), [architecture section 6](../architecture.md#6-operations) and [section 17](../architecture.md#17-extensions-and-configuration), [the brief's section 11](../spec/BRIEF.md#11-extension-and-configuration-model), [RFC 0004](0004-one-operation-table.md), [RFC 0017](0017-config-and-entry-points.md), [RFC 0026](0026-every-act-from-any-terminal.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
-| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
+| Builds on | [`main.py`](../../packages/cli/src/platoon_harness_cli/main.py), [`ops.py`](../../packages/cli/src/platoon_harness_cli/ops.py), [`extensions.py`](../../packages/sdk/src/platoon_harness/extensions.py), [architecture section 6](../architecture.md#6-operations) and [section 17](../architecture.md#17-extensions-and-configuration), [RFC 0004](0004-one-operation-table.md), [RFC 0017](0017-config-and-entry-points.md), [RFC 0026](0026-every-act-from-any-terminal.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `feat: Give an installed extension's op a command, loading only that extension`, `feat: Refuse an extension named as a built-in command group`, and the fixes `fix: Leave an extension's command to the runtime where a team names extensions by module:attr`, `fix: Give no command to an installed extension named as one every session holds`, `fix: Name in extension list and doctor an installed extension whose name is held`, `fix: Claim no op for an installed extension before its group loads it` and `fix: Read no installed extension's metadata for --version` |
 
 ## Summary
@@ -20,12 +20,11 @@ session whose team, as the manifest records it, does not name the extension is r
 ops; where a team names an extension by `module:attr`, the manifest cannot say which it is, and the session's runtime
 answers. An extension whose name is one of the command line's own commands, or that of an extension every session holds,
 gets no group: discovery refuses it from metadata, before any import, and says why on stderr. `--help` lists each installed
-extension under Installed extensions, from metadata, importing none. That an installed extension's op gets a command at all
-is the plan's default for an owner question the owner has not ruled on.
+extension under Installed extensions, from metadata, importing none.
 
 ## Motivation
 
-[The brief's section 11](../spec/BRIEF.md#11-extension-and-configuration-model) asks that an extension's op be usable
+An extension's op must be usable
 through the SDK, the tool protocol, the CLI and the generic UI with no core edit. Every surface but the command line does
 it: `Session.submit`, MCP and `ph` take it from the op table, and both palettes from `ops.list`
 ([RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)).
@@ -39,8 +38,8 @@ has no way to cast it but Python.
 The command line cannot simply load every installed extension to make its commands. Installing activates nothing, and a
 component is imported only by exact name ([RFC 0017](0017-config-and-entry-points.md)): importing them all would run code
 nobody named, and one that failed to import would break every command. And a command needs the op's schema before the
-command line is parsed, so before any session is read, and `--help` has no session at all. The plan's critique added a
-third problem: `platoon-harness <extension> <verb>` puts extension names beside the command line's own, such as `run`,
+command line is parsed, so before any session is read, and `--help` has no session at all. And there
+is a third problem: `platoon-harness <extension> <verb>` puts extension names beside the command line's own, such as `run`,
 `session` and `task`, and nothing said which wins.
 
 ## Proposal
@@ -164,8 +163,8 @@ arguments against the op it holds, and refuses `invalid` what does not fit.
 
 ## Consequences
 
-- An installed extension's op runs from the command line as the SDK's ops do, so every surface the brief names runs it with
-  no core edit.
+- An installed extension's op runs from the command line as the SDK's ops do, so every surface runs it with no core
+  edit.
 - A command line whose first word is none of the command line's own, or a help flag, reads metadata first, about 30 ms
   here, and one that names an extension imports it. One that cannot be loaded exits 78, saying why, as a team that named it would be refused.
 - An extension named as a command of the command line's own, or as an extension every session holds, has no command, and
@@ -189,10 +188,9 @@ arguments against the op it holds, and refuses `invalid` what does not fit.
 
 ## Open questions
 
-1. Whether an installed extension's op gets a command at all is the owner's, as milestone 4's plan asks. The default, pending
-   the owner's ruling, is that it does: loaded by its group's name alone, refused on a session whose team does not name it,
-   and refused at discovery if its name is a built-in group. A ruling the other way would remove the Installed extensions
-   groups and the manifest check, which nothing else rests on, and leave every other surface as it is.
+1. Open: should an installed extension's op get a command at all? Today it does: loaded by its group's name alone, refused on a
+   session whose team does not name it, and refused at discovery if its name is a built-in group. Giving it none would remove the
+   Installed extensions groups and the manifest check, which nothing else rests on, and leave every other surface as it is.
 
 ## Evidence
 

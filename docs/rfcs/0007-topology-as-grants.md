@@ -10,7 +10,7 @@ Grants over relations, presets as macros, no `deny`, delivery set on the reader'
 
 ## Motivation
 
-The owner asked for communication primitives and topologies inspired by distributed computing, and easy to configure. Of the systems surveyed, none combines concurrent agents, dynamic membership and server-enforced edges. Most put control flow in config or hide a central scheduler. Agents here spawn and retire, so a graph of named agents is stale at once. And a wake costs money, so who may wake whom is a resource grant.
+Teams need communication primitives and topologies inspired by distributed computing, and easy to configure. Of the systems surveyed, none combines concurrent agents, dynamic membership and server-enforced edges. Most put control flow in config or hide a central scheduler. Agents here spawn and retire, so a graph of named agents is stale at once. And a wake costs money, so who may wake whom is a resource grant.
 
 ## Proposal
 
@@ -37,5 +37,5 @@ A topology is a set of grants over relations such as `parent` and `children`, ev
 
 ## Evidence
 
-- [distributed-primitives.md](../research/distributed-primitives.md), bottom line and sections 2, 3 and 4.
-- [swarm-patterns.md](../research/swarm-patterns.md): the patterns the presets must express. [Architecture section 8](../architecture.md), [the owner's addendum to the brief](../spec/BRIEF.md).
+- Design-phase research, not published, a study of distributed primitives and of how agent frameworks declare topology: a topology is a set of grants over relations, not a graph of agents; one authorization function decides every verb in the transaction that records it; and collectives are library code over the core operations.
+- The patterns the presets must express: DeLM's board, GitSwarm's worktrees and Agensh's notices (compatibility.md, Upstreams). [Architecture section 8](../architecture.md).

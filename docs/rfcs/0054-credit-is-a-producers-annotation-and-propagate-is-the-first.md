@@ -19,7 +19,7 @@ One producer signature, and a heuristic that splits a team's reward back along c
 
 A training system that trains each agent of a team on a reward of its own needs that reward from somewhere: the team's reward is
 one number for the episode, and the record already holds the edges along which work rested on work, citations, causes and
-ancestry. M2 kept credit out of the SDK: an annotation by a named producer, never a fact, and the SDK made no estimate of its own.
+ancestry. Until now credit stayed out of the SDK: an annotation by a named producer, never a fact, and the SDK made no estimate of its own.
 A training system still needs one producer to start from, with one way to be run, and the record must say whose work it is about.
 
 ## Proposal

@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`topology/presets.py`](../../packages/sdk/src/platoon_harness/topology/presets.py), [`team.py`](../../packages/sdk/src/platoon_harness/team.py), [architecture section 6](../architecture.md#library-tier), [section 8](../architecture.md#8-topology) and [section 13](../architecture.md#13-workspaces), [RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md), [RFC 0048](0048-a-setting-nothing-carries-out-is-refused.md), [RFC 0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) and [RFC 0068](0068-a-program-is-a-script-that-owns-its-session.md) |
-| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's question on a readout, which is open |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `refactor!: Give git-swarm live and a board for its program's outcomes`, `feat: Run a population that gives each worker one outcome`, `feat: Build on a peer's nominated commit by its recorded SHA` and `feat: Warn when no budget bounds a population's spawns` |
 
 ## Summary
@@ -29,10 +29,10 @@ winner: choosing among the nominations is the person's.
 `git-swarm` makes the channels of a population, a `nominations` topic and an `inflight` board, and leaves its session to its
 program, but no program runs it: [RFC 0068](0068-a-program-is-a-script-that-owns-its-session.md) took the `program` key and the
 arguments it carried, `live` and `episodes`, and asked where a population takes its `live` and its `attempts`. The rework
-[STATUS](../STATUS.md) lists for milestone 4 names the rest: nominations that cite commits, a worker building on a peer's commit,
+needs the rest: nominations that cite commits, a worker building on a peer's commit,
 one outcome for each worker, every outcome counting against `attempts`, and a warning when no budget bounds the spawns.
 
-GitSwarm, as its paper states it ([research section 3](../research/swarm-patterns.md#3-gitswarm)), ends each worker's episode in
+GitSwarm, as its paper states it ([arXiv 2610.04862v1](https://arxiv.org/abs/2610.04862v1)), ends each worker's episode in
 one of a few typed exits, charges a budget of episodes by exit, leaves abstaining uncharged with no rule for a population whose
 every worker abstains, and reads out a plurality of the nominations. The record already holds what an outcome rests on: an
 agent's end, each commit with the workspace that made it ([RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md)), and a
@@ -160,7 +160,7 @@ What changes for users:
 
 | Alternative | Why not |
 |---|---|
-| A readout of a winner: the plurality of valid nominations, a tie going to the least full SHA, and the repository's root when no nomination is valid, as GitSwarm's paper has it | The owner's question, open (Open questions). The default reads out nothing: each worker's outcome is the result, and choosing among the nominations is the person's. A readout would be one more function over the board, and would change nothing built here |
+| A readout of a winner: the plurality of valid nominations, a tie going to the least full SHA, and the repository's root when no nomination is valid, as GitSwarm's paper has it | Open (Open questions). Nothing is read out: each worker's outcome is the result, and choosing among the nominations is the person's. A readout would be one more function over the board, and would change nothing built here |
 | Abstaining uncharged, with a cap of its own on uncharged attempts | A second count, with a rule of its own, for what charging every outcome already ends |
 | `attempts` as an argument of `git-swarm` | A preset is a fragment of a topology, which holds no count of spawns, and a setting nothing carries out is refused ([RFC 0048](0048-a-setting-nothing-carries-out-is-refused.md)). How many workers to start is control flow, which is the program's |
 | `attempts` as the role's budget `agents` | `agents` is charged when an agent starts, so a worker whose launch failed is never charged, and a population whose launches fail would start workers without end |
@@ -200,16 +200,16 @@ What changes for users:
 
 ## Open questions
 
-1. Should a population read out a winner: a plurality of the valid nominations, ties going to the least full SHA, and the
-   repository's root when there is none? This builds the default, pending the owner's ruling: no readout, each worker's outcome
-   is the result, and choosing among the nominations is the person's. A readout would read the board this builds, so a ruling
-   for one adds a function and removes nothing. The GitSwarm example ships on the default, pending the ruling, so a readout
-   would add a line to what it prints.
+1. Open: should a population read out a winner, a plurality of the valid nominations, ties going to the least full SHA, and the
+   repository's root when there is none? Today it reads out nothing: each worker's outcome is the result, and choosing among the
+   nominations is the person's. A readout would read the board this builds, adding a function and removing nothing, and the
+   GitSwarm example would print one line more.
 
 ## Evidence
 
-- [Research section 3](../research/swarm-patterns.md#3-gitswarm): GitSwarm's exits, its budget charged by exit, its uncharged
-  abstaining with no rule for a population that only abstains, and its readout, all from its paper, as no code of its was run.
+- GitSwarm's paper, [arXiv 2610.04862v1](https://arxiv.org/abs/2610.04862v1): its exits, its budget charged by exit, its
+  uncharged abstaining with no rule for a population that only abstains, and its readout. No code of its was run, as its
+  repository is a website.
 - [RFC 0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md)'s tests, in `tests/unit/primitives/test_repo.py`, for
   the ref a nomination cites, and `tests/unit/runtime/test_looks.py` for `made_in`.
 - `tests/unit/kernel/test_commands.py::test_a_retry_of_a_refusal_gets_the_same_refusal`, for why spawns and posts carry no key.

@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`ops.py`](../../packages/cli/src/platoon_harness_cli/ops.py), [`tui/workspace.py`](../../packages/cli/src/platoon_harness_cli/tui/workspace.py), [`web/server.py`](../../packages/cli/src/platoon_harness_cli/web/server.py), [`web/overlay.js`](../../packages/cli/src/platoon_harness_cli/web/overlay.js), [`primitives/clients.py`](../../packages/sdk/src/platoon_harness/primitives/clients.py), [architecture sections 6, 12, 13 and 17](../architecture.md#6-operations), [RFC 0026](0026-every-act-from-any-terminal.md), [RFC 0028](0028-acting-from-the-page.md), [RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md), [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md) and [RFC 0046](0046-a-daemon-that-keeps-failing-needs-a-person.md) |
-| Discussion | Milestone 4's plan and the audits and critiques behind it, kept outside the repository |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `refactor: Build the palette from the write ops a person holds, by one rule both clients share`; `refactor: Read every pane of the page through one route, which x_provenance becomes`; `feat: Run every write op a person holds from the page through one generated form`; `test: Show an extension's op in the palette and the page with no core edit`; `feat: Let an attention action fix some arguments and leave the rest to its op's form`; `feat: Give every kind of place its act, or say in its gist what settles it`; `fix: Send a person who meets a conflict to its agent or their own checkout`; `docs: Say a commit made in an agent's worktree is recorded as that agent's` |
 
 ## Summary
@@ -38,7 +38,7 @@ and `ops.list` carries no flag for it: a person holds `wait` and `wait.cancel`, 
 stream and `ops.list` itself among them. Two clients that each filtered `ops.list` in their own way would drift.
 
 The page reads provenance through `x_provenance`, a route of its own, and what needs the person through `/x/command`, as a query,
-which a view link cannot reach, so its Needs you is disabled. Each pane milestone 4 adds, review, tasks and boards, spans, who
+which a view link cannot reach, so its Needs you is disabled. Each pane still to come, review, tasks and boards, spans, who
 reached whom and tool activity, would add a route of its own, with nothing saying which credential reaches it.
 
 An action of the `attention` view is an op with every argument, so only an approval, with Allow and Deny, and an uncertain effect,
@@ -194,7 +194,7 @@ commit is reads the workspace's HEAD reflog, evidence at the workspace's assuran
 | Set the budget filled in with its scope alone | `budget.set` replaces a scope's limits and estimate whole, so a person who typed the one limit they meant to raise would lift every other and the estimate, with nothing to say so |
 | Fixed arguments shown and not to be changed | Each client would draw a field it may not take, saying why, for a value the person can type in the palette's form anyway |
 | A dismiss op, closing a place that is news | A new op and a new state of a place, and a person's dismissing settles nothing the record says. Open question 4 |
-| A conflict resolved in the agent's workspace, recorded as the person's | Whose a commit is would need the committer's identity, which the owner has not asked for. Open question 3 |
+| A conflict resolved in the agent's workspace, recorded as the person's | Whose a commit is would need the committer's identity, which nothing records. Open question 3 |
 
 ## Consequences
 
@@ -205,7 +205,7 @@ commit is reads the workspace's HEAD reflog, evidence at the workspace's assuran
   too, say it holds deliveries and no more, where they said it held deliveries so that a human could drive it.
 - The page's form takes the pane, so opening a thread or provenance closes it, as each closes the other.
 - `view_info` reads `ops.list` on every link and every load, where it read it on a live control link alone.
-- Every pane milestone 4 adds reads through `x_read`, and words its answer in Python.
+- Every pane added after this reads through `x_read`, and words its answer in Python.
 - Every kind of place carries its act or says in its gist what settles it, in the dock, in Needs you and in `session show` alike, and
   a test walks every kind.
 - An attention action carries `form`, which every client of the view reads, and the view's version moves from 4 to 5, so an older
@@ -213,10 +213,6 @@ commit is reads the workspace's HEAD reflog, evidence at the workspace's assuran
 - A dead task's place closes once a task citing it is added, where it stood until the session ended.
 
 ## Rollout plan
-
-Its seven milestones were built while it is a draft, ahead of the acceptance the RFC process asks for, so the owner decides on
-code already written. Accepted, a last change sets its status to `Implemented` once they are all on main. Rejected, their commits
-are reverted.
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
@@ -230,22 +226,18 @@ are reverted.
 
 ## Open questions
 
-1. Whether the browser may list, start, resume or stop sessions was the owner's, as [RFC 0027](0027-the-browser-on-our-backend.md)
-   said it may not. On 2026-11-08 the owner ruled that it may, and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md),
-   a draft, does it on a page of its own, which `web` with no session serves, so the page's palette still offers the ops of the one session
-   it serves, and nothing here was torn out.
-2. Whether both palettes run `agent hold` is the owner's to confirm: the terminal's palette kept it out until now, as an
-   earlier fix said a hold for a terminal not built was a defect. The default, pending the owner's ruling, is that every write op
-   a person holds runs from both, as the plan's definition of done asks, with the op's name and words saying what it does, and
-   driving the agent's native session, which the owner's question on the terminal's features defers by default, left to
-   `/takeover`. A ruling the other way would leave it out of both palettes, and tear nothing else out.
-3. Where a person resolves a conflict in an agent's workspace is the owner's. The default, pending the owner's ruling, is that the
-   conflict's gist says to tell its agent or to resolve it in your own checkout, never in the agent's workspace, and the workspace
-   guide says a commit made there is recorded as that agent's, as evidence at the workspace's assurance. Recording a commit's
-   committer waits for the owner to ask. A ruling the other way would change the gist's words, and tear nothing out.
-4. Whether a person may close a place nothing settles, a failure of no agent's, is the owner's. The default, pending the owner's
-   ruling, is that it stands as news until the session ends, as no op redoes an effect, saying that nothing tries it again. A
-   ruling the other way would add an op, and tear nothing out.
+1. Whether the browser may list, start, resume or stop sessions, which [RFC 0027](0027-the-browser-on-our-backend.md) said it may
+   not. Decided on 2026-11-08: it may, and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) does it on a page
+   of its own, which `web` with no session serves, so the page's palette still offers the ops of the one session it serves.
+2. Open: whether both palettes should run `agent hold`, which the terminal's palette kept out before, as an earlier fix said a hold
+   for a terminal not built was a defect. Today every write op a person holds runs from both, with the op's name and words saying
+   what it does, and driving the agent's native session is left to `/takeover`. Leaving it out would tear nothing else out.
+3. Open: where a person resolves a conflict in an agent's workspace. Today the conflict's gist says to tell its agent or to resolve
+   it in your own checkout, never in the agent's workspace, and the workspace guide says a commit made there is recorded as that
+   agent's, as evidence at the workspace's assurance; nothing records a commit's committer. Another answer would change the gist's
+   words, and tear nothing out.
+4. Open: whether a person may close a place nothing settles, a failure of no agent's. Today it stands as news until the session
+   ends, as no op redoes an effect, saying that nothing tries it again. Closing it would add an op, and tear nothing out.
 
 ## Evidence
 

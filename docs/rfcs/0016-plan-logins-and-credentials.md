@@ -15,7 +15,7 @@ The user's own harness under its own login. We never read a credential
 
 ## Motivation
 
-Most users already have a harness signed in on a plan, and the brief says not to force them onto a shared API key. Provider terms limit how that login may be used. Third parties may not collect or intermediate plan credentials, and advertised limits assume "ordinary, individual usage", which is undefined. Enforcement can come without notice and would land on the user's account. Credentials also escape in quiet ways: a path-form URL is a key, and `repr(ctx.endpoint)` prints it.
+Most users already have a harness signed in on a plan, and they must not be forced onto a shared API key. Provider terms limit how that login may be used. Third parties may not collect or intermediate plan credentials, and advertised limits assume "ordinary, individual usage", which is undefined. Enforcement can come without notice and would land on the user's account. Credentials also escape in quiet ways: a path-form URL is a key, and `repr(ctx.endpoint)` prints it.
 
 ## Proposal
 
@@ -28,19 +28,19 @@ Most users already have a harness signed in on a plan, and the brief says not to
 
 | Alternative | Why not |
 |---|---|
-| A credential broker, our own sign-in, or a plan token in our client | The terms forbid intermediating, the brief forbids reuse as an API credential, and it would create a secret store to defend |
-| Requiring API keys | The brief forbids that too, and a native-login agent stays useful even when it is not trainable |
-| Warning only on unattended teams | The first recommendation in the research. Headless, nobody reads a warning, and the risk is to the user's account. Opt-in keeps the choice and makes it deliberate |
+| A credential broker, our own sign-in, or a plan token in our client | The terms forbid intermediating, a plan login is no API credential to reuse, and it would create a secret store to defend |
+| Requiring API keys | It would force everyone onto one, and a native-login agent stays useful even when it is not trainable |
+| Warning only on unattended teams | The first recommendation. Headless, nobody reads a warning, and the risk is to the user's account. Opt-in keeps the choice and makes it deliberate |
 | Refusing all multi-agent use on plan logins | That would assert a limit no provider states. A person at the keyboard can watch and stop |
 | Inheriting the parent environment | Variables change harness behavior or leak a parent's identity. `ANTHROPIC_API_KEY` in `-p` would silently change billing |
 
 ## Consequences
 
 - Native login is Operational and Observable, never Trainable. Claude-generated traces are never offered as training data.
-- This is engineering policy, not legal advice. "Ordinary, individual usage" remains undefined, and OpenAI's clauses came from search snippets and need review.
-- Training through Claude Code against a non-Claude policy stays blocked pending an owner decision.
+- This is engineering policy, not legal advice. "Ordinary, individual usage" remains undefined, and OpenAI's terms were read only through search snippets and are unverified.
+- Training through Claude Code against a non-Claude policy stays blocked until decided.
 
 ## Evidence
 
-- [adapter-claude-code.md](../research/adapter-claude-code.md), sections 6 and 7: terms quoted verbatim and the may and must-not rules. [adapter-codex.md](../research/adapter-codex.md): login modes and third-party use.
-- [tools-and-parking.md](../research/spikes/tools-and-parking.md), clean environment: `PATH`, `HOME` and a supplied `TMPDIR` were enough for Claude Code in one trial. [platoon-training.md](../research/platoon-training.md), section 5, and [research index](../research/README.md), claim 5 and new finding 4. [Architecture sections 14 and 15](../architecture.md), [brief section 4](../spec/BRIEF.md).
+- The providers' terms that [compatibility.md](../reference/compatibility.md#7-auth-and-terms) links, read on 2026-11-02.
+- A spike of 2026-11-02, not published: `PATH`, `HOME` and a supplied `TMPDIR` were enough for Claude Code in one trial. Design-phase research, not published: `ANTHROPIC_BASE_URL` alone keeps a saved login active, and `repr(ctx.endpoint)` hides `api_key` but prints a key inside `base_url`. [Architecture sections 14 and 15](../architecture.md).

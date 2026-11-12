@@ -37,5 +37,5 @@ A **daemon** is a restartable task that reads views, acts, and reports back thro
 
 ## Evidence
 
-- [Architecture laws 3 and 5, section 5.4](../architecture.md), [Status](../STATUS.md). [acp-mcp.md](../research/acp-mcp.md), "What ACP cannot express". [platoon-training.md](../research/platoon-training.md), section 5: mint has no idempotency.
-- [Research index](../research/README.md), new finding 2: 29 of 48 accepted Codex commands ran. Brief section 12 was a gap that no report covered. [journal-performance.md](../research/spikes/journal-performance.md), result 8: commits without acks were observed, as expected.
+- [Architecture laws 3 and 5, section 5.4](../architecture.md), [Status](../STATUS.md). ACP has no retry-safe prompt, and Platoon 0.5.0's mint has no idempotency key.
+- Design-phase research, not published: with identical input, 29 of 48 commands Codex 0.164.0 accepted ran and 19 failed, cause not established. [RFC 0002](0002-one-journal-per-session.md)'s benchmark: commits without acks were observed, as expected.

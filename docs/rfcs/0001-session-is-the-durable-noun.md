@@ -10,7 +10,7 @@ One word for the thing you attach to. `run` is a verb, because the noun collides
 
 ## Motivation
 
-A user needs one word for the thing they start, attach to, resume and export. The brief says "run" throughout. Harnesses say "session" or "thread". Platoon already uses "run" for its own training work, and a rollout is what a training reader counts. Every extra durable noun is a question each API and UI must answer: which one do you mean?
+A user needs one word for the thing they start, attach to, resume and export. "Run" was the first word proposed. Harnesses say "session" or "thread". Platoon already uses "run" for its own training work, and a rollout is what a training reader counts. Every extra durable noun is a question each API and UI must answer: which one do you mean?
 
 ## Proposal
 
@@ -27,13 +27,12 @@ The durable thing is a **session**: one folder, one journal. `run` is only a ver
 
 ## Consequences
 
-- "Run" in the brief reads as "session" here. The word stays a verb in the CLI and in prose.
+- "Session" is the noun where "run" was first proposed, and "run" stays a verb in the CLI and in prose.
 - Sessions have no natural end. `settled` is a state a human message can undo, and only `close` ends one.
 - Training stays opt-in by construction: anything outside an episode fails eligibility by default.
 - "Session" remains overloaded by ACP and native harness sessions, so those are always qualified. Native ids live in the envelope's `native` field.
 
 ## Evidence
 
-- [Architecture sections 2 and 18](../architecture.md), [brief section 3](../spec/BRIEF.md).
-- [tui-expectations.md](../research/tui-expectations.md): session list and resume is a must-have in every surveyed TUI.
-- [distributed-primitives.md](../research/distributed-primitives.md), section 4.10: how a rollout maps onto channels and identity.
+- [Architecture sections 2 and 18](../architecture.md).
+- Design-phase research, not published: session list and resume is a must-have in every terminal agent surveyed, and a session maps onto one training rollout, so its channels are scoped to it.

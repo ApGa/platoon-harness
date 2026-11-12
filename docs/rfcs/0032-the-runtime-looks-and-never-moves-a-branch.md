@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-04; superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md), extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md), and amended by [RFC 0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) (a draft) |
+| Status | Accepted, 2026-11-04; superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md), extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md), and amended by [RFC 0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) |
 
 **Superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md)**: a commit's and a
 rewrite's record name no `cause`, as the turn end that prompted a look did not cause what git holds. Extended by
@@ -121,5 +121,5 @@ These details differ from the design, each the smallest change that keeps its ru
   Ending's unobserved agents, envelopes with no agent, records once and only when they differ, the `changes` view and `seq`, and a
   conflict that needs you while its agent rests on it and again after the next look.
 - `tests/live/test_worktrees.py`, live: a real agent's commit in its worktree recorded as its own, with no agent in the envelope,
-  across a `kill -9` of its runtime and a resume, in run 62 on `claude-haiku-5-5` in 5 calls and run 63 on `gpt-6-luna` in 4.
+  across a `kill -9` of its runtime and a resume, on `claude-haiku-5-5` in 5 calls and on `gpt-6-luna` in 4.
 - Git 2.47.3 is the only version run.

@@ -10,11 +10,11 @@ Our own server rather than the `mcp` package, HTTP bearer by default, `ph` as th
 
 ## Motivation
 
-Agents reach coordination ops as tools. The research planned on the `mcp` package as an optional extra. Three things pushed the other way. Identity must come only from a credential and undeclared arguments must be refused, while that SDK silently drops them. A Python `MCPServer` shim costs about 42 MB per agent. And the SDK embeds in environments we do not control, such as a Platoon rollout worker, so the tool plane should add nothing there. A spike then showed that coordination needs very little of MCP.
+Agents reach coordination ops as tools. The design first planned on the `mcp` package as an optional extra. Three things pushed the other way. Identity must come only from a credential and undeclared arguments must be refused, while that SDK silently drops them. A Python `MCPServer` shim costs about 42 MB per agent. And the SDK embeds in environments we do not control, such as a Platoon rollout worker, so the tool plane should add nothing there. A spike then showed that coordination needs very little of MCP.
 
 ## Proposal
 
-The SDK ships its own tools-only MCP server: Streamable HTTP on loopback with a per-agent bearer token, JSON replies, no SSE, no sessions. `GET` and `DELETE` return 405, and `server/discover` returns -32601. A stdlib stdio shim serves harnesses without HTTP. Identity comes from the token and nothing else. Undeclared arguments return `isError: true` and are journaled. `ph` is one stdlib file on the agent's `PATH` only, building its argv and help from `ops.list`. The server must pass contract tests against the official client and each real harness. The official client passes. Against Claude Code and Codex, only the spike's prototype has run so far.
+The SDK ships its own tools-only MCP server: Streamable HTTP on loopback with a per-agent bearer token, JSON replies, no SSE, no sessions. `GET` and `DELETE` return 405, and `server/discover` returns -32601. A stdlib stdio shim serves harnesses without HTTP. Identity comes from the token and nothing else. Undeclared arguments return `isError: true` and are journaled. `ph` is one stdlib file on the agent's `PATH` only, building its argv and help from `ops.list`. The server must pass contract tests against the official client and each real harness. The official client passes. Against Claude Code and Codex, only a spike's prototype had run when this was decided.
 
 ## Alternatives
 
@@ -36,8 +36,7 @@ The SDK ships its own tools-only MCP server: Streamable HTTP on loopback with a 
 
 ## Evidence
 
-- [tools-and-parking.md](../research/spikes/tools-and-parking.md): a 142-line stdlib server, 38 harness turns, the sandbox and token checks. Sample log: [mcp-http-probe.jsonl](../../tests/fixtures/mcp-http-probe.jsonl).
-- [acp-mcp.md](../research/acp-mcp.md), sections 4 and 5: eras, weight, identity binding, threat tiers.
-- [Research index](../research/README.md), claim 11, new finding 1, and the MCP identity contradiction. [Architecture section 10](../architecture.md).
+- A spike of 2026-11-02, not published: a 142-line stdlib server served real Claude Code 2.1.316 and Codex 0.164.0 for 38 harness turns, with the sandbox and token checks. Sample log: [mcp-http-probe.jsonl](../../tests/fixtures/mcp-http-probe.jsonl).
+- Design-phase research, not published: Codex settles on MCP revision `2025-06-18` and Claude Code on `2025-11-25`; `_meta` carries each client's anchors; and a spoofed `caller` argument reached the server verbatim from both, so the server must bind identity. A Python `MCPServer` shim costs about 42 MB each, so a light stdio shim is the fallback and HTTP the default. [Architecture section 10](../architecture.md).
 
 Also verified with `uv pip compile` on Python 3.12: `platoon[ors]>=0.5,<0.6` with `mcp>=2.3,<3` is unsatisfiable, because `openreward` pins `sse-starlette==2.3.6` and `mcp>=2.3` needs `sse-starlette>=3.0.0`. An unpinned `mcp` silently resolves to 1.30.0. So the SDK, which runs inside Platoon rollout workers, cannot take this dependency.

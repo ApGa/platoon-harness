@@ -42,5 +42,5 @@ spoke a surface with no namespace, `?surface=mcp`, which no harness asked for.
 - `tests/unit/runtime/test_host.py`, `test_a_harness_that_shows_our_tools_by_their_own_names_is_told_them_by_those`, and
   `tests/unit/tools/test_surface.py`.
 - `tests/integration/test_openhands.py`: what the journal says an OpenHands agent was told names `peers` as its first request shows
-  it, on the real SDK against FakeModel. [adapter-openhands.md](../research/adapter-openhands.md), section 3: tool `post` stayed
+  it, on the real SDK against FakeModel. Design-phase research of the OpenHands SDK, not published: a tool `post` stayed
   `post`.

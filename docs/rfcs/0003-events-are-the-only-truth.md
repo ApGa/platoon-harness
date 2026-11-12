@@ -38,4 +38,4 @@ Three needs pull against each other. A credit estimator written next year cannot
 ## Evidence
 
 - [Architecture laws 1, 2 and 5, sections 5.1, 5.2 and 15](../architecture.md).
-- [journal-performance.md](../research/spikes/journal-performance.md), result 8: no partial command and no lost ack across SIGKILL rounds. [distributed-primitives.md](../research/distributed-primitives.md), Temporal row: deterministic replay is out.
+- [RFC 0002](0002-one-journal-per-session.md)'s benchmark: no partial command and no lost ack across `kill -9` rounds. Design-phase research, not published: Temporal's deterministic replay is out, as a replay must not run a tool again.

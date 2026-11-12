@@ -6,7 +6,7 @@
 | Created | 2026-11-07 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [`primitives/common.py`](../../packages/sdk/src/platoon_harness/primitives/common.py), [architecture section 11](../architecture.md#11-provenance), [RFC 0036](0036-one-ref-names-what-a-model-is-shown.md), [RFC 0037](0037-an-offer-is-confirmed-only-by-its-harness.md) and [RFC 0038](0038-provenance-is-answered-from-the-record.md) |
-| Discussion | The notes of Platoon's `platoon-teams` bridge, under the SDK asks still open, kept outside this repository |
+| Discussion | Decided by the maintainers on 2026-11-07 |
 | Implementation | `feat: Show the text each item of an offer showed, by the offer's ref` |
 
 ## Summary
@@ -23,7 +23,7 @@ What it showed is not always the event's own words. A spawn shows its goal, a bo
 gist with its SHA and its workspace, and an entry that carries another event, a child's report or a board's announce, its own
 words under the carried event's ref. The form a gist is shown in with its fields was private to `Exposed.gist`.
 
-Platoon's bridge shows a training step's inputs in its viewer, each with its text where the record proves it. To prove a board
+A training system's viewer shows a training step's inputs, each with its text where the record proves it. To prove a board
 entry's text it rebuilt that private form, so a change to it would leave the text null; and a report or an announce, whose words
 no event it names holds, it could not show at all. A training system, a viewer, or a person asking what an agent was shown had no
 public way to the text an offer showed.
@@ -83,4 +83,3 @@ fields a commit shows beside its gist by one more, which `repo.commit` and the q
   closed copy.
 - [tests/unit/runtime/test_session.py](../../tests/unit/runtime/test_session.py),
   `test_what_an_offer_showed_through_the_facade`.
-- The bridge's display and its notes, in Platoon's `platoon-teams`, kept outside this repository.

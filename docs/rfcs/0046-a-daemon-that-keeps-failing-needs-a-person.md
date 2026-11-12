@@ -13,8 +13,8 @@ Its first failure since a run that lasted is `daemon.failed` and the next run th
 The supervisor restarts a daemon that raises, with backoff from a tenth of a second to thirty, and a run that lasts a minute forgives
 the failures before it ([RFC 0005](0005-daemons-and-effects.md)). It only logged. A courier or a host that fails on every pass
 therefore hands nothing over and starts nothing, and the session it serves looks quiet: no event, no `attention` row, nothing in the
-terminal or the browser but a log nobody reads. [The durable review](../research/pi-durable.md) raised it, and the owner chose a kind
-of `attention` of its own.
+terminal or the browser but a log nobody reads. A review raised it. A person must see it, so it is a kind of
+`attention` of its own.
 
 ## Proposal
 
@@ -42,10 +42,8 @@ of `attention` of its own.
 
 ## Consequences
 
-- This stage's brief held the design to adding no event type. The owner chose an attention kind of its own for this, and `attention`
-  is a fold, which needs an event: the owner's decision ranks above the design's rule, and no existing event says this, so this adds
-  two, `daemon.failed` and `daemon.recovered`, in a namespace the kernel now takes, `daemon`. The owner chose the kind, not these two
-  types, and is asked to confirm them.
+- `attention` is a fold, so a kind of its own needs an event, and no existing event says this, so this adds two, `daemon.failed`
+  and `daemon.recovered`, in a namespace the kernel now takes, `daemon`.
 - A daemon whose error changes on every pass writes an event a pass: one every thirty seconds once its backoff is full.
 - A daemon's error text reaches the journal, cut to 2048 characters and its gist to 280. The runtime's log keeps the traceback.
 - `Attention` is at view version 4.

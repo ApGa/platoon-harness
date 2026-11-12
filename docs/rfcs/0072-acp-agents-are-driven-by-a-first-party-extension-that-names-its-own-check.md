@@ -1,44 +1,40 @@
-# RFC 0072: ACP agents are driven by a first-party extension that names its own check
+# RFC 0072: ACP agents are driven by a driver of the SDK's own, and a driver outside it names its own check
 
 | | |
 |---|---|
-| Status | Draft; open question 1 decided 2026-11-12 |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`rpc.py`](../../packages/sdk/src/platoon_harness/rpc.py), [`drivers/__init__.py`](../../packages/sdk/src/platoon_harness/drivers/__init__.py), [`drivers/levels.py`](../../packages/sdk/src/platoon_harness/drivers/levels.py), [`testing/harnesses.py`](../../packages/sdk/src/platoon_harness/testing/harnesses.py), the command line's [`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py), [architecture section 9](../architecture.md#9-drivers) and [section 17](../architecture.md#17-extensions-and-configuration), [RFC 0008](0008-driver-contract-and-wire.md), [RFC 0024](0024-a-harness-s-own-agents-are-off.md), [RFC 0030](0030-openhands-is-an-extra-of-the-sdk.md), [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) and [RFC 0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) |
-| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's questions on where first-party extensions live and what ACP is spoken over, the first of which was decided on 2026-11-12 |
-| Implementation | `build: Add the platoon-harness-acp distribution under extensions`, `feat: Drive ACP agents on protocol 1 over the SDK's own JSON-RPC peer`, `feat: Let an installed driver name the check doctor runs for it` `test: Run check_driver on a scripted ACP agent and on OpenCode against FakeModel` and `refactor: Drive ACP agents from the SDK's own drivers` |
+| Discussion | Decided by the maintainers on 2026-11-12 |
+| Implementation | `build: Add the platoon-harness-acp distribution under extensions`, `feat: Drive ACP agents on protocol 1 over the SDK's own JSON-RPC peer`, `feat: Let an installed driver name the check doctor runs for it`, `test: Run check_driver on a scripted ACP agent and on OpenCode against FakeModel` and `refactor: Drive ACP agents from the SDK's own drivers` |
 
-**Open question 1, decided 2026-11-12.** ACP is driven by a built-in driver of the SDK, which releases with it, not by a
-first-party extension: a distribution of its own costs a PyPI name, a tag and a release environment, and
-`examples/extension-package` already shows how a third party ships a driver or an extension. `AcpDriver` is
-`platoon_harness.drivers.acp`, `opencode` is `platoon_harness.drivers.opencode`, and the check of `opencode` is the SDK's own,
-which `levels.CHECKED` names. `DriverInfo.check` stays, for drivers outside the SDK. Section 1, and what the rest says of
-`platoon-harness-acp`, describe what this replaced.
+**Revised 2026-11-12**, as open question 1 was decided: ACP is driven by a built-in driver of the SDK, which releases with it,
+where this first proposed `platoon-harness-acp`, a first-party extension with a distribution of its own under `extensions/acp`.
+The first three commits above built that extension, and the last moved its driver into the SDK.
 
 ## Summary
 
-`platoon-harness-acp`, a distribution of its own under `extensions/acp` with its own version and tag, is the first first-party
-extension. Its `AcpDriver(command)` drives an agent that speaks the Agent Client Protocol on stdio, at protocol 1 alone, over the
-SDK's own `rpc.Peer`, adding no dependency. A turn is one `session/prompt`, which is the only boundary it declares: a delivery for
-any other is refused until a recorded fixture shows an agent taking one. An update it does not map keeps its raw frame with a gap. A
-permission request is an approval whose whole ask is the tool call it names, as the agent last gave it. It never declares a sealed
-launch or an id per model call, so no agent on it is trainable. Stable ACP cannot turn an agent's own agents off, so a role on it
-must allow them, as `native_children_off`, a new capability every other driver declares, says. Its one named driver is
-`opencode`, on `opencode acp`, and a driver gains a way to name a check of its own, `DriverInfo.check`, which
-`platoon-harness doctor --check` runs and keeps as it does the SDK's, pinned to the driver's class and now also to the release
-of each distribution outside the SDK that the class stands on.
+`AcpDriver(command)`, a driver of the SDK's own, drives an agent that speaks the Agent Client Protocol on stdio, at protocol 1
+alone, over the SDK's own `rpc.Peer`, adding no dependency. A turn is one `session/prompt`, which is the only boundary it declares:
+a delivery for any other is refused until a recorded fixture shows an agent taking one. An update it does not map keeps its raw
+frame with a gap. A permission request is an approval whose whole ask is the tool call it names, as the agent last gave it. It
+never declares a sealed launch or an id per model call, so no agent on it is trainable. Stable ACP cannot turn an agent's own
+agents off, so a role on it must allow them, as `native_children_off`, a new capability every other driver declares, says. Its one
+named driver is `opencode`, on `opencode acp`, whose check is the SDK's own, and a driver outside the SDK gains a way to name a
+check of its own, `DriverInfo.check`, which `platoon-harness doctor --check` runs and keeps as it does the SDK's, pinned to the
+driver's class and now also to the release of each distribution outside the SDK that the class stands on.
 
 ## Motivation
 
 The SDK drives Claude Code, Codex, pi and OpenHands, each by a protocol of its own. Many agents speak ACP instead, OpenCode among
-them, and STATUS has planned a generic ACP driver since milestone 0. Three things stand in its way:
+them, and a generic ACP driver was planned from the start. Three things stand in its way:
 
 - **Where it lives.** A driver the SDK ships is checked by `doctor` and pinned to the SDK's version, and every other is a user's,
   checked by hand. A driver the project ships outside the SDK has no place: RFC 0030 folded the one distribution apart there was
   into an extra, because an unpublished distribution with pins of its own needed a second environment.
-- **What it speaks over.** The ACP Python SDK drops every update it cannot parse before a client sees it
-  ([acp-mcp.md](../research/acp-mcp.md#2-acp-python-sdk)), which is the frame a gap must keep, and its 1.0 release candidates
+- **What it speaks over.** The ACP Python SDK drops every update it cannot parse before a client sees it, which is the frame a
+  gap must keep, and its 1.0 release candidates
   cannot share a lock with the `openhands` extra's pin of 0.12.1.
 - **How it is checked.** `doctor --check` runs only the checks `levels.CHECKED` names, which are the SDK's
   ([`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py)), so a driver outside the SDK earns a level only from a
@@ -46,14 +42,12 @@ them, and STATUS has planned a generic ACP driver since milestone 0. Three thing
 
 ## Proposal
 
-### 1. A first-party extension is a distribution under `extensions/`
+### 1. The driver is the SDK's own
 
-`extensions/acp` holds `platoon-harness-acp`: its own `pyproject.toml`, version, README and license, a member of the uv
-workspace, locked with the SDK and the command line in the one `uv.lock`. It requires the SDK's own minor release and nothing else,
-so it shares the dev environment and every test runs it, unlike the OpenHands distribution RFC 0030 folded away. It releases on a tag
-of its own, `platoon-harness-acp-vX.Y.Z`, when the owner tags it; the release workflow builds and checks its wheel beside the SDK's
-and loads its driver from it. It uses the SDK's public names alone, which an AST test holds, and neither the SDK nor the command line
-imports it, which another holds.
+`AcpDriver` is `platoon_harness.drivers.acp` and `opencode` is `platoon_harness.drivers.opencode`, beside the SDK's other drivers,
+under its driver entry points. They release with the SDK, so they need no name on PyPI, tag or release environment of their own,
+and `examples/extension-package` shows how a third party ships a driver or an extension. The driver uses the SDK's public names
+alone, as every driver does, which an AST test holds.
 
 ### 2. Protocol 1 over `rpc.Peer`
 
@@ -156,16 +150,16 @@ A result is pinned to the class that implements the driver, and now also to the 
 each distribution outside the SDK whose driver entry points name the package of that class or of a class it is built on, so that
 an upgrade of an extension reads `unverified` until checked again, as an upgrade of the SDK does
 ([RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md)). A subclass of `AcpDriver` in a distribution of its own is
-pinned to that distribution and to `platoon-harness-acp`, which does its driving. A release is read from entry points, so a base
+pinned to that distribution, and to the SDK, which does its driving. A release is read from entry points, so a base
 class from a distribution that names no driver of its own leaves that distribution out of the pin.
 
 `opencode` is `AcpDriver` on `opencode acp`, inheriting the shell's proxy variables, refusing a start with no model, as OpenCode then
-sends prompts to a hosted model nobody chose, and naming `platoon_harness_acp.check:opencode`, which runs `check_driver` on it
-against `FakeModel` in a home of the check's own, through a provider given in `OPENCODE_CONFIG_CONTENT`.
+sends prompts to a hosted model nobody chose, and its check is the SDK's own, which `levels.CHECKED` names: it runs `check_driver` on
+it against `FakeModel` in a home of the check's own, through a provider given in `OPENCODE_CONFIG_CONTENT`.
 
 ## The hard parts
 
-- **OpenCode runs, and fails 7 of its checks.** On OpenCode 2.2.6 against FakeModel, run by hand on 2026-11-08, its check passed 11 checks and failed 7: it reaches FakeModel past `initialize`, starts on its pinned model, which a role names as OpenCode does, `fake/fake-model`, takes delivered text, ends, resumes and stops its turns, and reports a malformed frame as a gap; it failed our tool in the first request, the shell checks, approvals and the interrupt, because OpenCode's first request is a title of the session that it asks of the model on the side, with no tools, and because it shows an MCP server that `session/new` gives it only through its `execute` tool, Code Mode, not as a tool of its own ([acp-mcp.md, section 6](../research/acp-mcp.md#6-opencode-past-initialize-2026-11-08)). Its check is
+- **OpenCode runs, and fails 7 of its checks.** On OpenCode 2.2.6 against FakeModel, run by hand on 2026-11-08, its check passed 11 checks and failed 7: it reaches FakeModel past `initialize`, starts on its pinned model, which a role names as OpenCode does, `fake/fake-model`, takes delivered text, ends, resumes and stops its turns, and reports a malformed frame as a gap; it failed our tool in the first request, the shell checks, approvals and the interrupt, because OpenCode's first request is a title of the session that it asks of the model on the side, with no tools, and because it shows an MCP server that `session/new` gives it only through its `execute` tool, Code Mode, not as a tool of its own. Its check is
   written from the 2026-11-02 transcript and the 2.2.6 files, UNVERIFIED: the provider's shape, the names its model sees our tool and its shell by,
   and the values its model option takes, which may be `provider/model`, so that a start naming `fake-model` is refused. An ACP
   server reached the model behind Code Mode in that probe, so our tool may not be in the first request.
@@ -184,7 +178,7 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 | Alternative | Why not |
 |---|---|
 | The ACP Python SDK | It drops an update it cannot parse before the client sees it, so the gap would lose its frame, its 1.0 is still at release candidates, and it cannot share the lock with the `openhands` extra's 0.12.1 |
-| The driver inside the SDK | The SDK would release with every change of a protocol still moving toward version 2, and a first-party extension shows the path any third party's driver takes |
+| A first-party extension, a distribution of its own under `extensions/acp`, as this first proposed | It costs a name on PyPI, a tag and a release environment, and `examples/extension-package` already shows the path a third party's driver takes. The SDK releases with each change of a protocol still moving toward version 2 instead |
 | `harness = { command = [...], mode = "acp" }` in the team file | A change of the team file's schema with one agent to serve. A driver named for its command is the naming law's way, so a second agent gets a driver of its own until a team needs the generic one |
 | Name a check by an entry point of its own group | A second registry for one fact about a driver, which `describe` already answers |
 | Move the SDK's own checks onto `DriverInfo.check` | `levels`, a pure function, reads `CHECKED` to say what makes a result, so moving them is a change of its own |
@@ -198,41 +192,37 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 
 - An ACP agent can run as a team's harness, with a level earned only by a check on its machine, and an agent of any other ACP
   harness needs only a subclass naming its command. `opencode`, the one so named, passes 11 of its checks on OpenCode 2.2.6 and fails 7.
-- `doctor` lists `opencode` where the extension is installed, and `--check` checks it there, as it does the SDK's harnesses.
+- `doctor` lists `opencode`, and `--check` checks it, as it does the SDK's other harnesses.
 - A result kept for any driver outside the SDK made before this pinned no distribution, so it reads `unverified` until checked
   again.
 - No agent on ACP is trainable, and none reports what a model call cost, so every turn is charged its estimate.
 - An agent's own agents run unseen, and a role on an ACP harness must allow them, or `team check` refuses it. A third party's
   driver that declares agents of its own and not `native_children_off` meets the same refusal, until it declares it.
-- The workspace gains a member, which reverses the commit that dropped the empty `extensions/*` member.
 
 ## Rollout plan
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
-| M1 the distribution | `extensions/acp` in the workspace, the release workflow | `uv build --all-packages`, and the boundary tests `test_the_sdk_never_imports_a_first_party_extension` and `test_the_acp_extension_uses_only_public_names` | |
+| M1 the place | First `extensions/acp`, then the SDK's own drivers, as the note under the status table says | The layer tests, which hold every driver to the SDK's public names | |
 | M2 the driver | `AcpDriver`, `opencode` | `tests/unit/drivers/test_acp.py`: `test_protocol_1_is_negotiated_and_anything_else_disconnects`, `test_an_unknown_update_keeps_its_raw_frame_and_a_gap`, `test_permission_requests_go_through_the_runtime_s_approvals_with_their_tool_call_as_the_ask`, `test_steering_is_refused_until_a_fixture_passes` and `test_acp_levels_never_reach_trainable`; `tests/unit/topology/test_check.py::test_a_role_on_a_harness_whose_own_agents_cannot_be_turned_off_must_allow_them` and `tests/unit/drivers/test_check_driver.py::test_a_harness_whose_own_children_cannot_be_turned_off_skips_that_check` | |
 | M3 a named check | `DriverInfo.check`, `check_harness`, `doctor --check`, the pin to a distribution | `tests/unit/cli/test_machine.py::test_doctor_checks_an_installed_driver_that_names_its_check` | |
 | M4 conformance | `check_driver` on a scripted ACP agent, and on OpenCode against `FakeModel` | `tests/conformance/test_conformance.py::test_the_acp_driver_passes_check_driver_on_a_scripted_acp_agent`, and the slow `tests/integration/test_acp.py::test_opencode_through_acp_passes_check_driver_against_fake_model` where `opencode` is on `PATH` | |
 
 ## Open questions
 
-1. Where do first-party extensions live and ship? This builds the default, pending the owner's ruling: `extensions/<name>`, each a
-   distribution with its own version and tag. Another place moves a folder and a workspace member and removes nothing else.
-   Decided on 2026-11-12: the ACP driver is the SDK's own, as the note under the status table says.
-2. Should ACP be spoken over the ACP Python SDK or the SDK's own `rpc.Peer`? This builds the default, pending the owner's ruling:
-   `rpc.Peer` on protocol 1. The SDK's client would replace `driver.py`'s use of the peer, and it drops an update it cannot parse
+1. Where do first-party extensions live and ship? Decided on 2026-11-12: the ACP driver is the SDK's own, as the note under the
+   status table says, and a third party ships a driver as `examples/extension-package` does.
+2. Open: should ACP be spoken over the ACP Python SDK or the SDK's own `rpc.Peer`? Today `rpc.Peer`, on protocol 1. The SDK's client would replace `driver.py`'s use of the peer, and it drops an update it cannot parse
    before a client sees it, so an unknown update would keep its gap and lose its raw frame: that answer would change
    `test_an_unknown_update_keeps_its_raw_frame_and_a_gap` and what STATUS says of it, and nothing else built here.
-3. Which agent is the reference, and is Prime Agent's live probe approved? This builds the default, pending the owner's ruling:
-   OpenCode is the reference, checked once it runs on a test host, and Prime Agent waits.
+3. Open: which agent is the reference? Today OpenCode, checked once it runs on a test host, and Prime Agent is not driven.
 
 ## Evidence
 
-- [acp-mcp.md](../research/acp-mcp.md): the version 1 surface, what ACP cannot express, the ACP SDK's dropped updates and the
-  resolver probes, and section 6, the probe that did not run and the schema read again.
-- [adapter-others.md](../research/adapter-others.md#acp-behaviour-live) and
-  [the OpenCode transcript](../research/fixtures/opencode-sample.jsonl): OpenCode 2.2.5 through ACP against a scripted fake server,
-  a permission request's `toolCall` and options, a cancelled prompt, and -32603 for a second prompt.
+- The ACP specification and its v1 schema at crate 1.15.1, read on 2026-11-08: the version 1 surface and what it cannot express.
+  Design-phase research, not published: the ACP Python SDK drops an update it cannot parse in its notification handler, and with
+  `uv pip compile` its 1.0.0rc3 cannot share an environment with `openhands-sdk` 1.59.0.
+- A recording of OpenCode 2.2.5 through ACP against a scripted fake server, not published: a permission request's `toolCall` and
+  options, a cancelled prompt, and -32603 for a second prompt.
 - The tests the rollout plan names, run on a scripted ACP agent that is `ScriptedDriver` behind ACP on `FakeModel`. Nothing here
   ran on OpenCode.

@@ -71,7 +71,7 @@ team holds it, whose yes covers what you were shown and nothing the file says si
   cancelled, failed or lost, its stop removes them, as it removes its harness's `tmp`, before its authority hears of the end.
   An agent put to rest, or in a session that stops, keeps them, as its harness comes back on them. What stays of them the stop
   says in the runtime's log: what could not be removed, and what a symlink an agent planted leads to, which is not followed
-  ([RFC 0075](rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft).
+  ([RFC 0075](rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md)).
 - **The owner's and the view token.** `owner.token`, a control credential, and `view.token`, which reads and never writes,
   are files in the session folder that only you can read, which each runtime writes fresh when it starts. A session a program
   started has no owner token. A stop or a close removes both. A runtime killed outright leaves its own, dead, as no runtime
@@ -82,7 +82,7 @@ team holds it, whose yes covers what you were shown and nothing the file says si
   never reaches a browser. The sessions page's link is the command's alone: the page makes none, its server keeps
   credentials of its own, so no link of a session's page opens it and its own opens no session's page, and it is served on
   loopback alone, as it acts as you on every session there and starts a team's harnesses, which run what its files name
-  ([RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md), a draft).
+  ([RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md)).
 
 ## Retention
 

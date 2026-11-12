@@ -19,7 +19,7 @@ An LLM agent cannot block. A held tool call has a harness cap: 300 s by default 
 - **`wait` parks.** Check and registration are one transaction from `after`. The tool result says the wait is registered and to end the turn. The agent becomes `waiting` when its turn ends, not at the call. When the condition holds, the runtime starts the next turn with its delivery attached.
 - **The wait lives in the service,** so a wake never depends on the model having seen the tool result. `hold` keeps a short call open below `tool_timeout_s`. A one-shot driver refuses anything longer, with the reason.
 - **The monitor.** `spawn` installs one. When an agent finishes, or a turn ends with no `finish` and no open wait, the runtime posts the turn's final text to the spawning parent's inbox, as a runtime-authored event naming the child as subject. It wakes at most once per causal chain and stops at `max_hops`. Changed on 2026-11-03 by [RFC 0023](0023-agents-that-stay.md): it wakes the parent once for the spawn and once for each message the parent sent that child, and a message from a peer or a human asks nothing, so the return rule below stays rejected.
-- **A report the parent is counting does not wake it,** unless the child ended badly. The wait wakes it when it holds, so a join of N costs one turn, and a failure still breaks in, past a chain's spent wake too. A wait that has only counted something of the child's doing, such as a task it settled, keeps it quiet only while someone else below the parent is at work, or the parent sleeps on what nobody is left to do. Added on 2026-11-03, after the [Pi Durable review](../research/pi-durable.md), which found each child of a join waking its parent.
+- **A report the parent is counting does not wake it,** unless the child ended badly. The wait wakes it when it holds, so a join of N costs one turn, and a failure still breaks in, past a chain's spent wake too. A wait that has only counted something of the child's doing, such as a task it settled, keeps it quiet only while someone else below the parent is at work, or the parent sleeps on what nobody is left to do. Added on 2026-11-03, after a review found each child of a join waking its parent.
 - **Hop limit.** A message carries `hops`, one more than the largest in its `cause`, and a human message resets it. A wake past `max_hops` is refused and shown in attention.
 
 ## Alternatives
@@ -40,7 +40,7 @@ An LLM agent cannot block. A held tool call has a harness cap: 300 s by default 
 
 ## Evidence
 
-- [tools-and-parking.md](../research/spikes/tools-and-parking.md): parking, wake turns, fallback, clean-stop counts.
-- [distributed-primitives.md](../research/distributed-primitives.md), section 2, the Erlang row, and the wake-storm risk. [acp-mcp.md](../research/acp-mcp.md), client support and rule 8 on blocking tools. [Architecture section 7](../architecture.md).
+- A spike of 2026-11-02 on real Claude Code 2.1.316 and Codex 0.164.0, not published: parking was clean in 10 of 10 trials with the tool visible, and a cold resume and the fallback ran one trial each.
+- Design-phase research, not published: Erlang's monitor is the model for a parent's return link; mesh agents that reply to each other can loop, so `coalesce` and budgets bound the cost and a hop limit the loop; and a blocking `wait` must return within a client's tool timeout and resume by cursor. [Architecture section 7](../architecture.md).
 
 Decided: no interrupt fallback and no notion of a required `wait`. Interrupting spends a cold resume to save a model's own overrun, which no trial showed, and budgets already bound the cost. A turn that ends with no `wait` and no `finish` is handled by the monitor, so the silent case reaches the parent.

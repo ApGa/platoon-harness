@@ -10,7 +10,7 @@ Every surface is derived. An `Operation` is a definition and a `Command` is one 
 
 ## Motivation
 
-The brief requires an extension primitive to work through the SDK, the tool protocol, the CLI and a generic UI with no core edit. Six surfaces written by hand would drift, and each would be one more place to forget an authorization check. The concept also needs words a reader would guess, and it touches `call`, a word training readers depend on.
+An extension's primitive must work through the SDK, the tool protocol, the CLI and a generic UI with no core edit. Six surfaces written by hand would drift, and each would be one more place to forget an authorization check. The concept also needs words a reader would guess, and it touches `call`, a word training readers depend on.
 
 ## Proposal
 
@@ -37,5 +37,5 @@ One `Op` definition reaches every surface. Python, MCP, `ph`, the CLI, the web r
 
 ## Evidence
 
-- [Architecture sections 2, 6 and 17](../architecture.md), [brief section 11](../spec/BRIEF.md).
-- [acp-mcp.md](../research/acp-mcp.md), section 4: `tools/list` may vary by authorization, which is what lets it be a filtered view of this table. [distributed-primitives.md](../research/distributed-primitives.md), Temporal row: the split between queries, which enter no history, and tracked writes.
+- [Architecture sections 2, 6 and 17](../architecture.md).
+- The MCP specification: `tools/list` may vary by authorization, which is what lets it be a filtered view of this table. Temporal's split between queries, which enter no history, and tracked writes.

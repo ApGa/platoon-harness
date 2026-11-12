@@ -34,8 +34,8 @@ OLD_NAME = re.compile(r"\badrs?\b|docs/adr", re.IGNORECASE)
 PINNED = re.compile(r"platoon-harness@[0-9a-f]{7,40}:docs/adr/")
 """A line-numbered citation in a dated note, read at the commit it names, before the records moved."""
 HISTORY = (
-    "Until 2026-11-07, RFCs 0001 to 0060 were architecture decision records in `docs/adr`; earlier commits and other "
-    "repositories cite them as ADR NNNN, under the same numbers."
+    "RFCs 0001 to 0060 began as architecture decision records in `docs/adr`; earlier commits cite them as ADR NNNN, "
+    "under the same numbers."
 )
 NAMING_IT = {"tests/unit/docs/test_rfcs.py": "it names what it looks for"}
 

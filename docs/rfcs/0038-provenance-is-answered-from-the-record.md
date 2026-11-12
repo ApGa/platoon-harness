@@ -17,8 +17,8 @@ Three views index what events already hold, and `exposure`, `lineage`, `uses` an
 
 [RFC 0036](0036-one-ref-names-what-a-model-is-shown.md) and [RFC 0037](0037-an-offer-is-confirmed-only-by-its-harness.md) made the
 record able to say what reached an agent and what an agent claimed: one ref per act, citations checked and kept as claims, offers
-confirmed only by a harness's own report, makers stamped, and gaps placed where they began. Nothing could ask it yet. Provenance is
-to be a selling point of the harness, and credit research wants to know which agents contributed to an outcome, so the record has to
+confirmed only by a harness's own report, makers stamped, and gaps placed where they began. Nothing could ask it yet. People need to
+read provenance, and credit research wants to know which agents contributed to an outcome, so the record has to
 answer for people and programs, live and on a closed copy, without ever presenting a claim as evidence, an estimate as a fact or
 unknown as zero. [RFC 0010](0010-provenance.md) sketched `lineage` returning whole paths and a `why` command; neither was built.
 
@@ -103,7 +103,7 @@ Where the design was wrong in a detail, this keeps its rules and changes the lea
 
 ## Consequences
 
-- At M2 a negative answer about Claude Code, Codex, pi, OpenHands or `exec` is always `Unknown`, and says why.
+- For now a negative answer about Claude Code, Codex, pi, OpenHands or `exec` is always `Unknown`, and says why.
 - Claude Code's tool calls join their model calls, so its answers are bounded at the call. Codex's reach their script's item and no
   call, and pi's, OpenHands' and `exec`'s reach nothing, so theirs are bounded at the commit, which can count a read the same model call
   chose as below, and says `commit`.
@@ -113,7 +113,7 @@ Where the design was wrong in a detail, this keeps its rules and changes the lea
 - The writer pays one row per offered item, offer, confirmation, citation, cause, anchored agent event, tool item, model call and turn.
   In the reference closed loop of a trivial op the views cost nothing measurable. In a loop made only of reads and citations, where
   every command writes provenance, they cost about 6%, and in a mixed workload about 9%, the stage as a whole about 17% (see the
-  evidence), against a proposed budget of 5%, which the owner is to accept or cut. Folding an anchor only for the event that ends
+  evidence), against a proposed budget of 5%, not accepted. Folding an anchor only for the event that ends
   its command, which would halve those rows, cannot be done: a fold runs before its command's outcome is put on that event.
 
 ## Evidence
@@ -130,11 +130,11 @@ Where the design was wrong in a detail, this keeps its rules and changes the lea
   `test_a_look_s_trigger_is_no_contributor_to_a_commit_it_found`, `test_a_commit_s_answers_are_bounded_at_the_look_that_recorded_it`,
   `test_whether_a_range_was_shown_is_unknown_when_its_citer_s_exposure_is`, `test_an_exposure_answer_cuts_each_list_it_holds`,
   `test_marks_end_at_the_compaction_that_forgot` and, in `tests/unit/runtime/test_control.py`,
-  `test_a_query_never_holds_up_the_runtime` hold each. On the review's own builds, at load 24 to 26: that event's `exposure` took
+  `test_a_query_never_holds_up_the_runtime` hold each. On builds made for a review, at load 24 to 26: that event's `exposure` took
   7, 28 and 15 ms at 250, 1,000 and 4,000 turns, about 65 KB each, and `lineage` of the citing message 8 to 14 ms; and
   `contributors` of an outcome citing 64 readers, who had each paged through four authors' objects, took 158 ms over 1,000
   objects an author and 600 ms over 4,000, against 1.46 s and 6 s before each maker was read once an answer.
-- Writer throughput, measured on the shared login node at load 27 to 64, each run 5 s, alternated. A trivial op with 256 in flight:
+- Writer throughput, measured on a shared Linux machine at load 27 to 64, each run 5 s, alternated. A trivial op with 256 in flight:
   10,290, 10,327 and 10,454 commands/s with the views against 10,382, 10,578 and 10,304 without. A loop of 32 workers, each a citing
   send, a read under a tool call's id and that tool item's completion: 2,524, 2,630, 2,621 and 2,630 commands/s with the views against
   2,760, 2,719, 2,777 and 2,769 without, after `Exposures` dropped its ordinals, which had cost about 8% of that loop. A mixed

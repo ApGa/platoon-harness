@@ -6,7 +6,7 @@
 | Created | 2026-11-07 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/lifecycle.py`](../../packages/sdk/src/platoon_harness/primitives/lifecycle.py), [architecture section 7](../architecture.md#lifecycle), [RFC 0023](0023-agents-that-stay.md), [RFC 0059](0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md) and [RFC 0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) |
-| Discussion | The notes of Platoon's `platoon-teams` bridge on its close, kept outside this repository |
+| Discussion | Decided by the maintainers on 2026-11-07 |
 | Implementation | `fix: End a child with its parent cancelled only for a turn under way` |
 
 ## Summary
@@ -24,10 +24,9 @@ child took is whole. The "on its way" half reached past that reason. A child is 
 begun, a wake that is due, a wait that holds or a handover waits to start one, and none of these has begun: the record holds no
 `turn.started` for it and no call in it, so the parent's end cuts no turn of the child's, as it cuts none of an idle child's.
 
-Platoon's bridge met the cost. At a rollout's end its close retires each agent left, deepest first, and cancels one that refuses,
-as one on its way to a turn refuses `agent.retire`. On its first GPU runs on pi that ended 4 to 26 of each step's 128 rollouts
-cancelled, by agents with a handover pending, and the training system dropped their tokens, so the bridge now reads an agent its
-close cancels with no turn under way as retired. But its close is not the only way a child ends with a parent. When a parent is
+A training system's bridge meets the cost. At a rollout's end such a close retires each agent left, deepest first, and cancels
+one that refuses, as one on its way to a turn refuses `agent.retire`, and the training system drops the tokens of an agent that
+ends `cancelled`, so a bridge must read an agent its close cancels with no turn under way as retired. But its close is not the only way a child ends with a parent. When a parent is
 cancelled while a child of its is on its way to a turn, woken by a message or a report, or holding a handover its harness took
 and had begun no turn on, the SDK ended that child `cancelled`, and the training system dropped its tokens though no turn of its
 was cut. The bridge left this to the SDK, as one end read two ways is a contract with two meanings. How often it happened on
@@ -72,6 +71,4 @@ those runs was not measured.
   cancelled, one idle, one parked, one in a turn, and five on their way to a turn, by a wake that is due, a wait that holds, a
   handover under way, a handover taken with no turn begun and a goal not begun, of which only the one in a turn ends
   `cancelled`. On the code before this record the five on their way end `cancelled` too.
-- The bridge's rule for its close, which reads an agent it cancels with no turn under way as retired, and its fixtures, in
-  Platoon's `platoon-teams`, kept outside this repository.
 - [Architecture section 7](../architecture.md), Lifecycle.

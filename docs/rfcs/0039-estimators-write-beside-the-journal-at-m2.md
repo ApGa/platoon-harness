@@ -1,4 +1,4 @@
-# RFC 0039: Estimators write rewards and credit beside the journal from M2
+# RFC 0039: Estimators write rewards and credit beside the journal
 
 | | |
 |---|---|
@@ -11,8 +11,8 @@
 ## Motivation
 
 [RFC 0011](0011-annotations-beside-the-journal.md) put rewards, judgments and credit in `annotations.sqlite`, beside the journal,
-and planned it for M3 with the Platoon bridge. The owner wants research estimators to write credit on M2 sessions before that bridge
-exists, now that `contributors` and `lineage` say who the record ties to an outcome (RFC 0038). An estimate written there must never
+and planned it with a training bridge. Research estimators need to write credit before any training bridge exists, now
+that `contributors` and `lineage` say who the record ties to an outcome (RFC 0038). An estimate written there must never
 read as a fact, and a reward nobody could score must never read as zero.
 
 ## Proposal
@@ -55,7 +55,8 @@ read as a fact, and a reward nobody could score must never read as zero.
 - Each statement checks its target and evidence through `lineage`, one bounded query a distinct ref, which a closed copy with stale
   views refuses until `platoon-harness session refold` has brought them up to its journal.
 - A read of every statement is one list, unpaged: the file is an estimator's, and nothing an agent can reach reads it.
-- Eligibility, attribution, the export and judged or validated evidence stay M3.
+- Eligibility and attribution came with [RFC 0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md),
+  and the export with [RFC 0055](0055-the-export-is-the-session-as-it-ended.md); judged and validated evidence were left for later.
 
 ## Evidence
 

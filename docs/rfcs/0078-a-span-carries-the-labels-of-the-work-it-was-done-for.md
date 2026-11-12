@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-09 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`team.py`](../../packages/sdk/src/platoon_harness/team.py), [`primitives/sessions.py`](../../packages/sdk/src/platoon_harness/primitives/sessions.py), [`primitives/tasks.py`](../../packages/sdk/src/platoon_harness/primitives/tasks.py), [`primitives/provenance.py`](../../packages/sdk/src/platoon_harness/primitives/provenance.py), [`tools/surface.py`](../../packages/sdk/src/platoon_harness/tools/surface.py), [`credit.py`](../../packages/sdk/src/platoon_harness/credit.py), [architecture sections 7, 10, 11 and 14](../architecture.md#7-primitive-semantics), [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and [RFC 0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) |
-| Discussion | The owner's request of 2026-11-09, and the owner's answer on it: "yes fixed vocab makes sense. For now difficulty can come at creation time decided by the agent". That the vocabulary is the team's, declared in its configuration, and that crafting-style work an agent does for a task earns credit through the task, are this design's, which the owner has not ruled on. The request accepts no design: this one waits for the owner's acceptance |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `feat: Label tasks and spawns from a vocabulary the team declares`; `feat: Give each span the claims its agent held and the labels of its work`; `feat: Share what a claim and its result keep among the spans that held the claim`; and the fixes the review asked for |
 
 ## Summary
@@ -25,12 +25,12 @@ predecessor's, and an earlier version is reached by pinning an earlier SDK.
 
 ## Motivation
 
-The owner's idea: an agent that creates a sub-task, by spawning an agent or by adding a task for another to take, tags it with
+An agent that creates a sub-task, by spawning an agent or by adding a task for another to take, tags it with
 labels, such as its difficulty and its kind of work, verification, execution, design or search, from a vocabulary that belongs
 to the domain; and a training system computes the advantage of the work done for it against a baseline of other rollouts' work
 of like labels. The SDK owns three parts of that: the vocabulary and the labels on the record, the tie from a span to the work it
-was done for, and credit that reaches that work. Platoon's keyed baseline and DAO's team are later stages in other repositories,
-on the contract this states.
+was done for, and credit that reaches that work. A training system keys its baseline in a repository of its own, on
+the contract this states.
 
 Today none of it can be said:
 
@@ -80,14 +80,14 @@ runtime's adds and spawns meet the same check as an agent's.
 They are optional, label by label. The code gives reasons: the agents a session starts have no creator to decide anything of
 them, older sessions and teams with no vocabulary have none, and a label is evidence its creator gives, so one it was not sure of
 is honest absence, which a training system can tell from a value, where a required label would make it guess. Difficulty is
-decided by the creating agent as it creates the work, which the owner said will do "for now"; no op changes it after, and open
+decided by the creating agent as it creates the work; no op changes it after, and open
 question 5 asks whether one should.
 
 A tool that takes `labels` shows a model each label with its values, as an `enum`, with no other key allowed, and says them in
 its description too, which `ph` shows, so a model picks from them; with no vocabulary, the argument is left out of the schema, as
 no value could fill it. The op's own check is what holds, for a harness that does not enforce a tool's schema. The vocabulary is
 fixed at open and the tool list at launch, so the two always agree. No claimant is shown its task's labels: `task.list` and
-`task.claim` say what they said before, as the owner ruled on open question 1. A person reading the record,
+`task.claim` say what they said before, as open question 1 decided. A person reading the record,
 and a training system reading `spans`, see them.
 
 ### 3. A span's labels
@@ -135,14 +135,13 @@ The walk is `propagate@3`'s, edge for edge, takes included: only where a share i
 them; and it is as deterministic, and bounded at the same 4,096 events. Where no claimant's event of a claim is reached, or each
 such event's own span is the one span that held its claim, its rows are version 3's.
 
-On the owner's case, scripted, a lead's last words take the worker's result and keep half the reward; the result keeps an eighth
+On a scripted case, a lead's last words take the worker's result and keep half the reward; the result keeps an eighth
 and its claim a sixteenth; the worker's crafting span and its completing span share both, 3/32 each, where version 3 gave the
 completing span the eighth and the crafting span the sixteenth.
 
 Version 4 takes version 3's place under the same name and function, `propagate(session, episode, *, judge, retained)`, and its
-rows say `producer_version` 4, as RFC 0061 has each version do: a run recorded on `propagate@3`, as DAO's run notes and configs
-name it, runs again on the SDK it was recorded on. Version 4 is the producer the SDK ships, and the one DAO's next arms train on,
-as the owner ruled on open question 3.
+rows say `producer_version` 4, as RFC 0061 has each version do: a run recorded on `propagate@3` runs again on the SDK it
+was recorded on. Version 4 is the producer the SDK ships.
 
 ### 5. The contract for a training system
 
@@ -175,7 +174,7 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 
 | Alternative | Why not |
 |---|---|
-| Free-form labels | The owner agreed a fixed vocabulary makes sense; a free label keys a baseline nothing else shares |
+| Free-form labels | A free label keys a baseline nothing else shares |
 | A vocabulary per queue, per role or per channel | Several places for one fact; a vocabulary is the domain's, which a team is |
 | Labels in `Topology` | The topology says who may reach whom; labels say what the work is |
 | Tags, a set of values with no labels | "Hard" and "search" are values of different questions, and a baseline keys each |
@@ -189,7 +188,7 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 | Spreading the claim's and the result's takes too | Two changes in one version, so its agent rows would no longer be version 3's |
 | Sharing a completion alone | A failure is the same work's other result, and its claim is reached through it; one rule for a hold's events |
 | A second producer for tasks | Two ways to do one thing |
-| A `version` argument, to run version 3 beside 4 | A shim nobody asked for; an earlier SDK runs version 3, as RFC 0061 says, and a ruling that a run needs version 3's rows beside labels adds the argument then |
+| A `version` argument, to run version 3 beside 4 | A shim nobody asked for; an earlier SDK runs version 3, as RFC 0061 says, and a run that needs version 3's rows beside labels adds the argument then |
 
 ## Consequences
 
@@ -213,18 +212,16 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
 
 ## Open questions
 
-1. Should a claimant be shown its task's labels in `task.claim` and `task.list`? No, the owner ruled on 2026-11-09: a worker told
-   its task is easy may work it as one.
-2. Should a failure and a release be shared as a completion is? Yes, the owner ruled on 2026-11-09: every claimant's event of a
-   hold is shared.
-3. Should DAO's next run train on `propagate@4`, or pin the SDK before it, which writes `propagate@3` and has no labels? On
-   version 4, the owner ruled on 2026-11-09, for the arms that test labels; runs recorded on version 3 keep their pinned SDK.
-4. Should a span that claimed a task carry the task's labels for its calls before the claim? The default, built, does: a span
-   that surely held a claim takes its claims' labels alone, pending the owner's ruling. A ruling for the spawn's work makes such
-   a span's labels None wherever its spawn's differ, which changes one rule of `spans` and tears out nothing; a worker that
+1. Should a claimant be shown its task's labels in `task.claim` and `task.list`? Decided on 2026-11-09: no, as a worker told its
+   task is easy may work it as one.
+2. Should a failure and a release be shared as a completion is? Decided on 2026-11-09: yes, every claimant's event of a hold is
+   shared.
+3. Should a run on labels train on `propagate@4`, or pin the SDK before it, which writes `propagate@3` and has no labels? Decided
+   on 2026-11-09: version 4; a run recorded on version 3 keeps its pinned SDK.
+4. Open: should a span that claimed a task carry the task's labels for its calls before the claim? Today it does: a span that
+   surely held a claim takes its claims' labels alone. Taking the spawn's work instead would make such a span's labels None wherever its spawn's differ, which changes one rule of `spans` and tears out nothing; a worker that
    looks at its queue before it claims would then have no key for the span that claims.
-5. Should work be labelled again after it is added, as by a new op, or by its claimant? The owner said difficulty comes at
-   creation "for now", so none is built: labels are given as work is created, and nothing changes them. An op to label work later
+5. Open: should work be labelled again after it is added, as by a new op, or by its claimant? Today none is built: labels are given as work is created, and nothing changes them. An op to label work later
    would be a second write of one fact, beside the first, and tears out nothing.
 
 ## Evidence
@@ -243,8 +240,8 @@ wrote; `session.opened` holds it as the session ran. Nothing here computes a bas
   `test_each_agent_row_is_at_least_its_span_rows_and_the_rest_was_kept_in_no_span` holds that an event lies in several spans only
   as such an event of a claim each held, and that an agent's row is its spans' and what it kept in no span. These hold where no
   span took another principal's event; that version 4's agent rows are version 3's where one did rests on the walk being version
-  3's, edge for edge, and on the scripted cases, which state version 3's numbers beside their own. The owner's case runs on
+  3's, edge for edge, and on the scripted cases, which state version 3's numbers beside their own. The scripted case runs on
   ScriptedDriver against FakeModel acting as each agent's gateway, whose numbers section 4 gives. On the commit that still took a
   version, versions 3 and 4 were run on 207 generated journals, 113 of them reaching a claim's events, and gave the same agent rows
-  on each, by a throwaway check outside the repository.
-- No live model, no real binary and no GPU run has produced a labelled span.
+  on each, by a check that is not published.
+- No live model, no real binary and no training run has produced a labelled span.

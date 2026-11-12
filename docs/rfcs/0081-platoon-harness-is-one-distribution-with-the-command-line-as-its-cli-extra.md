@@ -18,9 +18,9 @@ launcher that needs only the standard library, so without the `cli` extra it say
 
 ## Motivation
 
-The SDK and the command line were two distributions, `platoon-harness-sdk` and `platoon-harness-cli`, and the ACP driver
-a third. They released at one version, yet each needed a name on PyPI, a release tag and a publisher, and a person had to
-know which to install. The name a person types, `platoon-harness`, installed none of them.
+The SDK and the command line were built as two distributions, `platoon-harness-sdk` and `platoon-harness-cli`, never
+published, and the ACP driver a third. Publishing them would have needed a name on PyPI, a release tag and a publisher
+each, and a person would have had to know which to install, where the name a person types is `platoon-harness`.
 
 ## Proposal
 
@@ -38,8 +38,8 @@ discovery checks that requirement against the release that runs, as it checked o
 
 ### 3. A light library
 
-The base requires pydantic alone, so a library built on the SDK, as Platoon's teams bridge is, installs no terminal UI,
-web server or command-line parser:
+The base requires pydantic alone, so a library built on the SDK, such as a training system's bridge, installs no terminal
+UI, web server or command-line parser:
 
 | Install | Brings |
 |---|---|

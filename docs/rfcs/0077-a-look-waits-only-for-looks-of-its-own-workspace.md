@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [`tools/mcp.py`](../../packages/sdk/src/platoon_harness/tools/mcp.py), [architecture sections 4](../architecture.md#what-runs-at-once), [10](../architecture.md#10-tool-plane) and [13](../architecture.md#13-workspaces), [RFC 0005](0005-daemons-and-effects.md), [RFC 0009](0009-tools-only-mcp-server.md) and [RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md) |
-| Discussion | The owner's request of 2026-11-08, that tool calls and their execution run in parallel across agents that share one tool server, as faster wall clock is one of the benefits of several agents. The request accepts no design: this one waits for the owner's acceptance |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `fix: Run an agent's query on a reader thread, so a slow one holds up no other call`, `test: Show agents' shell tools run at once on each real binary, and measure one response's calls`, `feat: Look at different workspaces at once, each after the shared one`, `fix: Run the host's git and files on threads of its own, so no round of looks holds up a query`, `test: Hold that interleaved looks record parents first, and that a hung delivery holds up no other agent's` and `test: Show several agents call the tool server they share at once on each real binary, and count one response's approvals` |
 
 ## Summary
@@ -22,14 +22,15 @@ agent.
 
 ## Motivation
 
-The owner asked that tool calls and their execution run in parallel across the agents of a team that share one tool server. Most
+Tool calls and their execution should run in parallel across the agents of a team that share one tool server, as a faster wall
+clock is one of the benefits of several agents. Most
 already did: every real harness is a process of its own, the tool server answers each request on a connection of its own, and the
 host gives each effect a task of its own. Two things did not.
 
 - **Looks ran one at a time in a session.** `Host._look` held one lock across both of a probe's looks, so the looks of a team of N
   agents in worktrees, each committing each turn, queued behind each other at every turn's end, though each reads its own work
   tree. A look's cost grows with the team, as it reads every workspace's HEAD reflog to say whose a new commit is, so a round of
-  looks grew faster than the team. Measured on 32 hardware threads of a compute node, a round of such a team, from the person's
+  looks grew faster than the team. Measured on 32 hardware threads of a shared machine, a round of such a team, from the person's
   message to every agent until every look after that turn had finished, took 0.74 to 0.77 s for 10 agents, 3.5 to 3.6 s for 30
   and 27 to 30 s for 100, against 0.36 to 0.42 s, 1.3 to 1.5 s and 8.6 to 10.3 s with looks one at a time per workspace. RFC
   0032 had weighed concurrent looks only as looks deduplicated by the op, which "would race on the shared workspace's last look,
@@ -96,7 +97,7 @@ reports back through an op. Its query is read off the loop, so a slow one holds 
 
 ## Consequences
 
-- A team of agents in worktrees records its commits some three times sooner at 100 agents, and twice as soon at 10, on the node
+- A team of agents in worktrees records its commits some three times sooner at 100 agents, and twice as soon at 10, on the machine
   measured. A round of looks still grows with the team, as each look reads every workspace's HEAD reflog, and the shared
   workspace's looks still queue.
 - An agent's slow query costs only its own call while a thread of the loop's pool is free; past its threads, queries wait for
@@ -108,14 +109,13 @@ reports back through an op. Its query is read off the loop, so a slow one holds 
 
 ## Open questions
 
-1. Whether a look should read only the reflogs of the workspaces that could have made what it found, where it reads every
+1. Open: whether a look should read only the reflogs of the workspaces that could have made what it found, where it reads every
    workspace's, one git process each, whenever it finds a commit. Nothing here measures what that would save, and it changes how
-   whose a commit is gets read ([RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md)), so it is the owner's to ask for.
-2. Whether the OpenHands worker should raise its SDK's `tool_concurrency_limit`, which it keeps at the SDK's default of 1, so
+   whose a commit is gets read ([RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md)), so it waits for a need.
+2. Open: whether the OpenHands worker should raise its SDK's `tool_concurrency_limit`, which it keeps at the SDK's default of 1, so
    OpenHands runs the calls of one response in turn. Raised, the SDK would run different tools of one response at once, as a
    query of ours beside a terminal command, and still two terminal calls, or two calls of one MCP tool, in turn; and the calls of
-   one response would no longer run in the order the model gave them, an environment's among them. The default, pending the
-   owner's ruling, keeps it at 1.
+   one response would no longer run in the order the model gave them, an environment's among them. Today it stays at 1.
 
 ## Evidence
 

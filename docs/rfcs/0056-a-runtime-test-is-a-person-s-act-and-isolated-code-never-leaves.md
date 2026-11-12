@@ -10,7 +10,7 @@
 
 ## Motivation
 
-The brief asks for tests to be captured beside commits, and section 13 names them as events on `repo/<name>`. An exit code tied to
+Tests must be captured beside commits, and architecture section 13 names them as events on `repo/<name>`. An exit code tied to
 an immutable SHA is the only test evidence the runtime can hold at the validated level: an agent saying its tests passed is a claim,
 and a test run read out of a tool item is a link nobody recorded. So the runtime runs a test itself. What it runs is a commit's code,
 written by an agent: a `conftest.py`, a `Makefile`, a script the test command names. The trust step that covers a `command` harness

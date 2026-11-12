@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`calls.py`](../../packages/cli/src/platoon_harness_cli/calls.py), [`web/server.py`](../../packages/cli/src/platoon_harness_cli/web/server.py), [`web/overlay.js`](../../packages/cli/src/platoon_harness_cli/web/overlay.js), [architecture sections 5.6 and 12](../architecture.md#56-readers), [RFC 0027](0027-the-browser-on-our-backend.md), [RFC 0028](0028-acting-from-the-page.md) and [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
-| Discussion | Milestone 4's plan and the audits and critiques behind it, kept outside the repository |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `feat: List an agent's tool calls on its page, a page at a time`; `feat: Show an agent's live text on its page, apart from its messages` |
 
 ## Summary
@@ -22,10 +22,8 @@ disabled.
 
 ## Motivation
 
-The brief asks the page for an accessible view of tools that does not flood conversation with low-level telemetry
-([section 9](../spec/BRIEF.md#9-swarmchat-a-real-second-client-not-a-log-dump)), and that a person can review tool calls and
-never meets dozens of token streams merged into one transcript
-([section 8](../spec/BRIEF.md#8-cli-and-tui-useful-enough-for-everyday-work)). The terminal does both: its transcript draws an agent's calls, each spawn under
+A person needs an accessible view of an agent's tools on the page that does not flood conversation with low-level telemetry,
+and to review tool calls without meeting dozens of token streams merged into one transcript. The terminal does both: its transcript draws an agent's calls, each spawn under
 the call that made it ([`calls.py`](../../packages/cli/src/platoon_harness_cli/calls.py)), and the live text of the agent in
 view below them, one tail at a time. The page does neither. [RFC 0027](0027-the-browser-on-our-backend.md) keeps thoughts,
 tools, usage and live text out of every chat, rightly, since a chat is messages between people and agents, and
@@ -161,12 +159,12 @@ an agent's words still reach its chat with the person once its turn commits them
 
 ## Open questions
 
-1. Should a call's line open its input and its output, the bodies its items carry? Today a line opens its event's provenance, and
-   the bodies are read with `platoon-harness blob`. A maintainer can decide before this RFC is accepted.
-2. Should the pane follow new calls as they come, as the feed's `x_moved` makes a queue's pane read again? Today Read again reads
+1. Open: should a call's line open its input and its output, the bodies its items carry? Today a line opens its event's
+   provenance, and the bodies are read with `platoon-harness blob`.
+2. Open: should the pane follow new calls as they come, as the feed's `x_moved` makes a queue's pane read again? Today Read again reads
    them, and the newest page says the head it was read at. Needed only if a person asks.
-3. What does a page of calls cost on a busy session's long turn? The scale tests of milestone 4 can measure it beside the other
-   reads.
+3. Open: what does a page of calls cost on a busy session's long turn? The scale test does not measure it yet, and could beside
+   the other reads.
 
 ## Evidence
 

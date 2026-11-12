@@ -12,8 +12,8 @@ An agent's read that finds nothing past its cursor names, in `next`, what the of
 
 A wake hands an agent what woke it and moves its cursor past that, as section 7 of the architecture says a handover does, so a
 `message_read` right after it finds nothing new and answered `{entries: [], cursor, behind: 0}`. Codex models open a woken turn with
-such a read: in 4 of 6 woken helper turns in live runs 34 to 39, and once, woken by a memo, a worker read `#memo`, got nothing, and
-said there were none ([the real-harness spike](../research/spikes/real-harness.md), section 16 and its lessons). The page was empty;
+such a read: in 4 of 6 woken helper turns in live runs not kept in this repository, and once, woken by a memo, a worker read `#memo`, got nothing, and
+said there were none. The page was empty;
 the channel was not. Claude Code did this in none of 17 woken turns.
 
 ## Proposal
@@ -52,6 +52,6 @@ the channel was not. Claude Code did this in none of 17 woken turns.
   is among.
 - `tests/unit/tools/test_mcp.py`, `test_an_empty_read_after_a_wake_names_what_it_handed_over_as_its_surface_does`, on the `mcp`,
   `mcp__<ns>` and `ph` surfaces.
-- `tests/live/test_reads.py`, live, run 79, on `gpt-6-luna` at low effort, 7 calls: woken by a memo and asked to read `#memo`,
+- `tests/live/test_reads.py`, live, on `gpt-6-luna` at low effort, 7 calls: woken by a memo and asked to read `#memo`,
   the model read, was told `Nothing is new here past what was already handed to you: channel/memo@1`, read again with `after` 0
   as told, and answered with the memo's code word; in its next two woken turns it read with `after` 0 at once. One run.

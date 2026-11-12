@@ -1,16 +1,14 @@
 # RFCs
 
 An RFC (request for comments) is a design document. [architecture.md](../architecture.md) says what the system is.
-These RFCs say why, and what else was on the table. Each one names the alternatives considered and the research or spike
-behind it.
+These RFCs say why, and what else was on the table. Each one names the alternatives considered and the evidence behind
+it.
 
-Until 2026-11-07, RFCs 0001 to 0060 were architecture decision records in `docs/adr`; earlier commits and other repositories
-cite them as ADR NNNN, under the same numbers. Their status tables give only their status and date, and each Summary is
-its old one-line index entry.
+RFCs 0001 to 0060 began as architecture decision records in `docs/adr`; earlier commits cite them as ADR NNNN, under the same
+numbers. Their status tables give only their status and date, and each Summary is its old one-line index entry.
 
 ## Index
 
-Each of RFCs 0001 to 0060 was accepted on 2026-11-02, during Milestone 0, unless its own date says otherwise.
 A status below is the one the RFC gives, with its note and without its date, so the index shows what superseded,
 amended or extended an RFC.
 
@@ -32,7 +30,7 @@ amended or extended an RFC.
 | [0014](0014-swarmchat-compatibility-backend.md) | SwarmChat compatibility backend plus overlay | Accepted |
 | [0015](0015-textual-and-safetext.md) | Textual, a SafeText boundary and a Line API transcript | Accepted |
 | [0016](0016-plan-logins-and-credentials.md) | Plan logins and credentials | Accepted; amended by [RFC 0027](0027-the-browser-on-our-backend.md) |
-| [0017](0017-config-and-entry-points.md) | TOML config, pydantic, and two entry-point groups | Accepted |
+| [0017](0017-config-and-entry-points.md) | TOML config, pydantic, and two entry-point groups | Accepted; amended by [RFC 0081](0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md) |
 | [0018](0018-who-owns-a-process.md) | Who owns a process | Accepted; superseded in part by [RFC 0021](0021-what-a-harness-leaves-behind.md) |
 | [0019](0019-one-link-two-forms.md) | One link, two forms | Accepted |
 | [0020](0020-finish-and-handover-wait-for-the-turn.md) | Finish and handover wait for the turn | Accepted |
@@ -42,23 +40,23 @@ amended or extended an RFC.
 | [0024](0024-a-harness-s-own-agents-are-off.md) | A harness's own agents are off | Accepted |
 | [0025](0025-what-an-agent-is-told-is-a-template.md) | What an agent is told is a template | Accepted; amended, and extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) |
 | [0026](0026-every-act-from-any-terminal.md) | Every act from any terminal | Accepted |
-| [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | Accepted; amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) (drafts) |
-| [0028](0028-acting-from-the-page.md) | Acting from the page | Accepted; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md), [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) and [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) (drafts) |
+| [0027](0027-the-browser-on-our-backend.md) | The browser on our backend | Accepted; amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) and [RFC 0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) |
+| [0028](0028-acting-from-the-page.md) | Acting from the page | Accepted; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md), [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) and [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) |
 | [0029](0029-a-harness-names-our-tools-as-it-shows-them.md) | A harness names our tools as it shows them | Accepted |
-| [0030](0030-openhands-is-an-extra-of-the-sdk.md) | OpenHands is an extra of the SDK | Accepted |
+| [0030](0030-openhands-is-an-extra-of-the-sdk.md) | OpenHands is an extra of the SDK | Accepted; amended by [RFC 0081](0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md) |
 | [0031](0031-a-workspace-is-a-place-git-already-knows.md) | A workspace is a place git already knows | Accepted |
-| [0032](0032-the-runtime-looks-and-never-moves-a-branch.md) | The runtime looks and never moves a branch | Accepted; superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md), extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md), and amended by [RFC 0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) (a draft) |
+| [0032](0032-the-runtime-looks-and-never-moves-a-branch.md) | The runtime looks and never moves a branch | Accepted; superseded in part by [RFC 0038](0038-provenance-is-answered-from-the-record.md), extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md), and amended by [RFC 0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) |
 | [0033](0033-a-harness-s-own-worktrees-are-off.md) | A harness's own worktrees are off | Accepted |
 | [0034](0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md) | Isolation is an extension's, and the runtime's own git runs inside it | Accepted |
 | [0035](0035-the-board-and-the-map-over-messages.md) | The board and the map over messages | Accepted |
 | [0036](0036-one-ref-names-what-a-model-is-shown.md) | One ref names what a model is shown, and a citation is checked and kept as a claim | Accepted; extended by [RFC 0042](0042-agents-are-asked-to-cite-by-their-template.md) and [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) |
 | [0037](0037-an-offer-is-confirmed-only-by-its-harness.md) | An offer is confirmed only by its harness, and the record claims nothing more than it holds | Accepted; extended by [RFC 0040](0040-pi-names-what-landed-and-which-call-made-a-tool-call.md) |
 | [0038](0038-provenance-is-answered-from-the-record.md) | Provenance is answered from the record, one hop at a time, and never as credit | Accepted; extended by [RFC 0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) and [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
-| [0039](0039-estimators-write-beside-the-journal-at-m2.md) | Estimators write rewards and credit beside the journal from M2 | Accepted |
+| [0039](0039-estimators-write-beside-the-journal-at-m2.md) | Estimators write rewards and credit beside the journal | Accepted |
 | [0040](0040-pi-names-what-landed-and-which-call-made-a-tool-call.md) | Pi names what landed and which call made a tool call | Accepted |
 | [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) | A commit cites what informed it by its ref | Accepted |
 | [0042](0042-agents-are-asked-to-cite-by-their-template.md) | Agents are asked to cite by their template, on by default | Accepted |
-| [0043](0043-a-person-follows-provenance-from-where-they-read.md) | A person follows provenance from where they read | Accepted; amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) (a draft) |
+| [0043](0043-a-person-follows-provenance-from-where-they-read.md) | A person follows provenance from where they read | Accepted; amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
 | [0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) | A level is earned on the machine that runs it | Accepted |
 | [0045](0045-an-agent-s-process-is-not-its-identity.md) | An agent's process is not its identity | Accepted |
 | [0046](0046-a-daemon-that-keeps-failing-needs-a-person.md) | A daemon that keeps failing needs a person | Accepted |
@@ -70,32 +68,32 @@ amended or extended an RFC.
 | [0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) | A reward has five statuses, and eligibility is read from the record | Accepted; extended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
 | [0053](0053-a-gateway-admission-launches-sealed.md) | A gateway admission launches sealed | Accepted; amended 2026-11-06 |
 | [0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) | Credit is a producer's annotation, and `propagate@1` is the first | Accepted; superseded in part by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
-| [0055](0055-the-export-is-the-session-as-it-ended.md) | The export is the session as it ended | Accepted; extended by [RFC 0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) (a draft) |
+| [0055](0055-the-export-is-the-session-as-it-ended.md) | The export is the session as it ended | Accepted; extended by [RFC 0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) |
 | [0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) | A runtime test is a person's act, and isolated code never leaves | Accepted |
 | [0057](0057-an-agent-cites-a-commit-by-the-ref-the-journal-gives.md) | An agent cites a commit by the ref the journal gives | Accepted |
 | [0058](0058-a-merge-queue-is-a-queue-and-a-merger-written-out.md) | A merge queue is a queue and a merger, written out | Accepted |
 | [0059](0059-a-parent-hears-of-a-child-s-end-once-its-authority-has.md) | A parent hears of a child's end once its authority has | Accepted |
 | [0060](0060-an-agent-that-does-not-stay-finishes-with-a-turn-that-leaves-nothing-to-come.md) | An agent that does not stay finishes with a turn that leaves nothing to come | Accepted; amended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
-| [0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) | Credit is kept per span, and a span rests on what it took | Accepted; extended by [RFC 0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) (a draft) |
+| [0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) | Credit is kept per span, and a span rests on what it took | Accepted; extended by [RFC 0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) |
 | [0062](0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md) | A child ends cancelled with its parent only for a turn under way | Accepted |
 | [0063](0063-what-an-offer-showed-is-answered-by-its-ref.md) | What an offer showed is answered by its ref | Accepted |
-| [0064](0064-an-act-is-one-form-and-a-read-one-route.md) | A person's act is an op completed by one form, and a pane's read is one route | Draft |
-| [0065](0065-a-diff-is-read-on-request-as-a-test-is-run.md) | A diff is read on request, as a test is run | Draft |
-| [0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) | An approval carries the whole of what it asks | Draft |
-| [0067](0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md) | Who reached whom is counted from the record, kind by kind | Draft |
+| [0064](0064-an-act-is-one-form-and-a-read-one-route.md) | A person's act is an op completed by one form, and a pane's read is one route | Accepted |
+| [0065](0065-a-diff-is-read-on-request-as-a-test-is-run.md) | A diff is read on request, as a test is run | Accepted |
+| [0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) | An approval carries the whole of what it asks | Accepted |
+| [0067](0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md) | Who reached whom is counted from the record, kind by kind | Accepted |
 | [0068](0068-a-program-is-a-script-that-owns-its-session.md) | A program is a script that owns its session | Accepted |
-| [0069](0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md) | Metrics are folds and gauges, and unknown stays unknown | Draft |
-| [0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) | A population gives each worker one outcome, which its program records | Draft |
-| [0071](0071-an-installed-extension-s-op-is-a-command.md) | An installed extension's op is a command | Draft |
-| [0072](0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md) | ACP agents are driven by a first-party extension that names its own check | Draft; open question 1 decided 2026-11-12 |
-| [0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) | An agent's page shows its tool activity and live text outside any chat | Draft |
-| [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Draft |
-| [0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) | An ended agent's folder keeps its record and no scratch or credential | Draft |
+| [0069](0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md) | Metrics are folds and gauges, and unknown stays unknown | Accepted |
+| [0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) | A population gives each worker one outcome, which its program records | Accepted |
+| [0071](0071-an-installed-extension-s-op-is-a-command.md) | An installed extension's op is a command | Accepted |
+| [0072](0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md) | ACP agents are driven by a driver of the SDK's own, and a driver outside it names its own check | Accepted |
+| [0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) | An agent's page shows its tool activity and live text outside any chat | Accepted |
+| [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Accepted |
+| [0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) | An ended agent's folder keeps its record and no scratch or credential | Accepted |
 | [0076](0076-holding-an-agent-is-agent-hold.md) | Holding an agent is `agent hold`, and a takeover drives its terminal | Accepted |
-| [0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) | A look waits only for looks of its own workspace | Draft |
-| [0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) | A span carries the labels of the work it was done for | Draft |
-| [0079](0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md) | A client edits the project's team file in place, from fields made from its schema | Draft |
-| [0080](0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md) | A replay is a read-only copy of a session's record through its playhead | Draft |
+| [0077](0077-a-look-waits-only-for-looks-of-its-own-workspace.md) | A look waits only for looks of its own workspace | Accepted |
+| [0078](0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) | A span carries the labels of the work it was done for | Accepted |
+| [0079](0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md) | A client edits the project's team file in place, from fields made from its schema | Accepted |
+| [0080](0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md) | A replay is a read-only copy of a session's record through its playhead | Accepted |
 | [0081](0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md) | platoon-harness is one distribution, with the command line as its cli extra | Accepted |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
@@ -167,13 +165,9 @@ Draft ──> Accepted ──> Implemented
 A status may carry a note after it, such as superseded by RFC NNNN or amended on a date, with the full note under the
 table.
 
-An Accepted RFC is revised as implementation changes course; once it is Implemented, a changed decision is a new RFC
-that supersedes it, noted in the old one's Status cell.
-
-RFCs 0001 to 0060 stay `Accepted` until an audit marks as `Implemented` each one that describes the code that shipped.
-Until then, [STATUS](../STATUS.md) stands in for their status under this rule: a decision whose code STATUS calls
-implemented, tested or experimental is changed by a new RFC, noted in the old one's Status cell as their notes are, and
-a decision whose code is planned or deferred is revised.
+Accepted RFCs have not been checked one by one against the code; the code and [architecture.md](../architecture.md) are
+authoritative. A decision whose code has shipped changes by a new RFC that supersedes it, noted in the old one's Status cell;
+one whose code has not shipped is revised.
 
 ## Linking an RFC to its implementation
 
@@ -204,7 +198,7 @@ An RFC written before its code includes Rollout plan and Open questions. An RFC 
 rows of the status table; RFCs 0001 to 0060 have only `Status`.
 
 Write why, not what. If the content is a description of the system, it belongs in the architecture. Cite evidence by
-repo-relative link. A decision with no evidence says so. Typed sketches show shape, not final names; the code that lands
-is authoritative. EST marks an estimate and UNVERIFIED a claim nobody has checked yet. Citations of other projects name
-the project, the commit read and a path inside it, as the research notes do, for example
-`platoon@efe3b277c82c:docs/rfcs/0000-template.md`.
+repo-relative link. Evidence the repository does not hold, such as a probe or a review, says so and states what it
+found. A decision with no evidence says so. Typed sketches show shape, not final names; the code that lands is
+authoritative. EST marks an estimate and UNVERIFIED a claim nobody has checked yet. Citations of other projects name the
+project, the commit read and a path inside it, for example `platoon@efe3b277c82c:docs/rfcs/0000-template.md`.

@@ -10,7 +10,7 @@ Ownership is who keeps the process alive. `Session.start` owns, `Session.attach`
 
 ## Motivation
 
-The brief asks for an in-process SDK and a supervised service with the same semantics. A UI disconnect must not kill a service-owned session, and an embedded runtime must have a documented shutdown. Terminal users expect closing a window to leave agents working. A script expects leaving a block to stop what it started. Starting or restarting agents can spend money, so no read may do it.
+An in-process SDK and a supervised service must share one implementation and its semantics. A UI disconnect must not kill a service-owned session, and an embedded runtime must have a documented shutdown. Terminal users expect closing a window to leave agents working. A script expects leaving a block to stop what it started. Starting or restarting agents can spend money, so no read may do it.
 
 ## Proposal
 
@@ -21,7 +21,7 @@ One runtime process runs per live session. It holds `lock` and binds the control
 | Alternative | Why not |
 |---|---|
 | A central daemon and session registry | One more process to upgrade, secure and recover, and a registry that can disagree with the disk. A folder scan plus `flock` answers the same questions |
-| Separate embedded and service implementations | The brief forbids it, and the semantics would diverge |
+| Separate embedded and service implementations | The semantics would diverge |
 | `attach` starts a runtime when the lock is free | Reading history would relaunch agents and could spend money. Recovery must be something you ask for |
 | `Session.open` or `Session(team)` | Neither says that agents start or that leaving stops them, and `Kernel.open` already means a different thing |
 | `embedded()` and `attach()` | `embedded` names a mechanism, not what the caller is doing. `start` and `attach` read as the two things a user does |
@@ -37,5 +37,5 @@ One runtime process runs per live session. It holds `lock` and binds the control
 
 ## Evidence
 
-- [Architecture section 4](../architecture.md), [brief section 3](../spec/BRIEF.md).
-- [journal-performance.md](../research/spikes/journal-performance.md), result 9 on socket paths and the unknown on many sessions in one process. [acp-mcp.md](../research/acp-mcp.md), "What ACP cannot express": the runtime owns the connection, and UIs attach to the runtime.
+- [Architecture section 4](../architecture.md).
+- [RFC 0002](0002-one-journal-per-session.md)'s benchmark: a Python `bind` allows a socket path of 107 bytes on Linux, and many sessions in one process were not measured. Over ACP the runtime owns an agent's connection, and UIs attach to the runtime, not to the agent.

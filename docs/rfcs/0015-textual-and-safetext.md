@@ -37,5 +37,5 @@ The TUI uses Textual, pinned `textual>=8.2,<9` with `rich`, in the CLI package o
 
 ## Evidence
 
-- [tui-expectations.md](../research/tui-expectations.md), bottom line, section 4 (measurements and safety) and section 7.
-- [Research index](../research/README.md), the Textual confirmation under the twelve critical claims. [Architecture sections 12 and 15](../architecture.md).
+- Design-phase research, not published, on Textual 8.2.8 and a real PTY: hostile escapes reached the terminal through every widget tested, `markup=False` among them, as ST-terminated OSC 0, CSI 2J and RIS did through `Static(markup=False)` and `Log`; one crafted string crashed an app in any widget with default markup; appends to a widget-per-message transcript cost 132 ms at 1,000 rows and 729 ms at 5,000, while Line API views held 40 to 50 ms at 400,000 to 1,000,000 rows.
+- [Architecture sections 12 and 15](../architecture.md).

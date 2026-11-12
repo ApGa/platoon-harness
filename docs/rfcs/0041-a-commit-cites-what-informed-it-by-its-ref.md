@@ -13,12 +13,11 @@ An `Informed-By` value that is an event's ref joins the commit's `based_on` once
 A commit declares what it rests on through `Informed-By` trailers ([RFC 0032](0032-the-runtime-looks-and-never-moves-a-branch.md)),
 and until now only a value naming a commit resolved: a commit's record cited the record of each commit its hex values named, and
 kept anything else as written and unresolved. So the walk back from code stopped at code. The board entry a commit implements, the
-message that asked for it, or the task it closes could be named in a trailer and reach nothing, and the owner wants credit for an
-outcome to reach the messages that informed it.
+message that asked for it, or the task it closes could be named in a trailer and reach nothing, though credit for an outcome
+should reach the messages that informed it.
 
-The design's owner question 7 asked whether a trailer should also take an event's ref, through the same check as `based_on`. The
-owner approved the stage's recommendations, which state the decision as: a trailer also takes an event ref, "checked as based_on is
-(it exists, and the commit's maker could read it)", recorded on `repo.committed` as a declared citation beside the resolved commits,
+So a trailer also takes an event's ref, through the same check as `based_on`: it exists, and the commit's maker could read it. It
+is recorded on `repo.committed` as a declared citation beside the resolved commits,
 and a value that is neither stays unresolved.
 
 A trailer is not written through our ops. It is text in a commit, which git carries between clones, sessions and years: a commit
@@ -44,7 +43,7 @@ An event's ref means something only in the session that wrote it.
 
 | Alternative | Why not |
 |---|---|
-| Citing any existing event, and leaving whether the maker could read it to exposure, as `based_on` does | The first build did this. A commit made in another clone, or a year before the session, then cited this session's unrelated event of the same ref, and contributors credited its maker; and the owner's decision names the check. `based_on` is written by its citer in the session, and a trailer may come from anywhere |
+| Citing any existing event, and leaving whether the maker could read it to exposure, as `based_on` does | The first build did this. A commit made in another clone, or a year before the session, then cited this session's unrelated event of the same ref, and contributors credited its maker; and the decision names the check. `based_on` is written by its citer in the session, and a trailer may come from anywhere |
 | Resolving only a commit whose committer time is not before the session opened | It needs a time the record does not keep, and a cherry-pick or a rebase takes a new committer time, so it would still let an old trailer in. A commit an agent's workspace made, of an event that agent could read, is the condition the record can state |
 | A gate on the maker's grants for the cited stream | A per-stream table of reader ops, which the design rejected for `based_on` |
 | A trailer of its own name for event refs | Two ways to declare what a commit rests on |

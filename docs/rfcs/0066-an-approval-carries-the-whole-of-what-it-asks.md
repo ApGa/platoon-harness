@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Accepted, 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`primitives/reports.py`](../../packages/sdk/src/platoon_harness/primitives/reports.py), [`primitives/approvals.py`](../../packages/sdk/src/platoon_harness/primitives/approvals.py), [`runtime/host.py`](../../packages/sdk/src/platoon_harness/runtime/host.py), [`testing/conformance.py`](../../packages/sdk/src/platoon_harness/testing/conformance.py), [architecture section 7](../architecture.md#approvals) and [section 9](../architecture.md#9-drivers), [RFC 0008](0008-driver-contract-and-wire.md) and [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) |
-| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository |
+| Discussion | Decided by the maintainers on 2026-11-12 |
 | Implementation | `feat: Carry an approval's whole ask as a body, redacted and bounded`, `feat: Send the whole ask from Claude Code, Codex, pi and OpenHands approvals`, `feat: Join a Codex file change approval to the patch of the item it names` and `feat: Check in check_driver that an approval shows its whole ask`; step 2, `feat: Open an approval's whole ask from the dock before answering it`, `feat: Draw an approval and who answered it in its agent's transcript` and `feat: Show an approval card's whole ask in the page` |
 
 ## Summary
@@ -32,8 +32,8 @@ An approval says what it asks in its gist alone, at most 280 characters. A perso
   method's name, `item/fileChange/requestApproval`
   ([`drivers/codex.py`](../../packages/sdk/src/platoon_harness/drivers/codex.py)). A person allows a patch they cannot see.
 
-The terminal's dock and the page's card show that gist and Allow and Deny, and nothing else. Milestone 4's definition of done asks
-that both clients show the whole ask before Allow or Deny, which needs the ask in the record first.
+The terminal's dock and the page's card show that gist and Allow and Deny, and nothing else. Both clients must show
+the whole ask before Allow or Deny, which needs the ask in the record first.
 
 ## Proposal
 
@@ -130,8 +130,8 @@ does. The ground truth is the command the check has the model ask to run. A fail
 
 `body` and `cut` are optional fields of the `approval.requested` frame within protocol 2. A program that leaves them out still
 asks, with its ask unknown, and its frames are read as before, but it fails `approval_shows_its_ask`, so it is not `operational`
-until it sends the ask, as one that loses a denial is not. Nothing is released yet, so no runtime that refuses the fields exists
-outside this repository.
+until it sends the ask, as one that loses a denial is not. Nothing was released before them, so no runtime that refuses the fields
+exists.
 
 ### 8. Both clients show it
 
@@ -177,7 +177,7 @@ attention row's `since_seq` or the card's line, as the first event of its stream
 | Codex: every request's params as JSON, a command's too | A person reads a command as the shell runs it, and JSON escapes its quotes |
 | Codex: the patch from `turn/diff/updated` | That is the whole turn's diff, not the item's, and it is said after the item starts |
 | A new protocol number | The fields are optional, so a program written before them is unchanged, and none has been released |
-| Scopes, a denial with feedback, or permission modes | No harness's honouring of them is verified, so milestone 4 adds none, which is the default pending the owner's ruling |
+| Scopes, a denial with feedback, or permission modes | No harness's honouring of them is verified, so none is added |
 
 ## Consequences
 
@@ -197,14 +197,12 @@ attention row's `since_seq` or the card's line, as the first event of its stream
 
 ## Open questions
 
-1. Should approvals gain scopes, a denial with feedback, or permission modes? M1 builds the default, pending the owner's ruling:
-   none in milestone 4, as no harness's honouring of them is verified, and the whole ask is shown before anyone answers. Any of
-   them would change what an answer carries, not what a request asks, so it would remove nothing M1 builds. Needed before
-   milestone 4 closes.
-2. Should `approval_shows_its_ask` count toward `operational`? M1 counts it, beside `approval_answered` and `denial_holds`, which
-   milestone 4's plan did not say: a driver whose approvals hide what they ask, or a wire program that sends no body, is then not
-   `operational`. A result kept before the check existed lacks it, and is not taken as failing it. Needed before this RFC is
-   accepted.
+1. Open: should approvals gain scopes, a denial with feedback, or permission modes? Today they have none, as no harness's
+   honouring of them is verified, and the whole ask is shown before anyone answers. Any of them would change what an answer
+   carries, not what a request asks, so it would remove nothing M1 builds.
+2. Should `approval_shows_its_ask` count toward `operational`? Decided with this RFC: it counts, beside `approval_answered` and
+   `denial_holds`, so a driver whose approvals hide what they ask, or a wire program that sends no body, is not `operational`. A
+   result kept before the check existed lacks it, and is not taken as failing it.
 
 ## Evidence
 

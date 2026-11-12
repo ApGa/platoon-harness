@@ -21,15 +21,13 @@ nothing else: the runtime kept every agent alike, and only `agent.finish`, a can
 one. An agent that does not stay is told to make `agent.finish` its last call. One that ended a turn without it was left idle, with
 its process and its conversation, for a next message that nothing in its instructions had it wait for.
 
-The first GPU run of a team on OpenHands showed what that costs where no person will ever enter. Platoon's bridge started a
-trainable session of one role with `stays = false` and waited on `Session.settled()` with no bound. The root spawned a child and
-placed a `wait` on its end, with a timeout of 20 minutes. The child did its work and reported, and never called `agent.finish`, so it
-stayed live and idle. The root woke on that report, reasoned, ended its turn without finishing, and parked again on the same wait.
-From then nothing could move: no open turn, nothing to hand over, no effect. The session was settled and short of its `until`, every
-agent of that role ended, and not stalled, as the wait's timeout was still to come. It sat for 19 minutes, until the run's graceful
-stop, 18 seconds before that timeout. Had it come, the root would have woken, ended its turn as before, and the session would have
-said stalled and ended `needs_human`: no better for a rollout, and with no end for either agent, so none of their calls could train.
-A run on pi showed one step of 54 minutes, likely the same.
+That costs most where no person will ever enter. Take a trainable session of one role with `stays = false` on OpenHands, whose
+training system waits on `Session.settled()` with no bound. The root spawns a child and places a `wait` on its end, with a timeout
+of 20 minutes. The child does its work and reports, and never calls `agent.finish`, so it stays live and idle. The root wakes on
+that report, reasons, ends its turn without finishing, and parks again on the same wait. From then nothing can move: no open turn,
+nothing to hand over, no effect. The session is settled and short of its `until`, every agent of that role ended, and not stalled,
+as the wait's timeout is still to come. When it comes, the root wakes, ends its turn as before, and the session says stalled and
+ends `needs_human`: no better for a rollout, and with no end for either agent, so none of their calls can train.
 
 The stalled check was right: it waits for what is scheduled, and says so once nothing is. An agent left idle can still be messaged,
 so nothing about it is settled for good until it ends. What was wrong was leaving it idle: an agent told to finish, whose turn has
@@ -98,7 +96,7 @@ stopped with nothing more to come for it, has said all it will.
 
 ## Evidence
 
-- The session from that run, kept outside the repository, and its rebuild on ScriptedDriver,
+- That session rebuilt on ScriptedDriver,
   [tests/unit/runtime/test_session.py](../../tests/unit/runtime/test_session.py),
   `test_a_tree_that_does_not_stay_settles_once_its_child_reports_without_finishing`, which on the code before this record sits,
   settled, not done and not stalled, with the root parked on its idle child, until the test gives up. Beside it,

@@ -13,7 +13,7 @@ Seven methods, JSON-RPC on stdio, OpenHands as a wire worker
 
 ## Motivation
 
-Harnesses differ in control path, boundaries, approvals and what they reveal. The brief requires a mix of them, a documented custom-driver protocol and a conformance suite. One target, OpenHands, cannot live in a shared environment at all. So the contract must be small enough to implement in any language, and real enough that a first-party driver uses it.
+Harnesses differ in control path, boundaries, approvals and what they reveal. A team needs a mix of them, and a driver of one's own needs a documented protocol and a conformance suite. One target, OpenHands, cannot live in a shared environment at all. So the contract must be small enough to implement in any language, and real enough that a first-party driver uses it.
 
 ## Proposal
 
@@ -40,5 +40,5 @@ A driver has seven methods: `describe`, `start`, `deliver`, `interrupt`, `answer
 
 ## Evidence
 
-- [acp-mcp.md](../research/acp-mcp.md), "What ACP cannot express" and the resolver probes in section 5.
-- [Research index](../research/README.md), claim 12 and new finding 1. [adapter-openhands.md](../research/adapter-openhands.md), [adapter-codex.md](../research/adapter-codex.md), [adapter-claude-code.md](../research/adapter-claude-code.md), [adapter-others.md](../research/adapter-others.md). [Architecture section 9](../architecture.md), [brief section 4](../spec/BRIEF.md).
+- What ACP cannot express: no mid-turn message, no sender identity, no idempotent prompt and no model-call attribution in stable v1.
+- Design-phase research, not published, with `uv pip compile`: `openhands-sdk` 1.59.0 cannot share an environment with `mcp` 2.3.0 or ACP 1.0.0rc3, and unpinned it resolves silently to older versions. Most harnesses hide MCP tools from the model by default, so a check must see the tool in the first model request. [compatibility.md](../reference/compatibility.md) holds what each harness does. [Architecture section 9](../architecture.md).

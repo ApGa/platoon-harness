@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-04; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md), [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) and [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) (drafts) |
+| Status | Accepted, 2026-11-04; amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md), [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) and [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) |
 
 **Amended by [RFC 0043](0043-a-person-follows-provenance-from-where-they-read.md)**: Provenance among a
 message's actions is built, and opens a pane.
 
-**Amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)**, a draft: Needs you reads `x_read`'s `attention` pane, which a view link reaches, so a view link
+**Amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md)**: Needs you reads `x_read`'s `attention` pane, which a view link reaches, so a view link
 and history show where the person must act, each action disabled, saying why; `/x/command` is sent no read.
 
-**Amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md)**, a draft: Tool
+**Amended by [RFC 0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md)**: Tool
 activity on an agent's page is built, and opens a pane of its tool calls and its live text.
 
 ## Summary
@@ -44,7 +44,7 @@ request can reach `web` and its answer never reach the page.
 - **A reply cites an entry.** Reply opens the message's thread with a composer that sends `reply_to`, the message's journal
   ref. What a harness said in its turn is no entry a reply can cite, so its Reply is disabled, saying so.
 - **What is not built is drawn.** Tool activity and Review changes on an agent's page and Provenance among a message's
-  actions are disabled, saying why, beside the layouts RFC 0027 disabled, so nothing the brief asks the page for is
+  actions are disabled, saying why, beside the layouts RFC 0027 disabled, so nothing a person looks for on the page is
   missing without a word. Links of either kind are made from the person's own page, through `/x/link`.
 - **What the page draws, the page says.** Each agent's status stands beside its name in the people list, where SwarmChat
   draws someone's first field, and seeing as anyone but an agent is drawn disabled, as the person's page already did.
@@ -70,4 +70,4 @@ request can reach `web` and its answer never reach the page.
 
 - `tests/e2e/test_acts.py`, `test_guards.py`, `test_follow.py` and `test_harnesses.py`, in Chromium's headless shell.
 - `tests/unit/web/test_server.py`, `test_a_message_too_long_for_a_gist_is_cut_as_the_terminal_cuts_it`.
-- `tests/live/test_web.py`, live run 58, on a Claude Code lead and a Codex worker: see STATUS.
+- `tests/live/test_web.py`, live, on a Claude Code lead and a Codex worker: see STATUS.

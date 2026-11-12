@@ -136,4 +136,4 @@ end. Building it showed the design wrong in a few details, each changed below in
   its probe names, committed, left a process in a session of its own, set a git filter the look then ran, and called our tools.
 - `tests/unit/drivers/test_boundaries.py`, `test_nothing_but_a_team_that_names_it_loads_bwrap`.
 - On the host it ran on, a socket file on a read-only mount and an abstract socket were both reached from inside, and a write to a
-  separate Lustre mount was refused.
+  separate network filesystem's mount was refused.

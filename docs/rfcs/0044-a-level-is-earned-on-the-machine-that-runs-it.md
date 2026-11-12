@@ -14,8 +14,8 @@
 pinned to the driver and the harness version proves them ([RFC 0008](0008-driver-contract-and-wire.md)). The host passed it no
 result, so every live agent read `unverified`, whatever the slow suites had proved of its binary. And `operational` needs
 `stop_ends_a_running_tool` and `runs_in_its_workspace`, which skip without a way to make a harness run its shell, so the scripted
-harness and a wire program, the custom-driver path drivers.md teaches, could never earn it. The owner chose where a result comes
-from: made on the user's machine, by `doctor`, against FakeModel, checking the binary that runs.
+harness and a wire program, the custom-driver path drivers.md teaches, could never earn it. So a result comes from the user's
+machine: made by `doctor`, against FakeModel, checking the binary that runs.
 
 ## Proposal
 
@@ -90,4 +90,5 @@ from: made on the user's machine, by `doctor`, against FakeModel, checking the b
 - `tests/integration/test_claude.py` and `test_pi.py`, slow: each driver's conformance through `check_harness`, kept, and read by a
   session on the real binary, Claude Code 2.1.316 and pi 1.5.0, whose agent's `operational` is met. `test_codex.py` and
   `test_openhands.py` do the same and have not passed on the machine this was built on, where Codex's shell does not run and
-  OpenHands' conformance times out; they wait for a compute node.
+  OpenHands' conformance times out, and have passed elsewhere since
+  ([compatibility.md](../reference/compatibility.md#driver-status)).

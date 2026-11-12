@@ -10,7 +10,7 @@ Upstream's page and our projection, one way, plus an overlay. Upstream's server 
 
 ## Motivation
 
-The brief asks for SwarmChat as a real second client, not a log dump, with the journal authoritative and no second scheduler. SwarmChat's viewer is read-only by design, and its server is a separate durable store with its own ids, order and times. Its messages have no idempotency key, no metadata, no caller-chosen ids and no caller-chosen timestamps. Its CSP stops the page from reaching a separate ingress.
+SwarmChat must be a real second client, not a log dump, with the journal authoritative and no second scheduler. SwarmChat's viewer is read-only by design, and its server is a separate durable store with its own ids, order and times. Its messages have no idempotency key, no metadata, no caller-chosen ids and no caller-chosen timestamps. Its CSP stops the page from reaching a separate ingress.
 
 ## Proposal
 
@@ -35,5 +35,5 @@ Upstream's server never runs. A follower folds the journal into its own rebuilda
 
 ## Evidence
 
-- [swarmchat.md](../research/swarmchat.md): verdict, section 4 (options and wire contract), probes, risks.
-- [Research index](../research/README.md), claim 9. [Architecture section 12](../architecture.md), [brief section 9](../spec/BRIEF.md).
+- Design-phase research, not published, on SwarmChat 0.1.0's real server: eight mutating requests with a view token gave 401, browsing changed no files, and the same `send` twice made two messages, ignoring a supplied `id`, `at` and `metadata`. A foreign `Origin` and `Host` were accepted.
+- [Architecture section 12](../architecture.md).
