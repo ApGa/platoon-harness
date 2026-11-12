@@ -205,9 +205,8 @@ can both be watched. Leaving only disconnects.
 
 Agents work at once, and wait for each other only where they share a thing. Across agents:
 
-- **A real harness is a process of its own,** so agents' harnesses run their own tools, a shell or an edit, at once. On Claude
-  Code 2.1.319, Codex 0.167.0, pi 1.5.0 and OpenHands SDK 1.59.0 against FakeModel, three agents' shell calls each ended only once
-  all three were running: `test_several_agents_run_their_shell_tools_at_once`, in each harness's file under `tests/integration/`.
+- **A real harness is a process of its own,** so agents' harnesses run their own tools, a shell or an edit, at once. On each of
+  the four real harnesses against FakeModel, three agents' shell calls each ended only once all three were running: `test_several_agents_run_their_shell_tools_at_once`, in each harness's file under `tests/integration/`.
   Each asks its model itself, and no test holds agents' model calls at once. `ScriptedDriver` has no process of its own: its
   steps run on the runtime's event loop, and hold up everything on it for as long as one runs without waiting.
 - **The tool server takes each request on a connection and a task of its own,** up to 1,024 connections at once, past which it
@@ -852,7 +851,7 @@ on(stream, types=..., n=1, distinct=None)   # join, wait-any, version watch and 
   its turn ends, not at the call, because a harness can batch `wait` with sibling tools. When the condition holds, the runtime
   starts the next turn with its delivery attached. If the model keeps working, the wait stays open and nothing breaks.
 - **The wait lives in the service.** A wake never depends on the model having seen the tool result, because an interrupted
-  harness can replace that result. Parking was clean in 10 of 10 trials across Claude Code and Codex with the tool visible.
+  harness can replace that result.
 - **`hold`** keeps the call open below the driver's `tool_timeout_s`. On expiry it returns `pending`; the agent may call again,
   and each stream resumes from its own cursor, so nothing is counted twice. It answers `released` only while no stop of a child of
   the agent's is under way (Lifecycle, below). A one-shot driver cannot park, so `wait` beyond `hold` is refused `unsupported` with
@@ -1231,7 +1230,7 @@ levels, as `resumed` when it comes from a resumed harness, which leaves the agen
 
 Another process or language speaks line-delimited JSON-RPC 2.0 on stdio, split on LF only, logs on stderr. `WireDriver(command)`
 is the only adapter, verbs equal the Python methods, and `protocol` is an integer refused when unknown. OpenHands runs this
-way, a worker per agent from the SDK's `openhands` extra on the runtime's own interpreter, finding its modules where the
+way, a worker per agent from the `openhands` extra on the runtime's own interpreter, finding its modules where the
 runtime does, as the session's one writer is no place for a library that takes seconds and some 200 MB to load, keeps one
 registry of agents a process, holds its lock while a tool runs and starts processes a group must own. So the custom-driver
 path is real and exercised, and where OpenHands' pins cannot share an environment, the worker runs from one of its own as a
@@ -1345,7 +1344,7 @@ for it.
 | `claude` | `claude -p` stream-json plus control protocol, stdin held open | The user's own setup, with ours beside it: HTTP MCP inline with `alwaysLoad`, naming the token's variable so that no file holds it, and no `--setting-sources`, no `--strict-mcp-config`. `--permission-prompt-tool stdio --permission-mode default` is the one launch path, as a user's `defaultMode` would answer first, and the runtime applies the approval policy to every request; `AskUserQuestion`, which that prompt tool brings in and no verdict can answer, is disallowed, and so are `EnterWorktree` and `ExitWorktree`, which would move the agent out of its workspace, always ([RFC 0033](rfcs/0033-a-harness-s-own-worktrees-are-off.md)), and `Agent`, `Workflow`, `ListAgents` and `SendMessage`, which start or reach the harness's own agents, unless a role allows them; a role's budget is what limits it, so no `--max-turns`. `uuid` on every input, and `command_lifecycle` says what landed where; an interrupt passes `cancel_queued`, as the runtime offers again what never landed, and the harness would otherwise begin a turn on it by itself; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, since a result is not a turn end while background tasks run, and it keeps a native child inside the tool call that started it, so an open turn covers it and `child.seen` needs no end; exit 1 after our own interrupt is normal. `get_settings` says the effective model before any model call, and `mcp_status` that our server failed, which fails the start. Its `toolUseId` equals the model's tool id. Never `ANTHROPIC_BASE_URL` without a gateway credential |
 | `codex` | `codex app-server` over stdio, no `experimentalApi` | The user's own setup, with ours beside it: `thread/start.config` overlays it for one thread, the same fields again on `thread/resume`, where a thread keeps the instructions and the setting of its own agents it began with, and what that overlay would replace, `developer_instructions` and `shell_environment_policy.exclude`, is read from `config/read` and kept. `approvalPolicy: "on-request"`, so every approval it asks for comes to the runtime, and `approvalsReviewer: "user"`, as user config can send them elsewhere. `agents.enabled = false` in that overlay, unless a role allows them, takes away both generations of the tools for its own agents, where `features.multi_agent` takes only the first. MCP with `default_tools_approval_mode: "approve"`, `required: true` and `omit_tools_from: ["deferred"]`, or the model must find our tools by writing a filter, and sometimes misses; `shell_environment_policy.exclude` names the token variable, or it reaches the agent shell. A thread whose `thread/start` or `thread/resume` names a `cwd` other than `spec.cwd` is refused. Under `workspace-write` and `read-only` its sandbox keeps `.git` read-only, so a commit outside the session's checkout waits on an approval, and `team check` names the three postures. `turn/start` is one way in: it steers a turn under way and otherwise begins one. `turn/interrupt` stops one thread, so the driver walks its children. A turn ends with the last thread at work, since a child can outlive its parent's turn, so an open turn covers it and `child.seen` needs no end. `item/completed` is truth. A file change asks with the patch of the item its `itemId` names, which Codex starts before it asks, as its request names no patch, and a command with its command, each after a line for each of `reason`, `cwd`, `networkApprovalContext` and `grantRoot` the request gives. `callId` joins to the `exec` script, not to a model call. `ph` is blocked by the default sandbox, so MCP is the path. Access by key is a provider of the agent's own, so no saved login pays: `-c` names it as the app-server starts, as from 0.167.0 a thread runs on no other, and the thread gives it its URL, as argv names no secret |
 | `pi` | `pi --mode rpc` | The user's own setup, with ours beside it: pi keeps its own agent directory, so their login, settings and extensions stay theirs, and one extension loaded with `-e` adds our tools through the stdio shim, `exposure: direct`, with the timeout `tool_timeout_s` says, and our instructions as a section of their own, since `--append-system-prompt` replaces the user's `APPEND_SYSTEM.md`. A provider of the agent's own is how access by URL arrives, so no saved login pays. `prompt` with a `streamingBehavior` is one way in: it begins a turn or queues in one, and the id goes in the text, as `reconcile` finds it in `get_entries`. A provider with no login is refused at start, as only a prompt would say so. `agent_settled` is `turn.ended`. What an interrupt leaves in pi's queue no run takes, so it is cleared. `gated` approvals through that extension, and no boundary. An input is said to land under the id of the entry pi wrote it down as, which `get_entries` names from the last entry seen once its message has ended, and what pi says after it waits behind it, so the reports keep pi's order. The extension puts pi's own id for a call of ours among its arguments as `_meta`, which the shim moves to where MCP keeps it, so the call's op goes under `pi/toolCallId`, which its tool item holds. `message_end` gives `model.call`, with `responseId`, which is the response's own id. `compaction_end` gives a `model.call` of purpose `compaction`, one by each id our extension kept or one with none for pi's own, and `forgotten` from `get_entries`. Our extension says, as a status `ready` waits for, which tools pi declares once ours have connected, as pi says nothing when a server's tools arrive. Sealed, on a gateway: a context window stated that no context reaches, as pi takes one unstated as none and would compact after every turn, an agent directory of its own, `PI_CODING_AGENT_DIR` in the agent's folder, whose settings retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve` and `--offline`, and the environment's server beside ours; our extension takes `session_before_compact` and runs pi's own `compact` with the gateway's compaction headers and a stream function that keeps each of its one or two calls' ids, which reach the driver in the details pi keeps of the compaction |
-| `openhands` | Wire worker on SDK `arun()`, from the SDK's `openhands` extra | A key from the role's auth profile, as OpenHands keeps no login, the shell's proxies, and no retries, as a retry is a call a gateway records twice. OpenHands' coding tools, its terminal in a subprocess, and ours through the stdio shim, shown `bare`; a start with none of ours fails, as the SDK only warns. Boundary is a model call: the request that carried a delivery, read from the SDK's completion log, never from event order. Every action but ours and a lone `finish` or `think` asks, one approval a step. A delivery goes to the conversation only between runs with no action pending, since one during a step's model call has the SDK reject what the step asks, unasked; one that comes during a run pauses it after its step, and a turn leaves no action pending. `llm_response_id` gives `model.call`, with the SDK's per-call usage; `Condensation` gives `compacted{forgotten}`. Its own agents are off unless allowed, and then unseen, a gap, with their steps asking the runtime, and an interrupt stops one at its next ask. An action a crash left with no result is rejected on resume, as the SDK would run it again. Its condenser's calls are reported as `compaction`. Sealed, on a gateway: none of its coding tools, so ours and the environment's beside its own `finish` and `think`, which act on nothing; the environment's tools come from an MCP client of their own, as the SDK's client of two servers would name ours by their server too, and are each named `environment_<tool>`, as that client names a server's tools, so none collides with `finish` or `think`; no project instructions; and a condenser whose LLM sends the gateway's compaction headers as `extra_headers` |
+| `openhands` | Wire worker on SDK `arun()`, from the `openhands` extra | A key from the role's auth profile, as OpenHands keeps no login, the shell's proxies, and no retries, as a retry is a call a gateway records twice. OpenHands' coding tools, its terminal in a subprocess, and ours through the stdio shim, shown `bare`; a start with none of ours fails, as the SDK only warns. Boundary is a model call: the request that carried a delivery, read from the SDK's completion log, never from event order. Every action but ours and a lone `finish` or `think` asks, one approval a step. A delivery goes to the conversation only between runs with no action pending, since one during a step's model call has the SDK reject what the step asks, unasked; one that comes during a run pauses it after its step, and a turn leaves no action pending. `llm_response_id` gives `model.call`, with the SDK's per-call usage; `Condensation` gives `compacted{forgotten}`. Its own agents are off unless allowed, and then unseen, a gap, with their steps asking the runtime, and an interrupt stops one at its next ask. An action a crash left with no result is rejected on resume, as the SDK would run it again. Its condenser's calls are reported as `compaction`. Sealed, on a gateway: none of its coding tools, so ours and the environment's beside its own `finish` and `think`, which act on nothing; the environment's tools come from an MCP client of their own, as the SDK's client of two servers would name ours by their server too, and are each named `environment_<tool>`, as that client names a server's tools, so none collides with `finish` or `think`; no project instructions; and a condenser whose LLM sends the gateway's compaction headers as `extra_headers` |
 | ACP agents, `opencode` among them | `AcpDriver(command)`, a driver of the SDK's own, protocol 1 over the SDK's own `Peer`, `fs` and `terminal` false | Turn boundary only: a delivery during a turn waits to go as the next prompt, and any other boundary is refused until a fixture shows an agent taking one. An update nothing maps keeps its raw frame, as the peer read it, with a gap. A permission request is an approval whose whole ask is the tool call it names, as last updated, answered by the option of its kind for this once and never `always`, and `cancelled` where there is none, which runs nothing, so an allow fails, saying so. A change of mode or option once the session is ready keeps its raw frame with a gap, as `ready` named the model. Stable ACP neither shows an agent's own agents nor turns them off, so a role on it must allow them. Our tools are one HTTP MCP server, instructions are `systemPrompt` where the agent offers it and else go before the first prompt, and the model is the session's config option of category `model`. No model call and no spend are said, so it is never trainable. `opencode` refuses an unset model, as OpenCode then uses a hosted one, and has not run; a probe of 2.2.5 saw an MCP server ACP gave it reach the model behind Code Mode ([RFC 0072](rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md)) |
 
 ## 10. Tool plane
@@ -1569,17 +1568,13 @@ through a shell, a file or git makes an answer `Unknown`, a read's `Seen` means 
 `callId` to the Code Mode script that made the call, and words an agent copied into another entry show only in that entry's
 lineage.
 
-**Where a person reads them.** The terminal's `/provenance`, on the chosen line of a transcript, and the browser's Provenance pane, on
-a message, show one event at a time, in words `platoon_harness_cli.provenance` makes once for both: Sources, Uses, Contributors, and
-Credit and rewards. A line that carries another event's words opens on that event. Each link is labelled by the kind it is known by
-and followed into its own event, a hop at a time; each answer says its head, where it stops counting, whether its turn was open and
-what its page left out, naming the command that reads on; and why a link opens nothing is said in its place. A harness's report of
-a tool item names the call its report names and opens what each command of its agent's under that item's id made. What an answer
-does not hold below its bound is said as not held there, never as never. Credit is shown only as each estimator's statement, by
-producer, version and params, never summed, and on a model call beside the span the call lies in, read from `spans`: a row on the
-call that names a span is said to be the whole span's, with its first call, its turn and its writes, an ended turn of one span
-says why nothing cut it, and a turn under way says what a later call or report can still change of its spans. A ref a message's text names, found by one pattern for both, is a link that opens that ref's own
-provenance, saying it was opened from text, which records no link. See
+**Where a person reads them.** The terminal's `/provenance` and the browser's Provenance pane show one event at a time, in words
+`platoon_harness_cli.provenance` makes once for both: Sources, Uses, Contributors, and Credit and rewards. Each link is labelled by
+the kind it is known by and followed into its own event, a hop at a time; each answer says its head, where it stops counting,
+whether its turn was open and what its page left out; and why a link opens nothing is said in its place. What an answer does not
+hold below its bound is said as not held there, never as never. Credit is shown only as each estimator's statement, by producer,
+version and params, never summed, and on a model call beside the span the call lies in, read from `spans`. A ref a message's text
+names opens that ref's own provenance, saying it was opened from text, which records no link. See
 [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md).
 
 **Annotations** attach to immutable events the way `git notes` attach to commits, in `annotations.sqlite`:
@@ -1783,113 +1778,65 @@ while its sender takes one, until it ends; a dead task offers to add it again, c
 that keeps failing say in their gist what settles them; and a failure of no agent's says that nothing tries it again, and stands
 ([RFC 0064](rfcs/0064-an-act-is-one-form-and-a-read-one-route.md)).
 
-- **TUI.** Textual, in the CLI package, which `platoon-harness` opens on a terminal and a headless command never imports. It starts a
-  session on a detached runtime and is its guest. One coalescer between the journal and widgets draws at most 15 frames a second,
-  dropping frames and never events: a reader with a frame's worth waiting waits for the next, which is how a slow screen is handled.
-  Its timers decide nothing: one paces frames, one looks for a runtime to attach to while it shows history, and one moves the
-  logo's agents and the navigator's glyphs a few frames a second from the roster's state alone, never on history, drawing only the
-  rows whose frame changed. The transcript is on the Line API, a window of at most 10,000 lines read from the journal a page at a
-  time as the person scrolls, either way, and drawn through an LRU of strips keyed by width. What an agent did in a turn besides
-  what it said, its calls, patches, thoughts and spawns, is that turn's fold, one line that counts it, failures and what ended
-  unknown among it, and opens on each step, which opens on its whole; a message's line comes open on its body as it comes, since
-  that body is what it says, read with the other bodies its page draws open, so the page is laid out once; a line or a fold
-  that opens or closes lays out its own lines alone. An agent's reads its own streams, every `agent/*`, so a child of its needs no
-  name to be drawn, and every `approval/*`, as an approval's id is its harness's, so its approvals and who answered them are
-  drawn, a read for each glob, kept to what every read covered. A child's spawn is drawn under the call that made it, the
-  tool item of its spawner's whose `native_id` its anchor holds, whichever of the two came first, by the join in `calls.py`,
-  which the page's Tool activity shares, and a call leaves the window with the spawns under it. A spawn that joins no
-  call the transcript holds is drawn where the journal has it, saying it joins no known call. An agent's turns are drawn
-  cut where `spans` says, read as the agent is shown and again as each of its turns ends: a cut stands at the first call
-  of the span after it and shows the last call of the span it ends, whose provenance says its credit row is the whole
-  span's, and is drawn once the window holds both calls.
-  Live text follows below it, one tail for the agent in view,
-  which goes with the runtime that said it. Unread counts, of lines the person did not write, and read mentions come from the
-  person's marks. Untrusted text crosses one `SafeText` boundary, and a lint bans handing a label-like widget anything not
-  visibly `Content`. Approvals never take focus: the dock gets it only from the person's Tab, with no place chosen, and only the
-  person moves its cursor, and an approval's whole ask opens from it, read by its body's ref, before anyone answers it, as the
-  page's card opens it. Every act also takes only keys every terminal delivers, a typed command in the composer or a plain key
-  where nothing is typed, so a chord is a shortcut and never the only way, and no chord decides, stops or spends anything, since
-  a terminal sends Alt and a letter as Esc then that letter. `p` with the transcript in focus opens the chosen line's
-  provenance in a panel, Enter following a link and Esc going back one hop, so it takes no chord, and `/provenance` its
-  form, filled in with that line's ref, which takes any other, as the page's pane takes a ref in its field. `/reached` opens
-  the panel on who reached whom, the first page of `interactions` in the words both clients share: each pair a heading over a
-  line for each kind of edge it holds and one for its unconfirmed offers, each opening the event that holds the first of
-  them, and each agent's unknowns. `/find`, or Ctrl+F, a shortcut that decides nothing, takes words through a form and chooses
-  the line before the chosen one whose words hold them, reading back a page at a time within the window, as scrolling up does.
-  `/thread` shows the thread of the chosen line's message as a focus, every message sent in it on any inbox or channel, and
-  the composer replies to that message where the page's Reply sends one. `/copy` sends the chosen line's text as OSC 52, each
-  control shown as its escape, and the terminal decides whether it reaches the clipboard. `/tasks`, on a
-  queue's or a board's focus, lists its tasks or its entries with every version, in the words of `channels.py`, read from
-  `task.list` or `board.query` again only for a frame that holds an event on one of their streams, or for a queue an agent's
-  end, which gives back each task it held, so no timer of the client's decides anything, and each act opens its op's form
-  filled in with what its line knows. `e` on the sessions screen opens the team editor on the project's team file, drawn
-  from the fields `team_editor.py` makes, a row each, each problem the loader and `team check` find under its field, beside
-  `team show`'s sentences and the diff a save makes, in the words the page's editor says; each change is checked as it is
-  made, a save asks first what only trust may take, in the page's question, and Start saves first, then opens the screen's
-  own start. A field typed in whose value holds a control a terminal would act on is not changed there, saying why, as its
-  form would draw that control itself ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md)).
-  `attach SESSION --replay`, or `R` on the sessions screen, opens a replay of a session, drawn as the session
-  is, under a banner saying it is one, with its controls on plain keys where nothing is typed and as typed commands, as
-  Replays below says. [tui.md](how-to/tui.md) is its guide.
-- **Replays.** `Replay`, in the SDK, is a read-only copy of a session, whose journal is the original's through a
-  playhead, made by `Kernel.copy` under the root in `replays/`, never in the session's folder, with what estimators had
-  said and the manifest beside it; its `session` reads as the runtime does, every event and view, and refuses every
-  write. A live session's replay replays its record as it stood when it opened. A replay works out what was due, spent
-  or stalled at the playhead's time, not today's. `seek` goes on in the copy it has, unless it goes back, or the nearest
-  checkpoint of the views at or below where it goes lies more than 1,024 events past the playhead, from which it starts
-  a copy anew; checkpoints are closed copies, at most eight and at least 1,024 events apart, made one after another on a
-  copy of their own once it opens, so a seek before they are made copies from the start. `replay.py`, in the command
-  line, plays one for both clients alike: the recorded gaps between events at 1x, 4x or 16x, or with every gap past a
-  second cut to one, a step of an event or to where a turn ends either way, a jump to an event or a time, the banner's
-  words, and why nothing in a replay acts, which every act and form says before it opens or sends anything. A client
-  draws the copy as it draws a session, its agents moving, and draws a copy started anew as a session joined anew, its
-  banner naming where what it draws stands, never where the replay went before that is drawn. An estimate in an event's
-  provenance says when it was written, and whether that was after the event the replay stands at, or of a trace past it
-  ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)).
-  [replay.md](how-to/replay.md) is its guide.
+- **TUI.** Textual, in the command line's layer, which `platoon-harness` opens on a terminal and a headless command never
+  imports. It starts a session on a detached runtime and is its guest. One coalescer between the journal and widgets draws at most
+  15 frames a second, dropping frames and never events: a reader with a frame's worth waiting waits for the next, which is how a
+  slow screen is handled. Its timers decide nothing: one paces frames, one looks for a runtime to attach to while it shows history,
+  and one moves the logo's agents and the navigator's glyphs from the roster's state alone, never on history. The transcript is on
+  the Line API, a window of at most 10,000 lines read from the journal a page at a time as the person scrolls, either way, and drawn
+  through an LRU of strips keyed by width. What an agent did in a turn besides what it said is that turn's fold, one line that
+  counts it, failures and what ended unknown among it, and opens on each step. An agent's transcript reads its own streams and every
+  `approval/*`, so its children and its approvals are drawn with no name to look up, and a child's spawn is drawn under the call
+  that made it, by the join in `calls.py`, which the page's Tool activity shares, or where the journal has it, saying it joins no
+  known call. Its turns are drawn cut where `spans` says. Live text follows below, one tail for the agent in view, which goes with
+  the runtime that said it. Unread counts and read mentions come from the person's marks. Untrusted text crosses one `SafeText`
+  boundary, and a lint bans handing a label-like widget anything not visibly `Content`. Approvals never take focus: the dock gets
+  it only from the person's Tab, with no place chosen, and only the person moves its cursor, and an approval's whole ask opens from
+  it, read by its body's ref, before anyone answers it, as the page's card opens it. Every act also takes only keys every terminal
+  delivers, a typed command in the composer or a plain key where nothing is typed, so a chord is a shortcut and never the only way,
+  and no chord decides, stops or spends anything, since a terminal sends Alt and a letter as Esc then that letter. Provenance, who
+  reached whom, search, threads, copying, a channel's tasks, the team editor and replays each open from a typed command, each
+  reading the record and deciding nothing. The team editor's fields, checks and words are `team_editor.py`'s, which the page's
+  editor shares, and a field typed in whose value holds a control a terminal would act on is not changed there, saying why
+  ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md)). [tui.md](how-to/tui.md) is its guide.
+- **Replays.** `Replay`, in the SDK, is a read-only copy of a session, whose journal is the original's through a playhead, made by
+  `Kernel.copy` under the root in `replays/`, never in the session's folder, with what estimators had said and the manifest beside
+  it; its `session` reads as the runtime does, every event and view, and refuses every write. A live session's replay replays its
+  record as it stood when it opened. A replay works out what was due, spent or stalled at the playhead's time, not today's. A seek
+  goes on in the copy it has, unless it goes back or the nearest checkpoint at or below where it goes lies more than 1,024 events
+  past the playhead, from which it copies anew; checkpoints are closed copies, at most eight and at least 1,024 events apart.
+  `replay.py`, in the command line, plays one for both clients alike, and says why nothing in a replay acts, which every act and
+  form says before it opens or sends anything. A client draws the copy as it draws a session, and a copy started anew as a session
+  joined anew, its banner naming where what it draws stands. An estimate in an event's provenance says when it was written, and
+  whether that was after the event the replay stands at ([RFC 0080](rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)). [replay.md](how-to/replay.md) is its guide.
 - **SwarmChat.** `platoon-harness web SESSION` serves SwarmChat's pinned page over the journal, a guest like the TUI on the owner's
   control credential, which starts and resumes nothing and follows the session as its runtime goes and comes back. A follower folds
   the journal one way into `swarmchat.sqlite`, a function of the events and the bodies they cite, so a rebuild gives every id again
   and nothing re-ingests it: two authorities and echo loops have no path, and upstream's server never runs. It serves the five page
   files, held to their hashes, the `view_*` replies over that projection, an overlay, and `/x/command` into `Session.submit`, so the
-  kernel's grants decide what a person may do there as anywhere. Direct chats key on the unordered participant pair, with both inboxes
-  merged in journal order, and every agent has one with the person from its start; channel chats key on the channel. What a harness
-  says in a turn is its agent's message to the person; tools, thoughts, usage and live text never enter a chat. "Read by" becomes
-  "Delivered to", from delivery evidence alone, a goal's being the turn that began on it, and browsing writes nothing and moves no
-  cursor or mark. A view link and a control link are two credentials of fixed class, one-time and exchanged for session tokens that
-  expire. One session per port avoids the `localStorage` collision, and one `web` per session keeps the projection's one writer. A
-  person acts there through `/x/command`, on every op they hold that writes, through the form the terminal's palette uses: each act
-  keeps its key until it is answered, across a lost connection, a reload or a new
-  link, so a retry is one operation, the ops asked about first are the terminal's, and what needs the person is the runtime's
-  `attention` view. Every pane of ours reads through `x_read`, a read beside the `view_*` that a view link reaches too, but for a
-  diff, which only asking for one gives, and which reads through the session's queries, where the kernel refuses an op that
-  writes, and for a diff the journal and the patch's body, and for an agent's tool calls the journal, where no op runs, and answers in the terminal's words: what needs the person, what changed and a diff, a page at a time, a queue's tasks and a board's entries, read again whenever the feed's `x_moved` says what one reads moved, each act opening its op's form filled in, who reached whom, in the lines `/reached` draws, an agent's tool calls, a page of whole turns at a time, the newest led by the head it was read at, each spawn under its call by the join in `calls.py` or said to join no known call, and an item that came under no id said to join none of its call's others, and what it is saying now, said not to be in the journal yet, which `web` reads only while a page asks, letting go of its ask as the pane closes, and lets go 25 s after no ask is held for it or with the runtime that said it, and the provenance a message's actions open, where the
-  projection keeps the ref of the event each line shows, which the pane opens on, and following a link a chat shows opens that chat
-  there. Each link in the pane is a button, and a message's
-  actions show while focus is in it, so the keyboard reaches both, and a press gives it focus, so a phone reaches them. At a
-  phone's width the page is one column, which goes to what a person opens, and a resize keeps where each list is read,
-  focus and the composer's target. `web` with no session serves a page of our own, of every
-  session under the root and how it stands, as the TUI's sessions screen lists them, on loopback alone, from one link the
-  command says, whose server keeps its own credentials, so no link of a session's page opens it and it makes none. Open
-  serves a session in the same process on a port of its own, as `web SESSION` serves one, and goes to a control link of it,
-  and Start, Resume and Stop do what the sessions screen does, each asking first, once, what only the person may allow: the
-  page asks before a resume, which can spend money, and a stop, and the server, which alone can tell, before a start whose
-  team needs trust, naming each value as the team holds it, with trust carrying the digest of what was shown, or would run several
-  agents on one plan login. Its team editor draws the project's team file where `web` runs as the fields `team_editor.py`
-  makes from the team's schema, which the terminal's draws too, each problem the loader and `team check` find at its
-  field, `team show`'s sentences and the diff a save makes, and saves the file in place, asking once before it writes what
-  only trust may take ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md)).
-  `web SESSION --replay`, or the sessions page's Replay, serves the page over a replay, its banner and
-  controls under the top bar, which `/x/replay` takes from a control link alone, every act of the session's disabled,
-  saying why. A copy started anew is folded on into the page's projection, which it holds all of, and where the replay
-  went back the page's projection is started anew from the nearest copy of it the page kept, one each checkpoint's
-  spacing, folded to where the replay went before the page hears a reset, as its `feed_id`, hashing its folder, changes;
-  the banner names where the page's projection stands. As its links act on nothing, it is served past loopback whatever
-  login its agents ran on (§15).
-  [web.md](how-to/web.md) is its guide, and
-  [RFC 0027](rfcs/0027-the-browser-on-our-backend.md), [RFC 0028](rfcs/0028-acting-from-the-page.md),
-  [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md), [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md)
-  and [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md) its decisions.
+  kernel's grants decide what a person may do there as anywhere. Direct chats key on the unordered participant pair, with both
+  inboxes merged in journal order, and every agent has one with the person from its start; channel chats key on the channel. What a
+  harness says in a turn is its agent's message to the person; tools, thoughts, usage and live text never enter a chat. "Read by"
+  becomes "Delivered to", from delivery evidence alone, a goal's being the turn that began on it, and browsing writes nothing and
+  moves no cursor or mark. A view link and a control link are two credentials of fixed class, one-time and exchanged for session
+  tokens that expire. One session per port avoids the `localStorage` collision, and one `web` per session keeps the projection's one
+  writer. A person acts there through `/x/command`, on every op they hold that writes, through the form the terminal's palette uses:
+  each act keeps its key until it is answered, across a lost connection, a reload or a new link, so a retry is one operation. Every
+  pane of ours reads through `x_read`, a read beside the `view_*` that a view link reaches too, through the session's queries, where
+  the kernel refuses an op that writes, but for a diff, which only asking for one gives, and answers in the terminal's words; what an
+  agent is saying now is said not to be in the journal yet, and `web` reads it only while a page asks. `web` with no session serves a
+  page of our own, of every session under the root and how it stands, on loopback alone, from one link the command says, whose
+  server keeps its own credentials, so no link of a session's page opens it and it makes none. Its Start, Resume and Stop do what
+  the terminal's sessions screen does, each asking first, once, what only the person may allow: a resume, which can spend money, a
+  stop, and a start whose team needs trust, naming each value as the team holds it, with trust carrying the digest of what was
+  shown, or that would run several agents on one plan login. Its team editor draws the project's team file as the fields
+  `team_editor.py` makes from the team's schema and saves the file in place, asking once before it writes what only trust may take
+  ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md)). `web SESSION --replay` serves the page over a replay, its controls taken from a control link alone and every act of the
+  session's disabled, saying why; as its links act on nothing, it is served past loopback whatever login its agents ran on (§15).
+  [web.md](how-to/web.md) is its guide, and [RFC 0027](rfcs/0027-the-browser-on-our-backend.md),
+  [RFC 0028](rfcs/0028-acting-from-the-page.md), [RFC 0035](rfcs/0035-the-board-and-the-map-over-messages.md),
+  [RFC 0043](rfcs/0043-a-person-follows-provenance-from-where-they-read.md) and
+  [RFC 0074](rfcs/0074-the-browser-lists-starts-resumes-and-stops-sessions.md) its decisions.
 
 ## 13. Workspaces
 
