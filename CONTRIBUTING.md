@@ -366,7 +366,8 @@ The list of changes that start with an RFC is in [the RFC index](docs/rfcs/READM
 
 platoon-harness is one distribution, `platoon-harness`, at the version `packages/sdk/src/platoon_harness/version.py`
 sets. Below 1.0, as [CHANGELOG.md](CHANGELOG.md) says, a minor release may change the Python API, the team file or the
-command line, and a patch release only fixes bugs.
+command line, and a patch release only fixes bugs. A change a user would notice adds one line to CHANGELOG.md under the
+next release's heading, `## X.Y.Z (unreleased)`, which the first such change after a release adds.
 
 A tag `vX.Y.Z` pushed to the repository publishes that release to PyPI. The release workflow checks it, and its
 `publish` job uploads by trusted publishing from the GitHub environment `pypi`, which only `v*` tags may deploy to and
