@@ -12,7 +12,8 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A tag's run is never cancelled, so a second push of the tag cannot stop an upload under way.
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 # As in ci.yml: a token that reads the repository and nothing more, and a Python that uv manages. Each action is pinned
 # to a commit, the release beside it, and the checkout keeps no credentials for the build backend to read. Every step
