@@ -41,11 +41,11 @@ jobs:
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status | grep -xE 'identical|behind'
+        run: gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status | grep -xE 'identical|behind' || { echo "::error::The tagged commit is not on main"; exit 1; }
 
       - name: Check that CHANGELOG.md dates the version
         if: github.ref_type == 'tag'
-        run: grep -q "^## ${GITHUB_REF_NAME#v} (2" CHANGELOG.md
+        run: grep -q "^## ${GITHUB_REF_NAME#v} (2" CHANGELOG.md || { echo "::error::CHANGELOG.md does not date the version"; exit 1; }
 
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
@@ -59,7 +59,7 @@ jobs:
 
       - name: Check that the tag names the version built
         if: github.ref_type == 'tag'
-        run: test -f "dist/platoon_harness-${GITHUB_REF_NAME#v}-py3-none-any.whl"
+        run: test -f "dist/platoon_harness-${GITHUB_REF_NAME#v}-py3-none-any.whl" || { echo "::error::The tag does not name the version built"; exit 1; }
 
       # Uploaded before any step below runs code the lock does not pin, so none of it can change what publish uploads.
       # publish still needs every step of this job to pass.
