@@ -25,8 +25,8 @@ none. -->
 
 - [ ] The title is a Conventional Commit, `<type>: <summary>`, with no scope and a summary in sentence case without a
       final period
-- [ ] Every fix and feature has a test, a fix's test fails without the fix, and each new primitive promise has a test
-      named for it
+- [ ] Every fix and feature has a test, a fix's test fails without the fix, and each new promise in architecture §7 has
+      a test named for it
 - [ ] `uv run pre-commit run --all-files` (ruff, ty) and `uv run pytest -q -n auto` pass
 - [ ] The docs, examples, command-line help, `docs/STATUS.md` and `tests/public_api.txt` that the change affects are
       updated, and generated docs are made again

@@ -1,7 +1,8 @@
 """CONTRIBUTING.md stays true: each command it shows is one CI or a hook runs, one that makes a generated page, or one
-it runs by hand for a stated reason; it shows every command CI runs, the release workflow's under Releases, and every
-hook; its commit types are the ones the hook and the title check accept; the ruff hook runs the ruff the dev group pins;
-the paths it names and the version it shows are real; and the pull request template asks for what it asks."""
+it runs by hand for a stated reason; it shows the release workflow's commands under Releases, and names every hook; its
+commit types are the ones the hook and the title check accept; the paths it names and the version it shows are real; and
+the pull request template asks for what it asks. The workflows themselves pin every action, and read only but where they
+publish, and the ruff hook runs the ruff the dev group pins."""
 
 import re
 import tomllib
@@ -143,11 +144,6 @@ def test_every_command_shown_is_run_by_ci_a_hook_or_a_generator_or_by_hand_for_a
     assert [command for command in BY_HAND if command not in commands] == []
 
 
-def test_every_command_ci_runs_is_shown():
-    assert ci_runs()
-    assert [command for command in ci_runs() if command not in shown()] == []
-
-
 def test_every_command_the_release_workflow_runs_is_shown():
     """Under Releases, in the order the workflow runs them, so a release is checked by hand as CI checks it."""
     runs = ci_runs("release")
@@ -162,13 +158,9 @@ def test_each_generated_page_names_the_command_that_makes_it_again():
         assert command in shown()
 
 
-def test_every_hook_is_shown_with_its_version_and_command():
-    for hook in hooks():
-        assert f"`{hook['id']}`" in TEXT
-        if hook["rev"]:
-            assert f"`{hook['rev']}`" in TEXT
-        if "entry" in hook:
-            assert f"`{hook['entry']}`" in TEXT
+def test_every_hook_is_named():
+    assert hooks()
+    assert [hook["id"] for hook in hooks() if f"`{hook['id']}`" not in TEXT] == []
 
 
 def test_a_plain_install_installs_every_git_hook_the_config_uses():
@@ -187,8 +179,6 @@ def test_the_commit_types_are_the_ones_the_hook_and_the_title_check_accept():
     assert hook["rev"] == "v4.0.0", "the guide gives v4.0.0's rules"
     assert types == sorted([arg for arg in hook.get("args", []) if not arg.startswith("-")] or DEFAULT_TYPES)
     assert types == sorted(str(check.get("with", {}).get("types", "")).split() or DEFAULT_TYPES)
-    [pin] = [PINNED.fullmatch(action) for action in actions() if action.startswith(TITLE_CHECK)]
-    assert pin is not None and f"`{TITLE_CHECK}` {pin['release']}" in TEXT
 
 
 def test_the_example_messages_are_ones_the_title_check_accepts():
@@ -211,9 +201,9 @@ def test_the_example_messages_are_ones_the_title_check_accepts():
 
 def test_every_action_is_pinned_to_a_commit_and_every_workflow_reads_only_by_default():
     """A tag moved upstream, or a release of a tool `uvx` fetches, changes nothing a workflow runs, a workflow's token
-    reads only, and no checkout keeps credentials for a later step, as the guide says. A job that publishes alone asks
-    for more, an OIDC token and nothing else, on a push to this repository, in the `pypi` environment, and runs no code
-    of the repository: it uploads what the build made."""
+    reads only, and no checkout keeps credentials for a later step. A job that publishes alone asks for more, an OIDC
+    token and nothing else, on a push to this repository, in the `pypi` environment, and runs no code of the repository:
+    it uploads what the build made."""
     workflows = [yaml.safe_load(path.read_text()) for path in (ROOT / ".github" / "workflows").glob("*.yml")]
     jobs = [job for workflow in workflows for job in workflow["jobs"].values()]
     publishing = [job for job in jobs if "id-token" in job.get("permissions", {})]
@@ -237,7 +227,6 @@ def test_every_action_is_pinned_to_a_commit_and_every_workflow_reads_only_by_def
         "actions/download-artifact",
         "pypa/gh-action-pypi-publish",
     }
-    assert "Each action is pinned to a commit" in " ".join(TEXT.split())
 
 
 def test_the_ruff_hook_runs_the_ruff_the_dev_group_pins():
@@ -246,7 +235,6 @@ def test_the_ruff_hook_runs_the_ruff_the_dev_group_pins():
     revs = {hook["rev"] for hook in hooks() if hook["id"].startswith("ruff")}
 
     assert revs == {f"v{pin.removeprefix('ruff==')}"}
-    assert f"`{pin}`" in TEXT
 
 
 def test_the_paths_the_guide_names_exist():

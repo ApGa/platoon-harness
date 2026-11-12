@@ -2,7 +2,8 @@
 
 Thank you for helping. This guide says how to set up a checkout, run the tests, check and commit a change, open a pull
 request, and add what contributors add most often: a driver, an extension, a topology preset, an op and an example.
-[AGENTS.md](AGENTS.md) holds the rules every change follows, and [architecture.md](docs/architecture.md) is the design.
+[AGENTS.md](AGENTS.md) holds the rules every change follows, human or agent, and [architecture.md](docs/architecture.md)
+is the design.
 
 Small changes, such as a bug fix, a test or a fix to the docs, go straight to a pull request. Some changes start with an
 RFC: see [When a change needs an RFC](#when-a-change-needs-an-rfc).
@@ -11,7 +12,6 @@ RFC: see [When a change needs an RFC](#when-a-change-needs-an-rfc).
 - [Set up a development environment](#set-up-a-development-environment)
 - [Repository layout](#repository-layout)
 - [Run the tests](#run-the-tests)
-- [Design rules](#design-rules)
 - [Lint, format and type-check](#lint-format-and-type-check)
 - [Commits and pull requests](#commits-and-pull-requests)
 - [Generated docs](#generated-docs)
@@ -28,8 +28,9 @@ RFC: see [When a change needs an RFC](#when-a-change-needs-an-rfc).
 
 | You want to | Start with |
 |---|---|
-| Report a bug | An issue from the bug report template, with what `platoon-harness doctor` prints, which shows your paths, user id and host name: edit out what you would not post |
+| Report a bug | An issue from the bug report template: what you ran, what it printed and what you expected, what `platoon-harness --version` prints, each harness with its version, your OS, and what `platoon-harness doctor` prints, which shows your paths, user id and host name: edit out what you would not post |
 | Report a security vulnerability | Never an issue: see [SECURITY.md](SECURITY.md) |
+| Ask a question | An issue |
 | Ask for a feature | An issue from the feature request template |
 | Fix a bug | A pull request; a fix comes with a test that fails without it |
 | Run a harness the SDK does not drive | Usually no change here: [Add a driver](#add-a-driver) |
@@ -41,16 +42,11 @@ RFC: see [When a change needs an RFC](#when-a-change-needs-an-rfc).
 
 **Goal:** a checkout where `platoon-harness` runs and the tests pass.
 
-**Prerequisites:**
-
-- Linux. Nothing has run on macOS ([STATUS](docs/STATUS.md)).
-- Python 3.12 or 3.13, the two that CI tests, and [uv](https://docs.astral.sh/uv/), which finds one or downloads it.
-- git 2.47 or later. A git workspace refuses a git older than 2.36, but 2.47.3 is the only git the tests have run on, so
-  CI fails on an older one.
-- Optionally, [bubblewrap](https://github.com/containers/bubblewrap): the `isolated` workspace confines an agent with its
-  `bwrap`, and without it those tests skip, saying why.
-
-The fast and browser tests need no harness, login or model key.
+**Prerequisites:** Linux, as nothing has run on macOS; Python 3.12 or 3.13, the two CI tests, and
+[uv](https://docs.astral.sh/uv/); git 2.47 or later, as CI requires; and optionally
+[bubblewrap](https://github.com/containers/bubblewrap), without which the tests of the `isolated` workspace skip, saying
+why. On Ubuntu, AppArmor blocks bubblewrap unless `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`, as
+CI's test job sets. The fast and browser tests need no harness, login or model key.
 
 1. Clone the repository:
 
@@ -58,27 +54,18 @@ The fast and browser tests need no harness, login or model key.
    git clone https://github.com/ApGa/platoon-harness.git && cd platoon-harness
    ```
 
-2. Install platoon-harness and the `dev` group from `uv.lock`, as CI does:
+2. Install platoon-harness and the `dev` group, which holds the tests' tools and the `cli` and `openhands` extras, from
+   `uv.lock`, as CI does, with `UV_NO_DEV` unset; after changing a requirement, run `uv lock` and commit `uv.lock` too:
 
    ```bash
    uv sync --locked
    ```
 
-   The `dev` group holds pytest and its plugins, hypothesis, pyte, Playwright, pre-commit, ruff, ty, and
-   platoon-harness's `cli` and `openhands` extras. `--locked` refuses when `uv.lock` is out of date with
-   `pyproject.toml`: after changing a requirement, run `uv lock` and commit `uv.lock` with it. Leave `UV_NO_DEV` unset:
-   while it is set, `uv sync` leaves the group out, and the hooks and the tests run from it.
-
-3. Install the git hooks. `.pre-commit-config.yaml` names both kinds, so this installs the `pre-commit` hook, which runs
-   the checks of CI's `lint` job on what you commit, and the `commit-msg` hook, which checks each commit message:
+3. Install the git hooks, the `pre-commit` hook, which runs CI's lint checks on what you commit, and the `commit-msg`
+   hook, which checks each message:
 
    ```bash
    uv run pre-commit install
-   ```
-
-   ```text
-   pre-commit installed at .git/hooks/pre-commit
-   pre-commit installed at .git/hooks/commit-msg
    ```
 
 4. Check that the command line runs:
@@ -106,21 +93,19 @@ The fast and browser tests need no harness, login or model key.
 ## Run the tests
 
 All but the live tests run on a CPU, with no network and no login: a harness under test runs against `FakeModel`, a
-model of ours on loopback, on a dummy key. `pyproject.toml`'s `addopts` selects the fast tests by default, leaving out
-the slow, browser and live ones. CI runs the fast tests on Python 3.12 and 3.13, on one worker per CPU:
+model of ours on loopback, on a dummy key. `pyproject.toml`'s `addopts` selects the fast tests, which CI runs on Python
+3.12 and 3.13, with `UV_PYTHON` naming each:
 
 ```bash
 uv run pytest -q -n auto
 ```
 
-To run them on 3.13, set `UV_PYTHON=3.13` for both `uv sync` and `uv run`, as CI's `test` job does.
-
 | Tests | Marker | Need | In CI |
 |---|---|---|---|
 | Fast | none | Nothing more | Yes, on 3.12 and 3.13 |
-| Slow | `slow` | The harness binaries to cover on `PATH`, such as `claude`, `codex` and `pi`, and no login, as each runs against `FakeModel`. A test whose binary is missing skips, saying so. Those of the installed wheels need uv's cache to hold what they install, as [Releases](#releases) says | Only those of the installed wheels, in the release workflow |
-| Browser | `e2e` | Playwright's Chromium headless shell, or each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of `chromium`, `firefox` and `webkit`. Where one is missing, a browser test fails, saying how to install it, and never skips. One test also needs `claude` on `PATH`, and one `pi`, and each skips without it, as on CI's runners | Yes, once in each of the three |
-| Live | `live` | `PLATOON_HARNESS_LIVE=1`, and the harnesses signed in as you usually are; the examples' need `pi`, and `PLATOON_HARNESS_LIVE_MODEL`, `OPENAI_BASE_URL` and `OPENAI_API_KEY` naming a model, its endpoint and your key. Each file's docstring states the model calls its tests may spend | Never |
+| Slow | `slow` | The harness binaries to cover on `PATH`, such as `claude`, `codex` and `pi`, each against `FakeModel`; a test whose binary is missing skips, saying so. Those of the installed wheels need uv's cache to hold what they install | Only those of the installed wheels, in the release workflow |
+| Browser | `e2e` | Playwright's Chromium headless shell, or each browser `PLATOON_HARNESS_BROWSERS` names, comma-separated, of `chromium`, `firefox` and `webkit`; a missing one fails, saying how to install it | Yes, once in each of the three |
+| Live | `live` | `PLATOON_HARNESS_LIVE=1` and the harnesses signed in as you usually are; the examples' also `pi`, and `PLATOON_HARNESS_LIVE_MODEL`, `OPENAI_BASE_URL` and `OPENAI_API_KEY` | Never |
 
 ```bash
 uv run pytest -q -m slow
@@ -129,45 +114,22 @@ uv run pytest -q -m e2e
 PLATOON_HARNESS_LIVE=1 uv run pytest -q -m live tests/live/test_claude.py
 ```
 
-Each browser test runs once in each browser `PLATOON_HARNESS_BROWSERS` names, its id naming the browser, as
-`PLATOON_HARNESS_BROWSERS=chromium,firefox` runs them in both; `uv run playwright install firefox` or `webkit` installs another.
-Playwright's WebKit needs glibc 2.38 or later, so it does not start on RHEL 9, whose glibc is 2.34.
-
-A live test spends model calls on your logins, so run only the ones your change needs, and say in the pull request which
-ran and what they spent. A skipped live test is not a passing one.
-
-While you work, run what you touch, such as `uv run pytest -q tests/unit/primitives`.
-
-### What skips, and why
-
-`addopts` has `-ra`, so every run ends by listing each skipped test with its reason. Of the fast tests, these skip:
-
-| Tests | Skip when |
-|---|---|
-| `tests/unit/runtime/test_bwrap.py`, and those of `tests/unit/runtime/test_isolation.py` on real bubblewrap | `bwrap` is not on `PATH`, or cannot confine here, as where unprivileged user namespaces are blocked. Ubuntu's AppArmor blocks them unless `kernel.apparmor_restrict_unprivileged_userns` is 0, which CI's `test` job sets. Where `PLATOON_HARNESS_REQUIRE_BWRAP=1`, as CI's `test` job sets it, they fail instead, saying why |
-| One test of `tests/unit/runtime/test_bwrap.py` | There is no writable folder outside `/tmp` |
-| One test each of `tests/unit/tools/test_ph.py` and `tests/unit/tools/test_shim.py` | The machine has no system `python3` |
-| One test of `tests/unit/drivers/test_process.py` | There is no `/dev/full` |
-
-## Design rules
-
-[AGENTS.md](AGENTS.md) holds the rules every change follows, human or agent: the clean room, taste, the layers, how tests
-are written, the commit form and STATUS. Read it before your first change.
+Playwright's WebKit needs glibc 2.38 or later. A live test spends model calls on your logins, and fails a run that took
+more model calls or minutes than its test's docstring states, so run only the ones your change needs, and say in the pull
+request which ran and what they spent: a skipped live test is not a passing one. Every run ends by listing each skipped
+test with its reason; the bubblewrap tests skip where `bwrap` cannot confine, and fail instead under
+`PLATOON_HARNESS_REQUIRE_BWRAP=1`, as CI's test job sets it. While you work, run what you touch, such as
+`uv run pytest -q tests/unit/primitives`.
 
 ## Lint, format and type-check
 
-`.pre-commit-config.yaml` defines four hooks. CI's `lint` job runs every hook of the `pre-commit` stage on every file:
+`.pre-commit-config.yaml` defines four hooks: `ruff-check` and `ruff-format`, configured in `pyproject.toml`; `ty`,
+configured in `ty.toml`; and `conventional-pre-commit`, which checks each commit message. CI's `lint` job runs every hook
+of the `pre-commit` stage on every file:
 
 ```bash
 uv run pre-commit run --all-files --show-diff-on-failure
 ```
-
-| Hook | What it checks | Configured in |
-|---|---|---|
-| `ruff-check` (ruff-pre-commit `v0.14.5`, with `--fix`) | Lint rules; it fixes what it can | `[tool.ruff]` and `[tool.ruff.lint]` in `pyproject.toml` |
-| `ruff-format` | Formatting | `[tool.ruff]` in `pyproject.toml` |
-| `ty` (`uv run ty check`) | Types, across the packages, when a commit changes a Python file | `ty.toml` |
-| `conventional-pre-commit` (`v4.0.0`, at the `commit-msg` stage, with `--verbose`) | The form of each commit message, when you commit; a rejection lists the accepted types. CI does not run it: the title check holds a pull request's title to the same form | Its default types, the ones in [Commits and pull requests](#commits-and-pull-requests) |
 
 To run the checks one at a time, without the hooks' fixes:
 
@@ -176,11 +138,8 @@ uv run ruff check . && uv run ruff format --check .
 uv run ty check
 ```
 
-When a hook fixes a file during `git commit`, the commit stops; add the fixed files and commit again.
-
-The ruff hook's `rev` is the version the `dev` group pins, `ruff==0.14.5`, so the hook and `uv run ruff` agree; a test
-holds them equal, so change both together. Keep `conventional-pre-commit` at `v4.0.0`: later releases accept any message
-that starts with `Merge`, and a type in any case (`Feat:`), which the pull request title check rejects.
+When a hook fixes a file during `git commit`, the commit stops; add the fixed files and commit again. The ruff hook's
+`rev` is the ruff the `dev` group pins, which a test holds equal, so change both together.
 
 ## Commits and pull requests
 
@@ -233,58 +192,29 @@ refactor!: Rename <the old name> to <the new name>
 BREAKING CHANGE: <what users must change>
 ```
 
-The `commit-msg` hook rejects a subject that is not one of these types, an optional scope, an optional `!`, a colon, a
-space and a summary, and a body that does not follow a blank line. It accepts a scope and does not check the summary's
-case: reviewers do, and for the title, the title check. To check a message without committing, save it to a file and run
-the hook on it:
+The `commit-msg` hook checks the form of each message, but not the summary's case, which reviewers and the title check
+do. To check a message without committing, save it to a file and run the hook on it:
 
 ```bash
 uv run pre-commit run conventional-pre-commit --hook-stage commit-msg --commit-msg-filename message.txt
 ```
 
-**Pull request titles.** A pull request's title has the form of a commit subject. Maintainers squash-merge pull requests,
-so the title becomes the subject of the commit on `main`. CI's `pr-title` job (`amannn/action-semantic-pull-request` v6.1.2)
-checks that the title is a Conventional Commit whose type is one of those above, with no scope and a summary that starts
-with a capital letter and has no final period. When a pull request has a single commit, the job checks that commit's
-subject too, because GitHub suggests it for the squashed commit. The job runs again whenever you edit the title.
+**Pull request titles.** A pull request's title has the form of a commit subject, as maintainers squash-merge pull
+requests and the title becomes the subject of the commit on `main`. CI's `pr-title` job checks it, and a single commit's
+subject too, as GitHub suggests that for the squashed commit.
 
-**What CI runs.** Each job runs on GitHub's Ubuntu runners for pull requests into any branch, so that a pull request
-stacked on another one is checked too, and for pushes to `main`. A new push cancels the run it makes stale. Each
-workflow's token reads the repository and nothing more, and a job that needs more asks only to read, as `pr-title`
-reads its pull request, but for the release workflow's `publish` job, which asks for an OIDC token alone, as
-[Releases](#releases) says. Each action is pinned to a commit, with its release beside it, and each tool `uvx` fetches is
-pinned to a release, so that a tag moved upstream or a new release changes nothing CI runs, and each checkout keeps no
-credentials for a later step to read.
+**What CI runs.** On each pull request, and each push to `main`:
 
-| Job | Checks | Fails when |
-|---|---|---|
-| `pr-title` | The title, on pull requests only | The title, or a single commit's subject, is not in the form above |
-| `lint` | Every hook of the `pre-commit` stage, on every file | `uv.lock` is out of date, or a hook fails or changes a file |
-| `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, after lifting Ubuntu's restriction on unprivileged user namespaces, which bubblewrap needs, and with `PLATOON_HARNESS_REQUIRE_BWRAP=1` | git is older than 2.47, bubblewrap cannot confine, or a test fails |
-| `e2e` | The browser tests, once in each of Chromium, Firefox and WebKit, with `PLATOON_HARNESS_BROWSERS` naming it | A browser test fails in that browser |
-| `build`, of the release workflow | The distribution built and checked, and on a `v*` tag the tag too, as [Releases](#releases) says | A build or a check fails |
-
-The commands, job by job:
-
-```bash
-# lint
-uv sync --locked
-uv run pre-commit run --all-files --show-diff-on-failure
-# test
-sudo apt-get update && sudo apt-get install -y bubblewrap
-sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-git --version && printf '2.47\n%s\n' "$(git --version | cut -d' ' -f3)" | sort -V -C
-uv sync --locked
-uv run pytest -q -n auto
-# e2e, once with PLATOON_HARNESS_BROWSERS set to each of chromium, firefox and webkit
-uv sync --locked
-uv run playwright install --with-deps --only-shell "$PLATOON_HARNESS_BROWSERS"
-uv run pytest -q -m e2e
-# build, of the release workflow, as Releases shows
-```
+| Job | Checks |
+|---|---|
+| `pr-title` | The title, and a single commit's subject, on pull requests only |
+| `lint` | Every hook of the `pre-commit` stage, on every file, with `uv.lock` up to date |
+| `test` | The fast tests, on Python 3.12 and 3.13, with bubblewrap able to confine and git 2.47 or later |
+| `e2e` | The browser tests, once in each of Chromium, Firefox and WebKit |
+| `build`, of the release workflow | The distribution built and checked, as [Releases](#releases) says |
 
 The slow tests need harness binaries that CI does not have, so CI runs none of them but those of the installed wheels,
-which need none, and it never runs the live ones.
+and it never runs the live ones.
 
 **The pull request.** Push your branch and open a pull request into `main`. The
 [pull request template](.github/pull_request_template.md) asks for each of these:
@@ -354,13 +284,9 @@ ballot = "ballot:extension"
 
 Installing it activates nothing: a team names it in `extensions = [...]`. It uses only the kernel's public names, as the
 core's primitives do, and its ops are usable through the SDK, MCP, `ph`, the command line, the terminal's palette and the
-page's form with no core edit ([architecture §17](docs/architecture.md#17-extensions-and-configuration),
-[STATUS](docs/STATUS.md#configuration-and-extensions-platoon_harnessconfig-platoon_harnessextensions)).
-[examples/extension-package](examples/extension-package/README.md) is one, a package of its own with an op, a view and a
-preset. An extension's name is its command group's, so one named as a command of the command line's own, such as `run`,
-has no command, and the command line says why; and no session can load one named as an extension of the SDK's own, which
-every session holds, such as `task` or `lease`.
-Hold it to what a core primitive keeps with `check_extension` from `platoon_harness.testing`.
+page's form with no core edit ([architecture §17](docs/architecture.md#17-extensions-and-configuration)).
+[examples/extension-package](examples/extension-package/README.md) is one, with an op, a view and a preset. Hold it to
+what a core primitive keeps with `check_extension` from `platoon_harness.testing`.
 [Write an extension](docs/extending/extensions.md) builds that package step by step, checks it and says how to publish
 one.
 
@@ -393,20 +319,19 @@ primitive, needs:
 
 ## Add an example
 
-An example is a folder of `examples/`: a `README.md` that states the goal, what it needs, the steps and what to expect,
-with the files a person runs and nothing else, no stand-in of a harness or a model among them. One that runs a team runs
-it on a real model the person names, at an endpoint that speaks OpenAI's Chat Completions, which a role's auth profile
-hands its harness as `OPENAI_BASE_URL` and `OPENAI_API_KEY`, and works on a copy of [the sample
-project](examples/sample-project/README.md), whose issues list names each job. Each has a slow test in
-`tests/integration/test_examples.py` that runs its README's commands as shown, with `fake-model` for MODEL and, beside a
-run's settings, the one line `plays.OFFLINE` that hands pi its switch for no network, on its real pi or OpenHands
-against `FakeModel`, which plays each agent from `tests/integration/plays.py`, so the harness, the tools and the team
-file are real and only the model is scripted. A fast test there runs its copy, `team check` and `team show` as shown,
-which need no harness, so CI's runners, which have no pi, run them. Each has a live test in
-`tests/live/test_examples.py` that runs it on a real model and fails a run that took more model calls or minutes than
-its README states; no budget counts model calls as they are made, so the team's own budget of turns and wall time is
-what stops a runaway. Its files import nothing from the tests and reach the SDK by the names `tests/public_api.txt`
-lists alone, which tests there hold. A cost a README quotes comes from a run that was made.
+An example is a folder of `examples/`, with a row in [examples/README.md](examples/README.md), and has:
+
+- a `README.md` that states the goal, what it needs, the steps and what to expect, and only the files a person runs, no
+  stand-in of a harness or a model among them;
+- a team that runs on a real model the person names, through an auth profile of `OPENAI_BASE_URL` and
+  `OPENAI_API_KEY`, on a copy of [the sample project](examples/sample-project/README.md), whose issues list names each
+  job;
+- a slow test in `tests/integration/test_examples.py` that runs its README's commands as shown against `FakeModel`,
+  which plays each agent from `tests/integration/plays.py`, and a fast one of its copy, `team check` and `team show`;
+- a live test in `tests/live/test_examples.py`, whose docstring states its budget: the model calls and minutes past which
+  it fails a run, as no budget of the team's counts model calls;
+- files that import nothing from the tests and reach the SDK by the names `tests/public_api.txt` lists alone;
+- a cost its README quotes only from a run that was made.
 
 ## The docs' images
 
@@ -506,21 +431,12 @@ uv sync --locked
 uv run pytest -q -m slow tests/integration/test_installed.py
 ```
 
-`uv build` writes the sdist to `dist/`, then the wheel, built from the sdist, so an sdist that leaves out a file the
-wheel needs fails here. `twine check --strict`, at the release the workflow pins, checks their metadata, and that the
-description renders on PyPI, failing on a warning too. Each `uv run --isolated` installs the wheel in an environment of
-its own, with only what its metadata requires: alone, the library imports, and with the `cli` extra, the command runs.
-`uv pip compile` resolves the `openhands` extra with `lmnr-claude-code-proxy` excluded, as
-[Install](docs/getting-started/install.md#openhands) says. The workflow runs every step on Python 3.12, the oldest the
-distribution names, with `UV_PYTHON=3.12`.
-
-`tests/integration/test_installed.py`, slow tests, build the wheel again and install it in environments of their own.
-With the `cli` extra, the command line says its version, a headless run of
-[examples/sdk-script](examples/sdk-script/README.md) settles on the `exec` driver and the command line reads it back,
-and `uv tool install` puts the command on PATH. Alone, the library imports with nothing of the extra, and the command
-says what to install. The wheel holds every file git tracks in each layer's package, and the `openhands` extra
-requires what the install guide says. The tests take no network, so uv's cache must hold the build backend and each
-requirement, as the steps before them leave it; where it does not, they fail, saying so, and never skip.
+Each step checks what an install from PyPI would get, on Python 3.12, the oldest the distribution names: a wheel built
+from the sdist, so an sdist that leaves out a file the wheel needs fails; metadata and a description that render on PyPI;
+the library imported alone and the command run with its `cli` extra, each in an environment of its own; and the
+`openhands` extra resolved with `lmnr-claude-code-proxy` excluded, as [Install](docs/getting-started/install.md#openhands)
+says. `tests/integration/test_installed.py` builds the wheel again and installs it as a person does, taking no network,
+so uv's cache must hold what it installs, as the steps before it leave it; where it does not, it fails, saying so.
 
 The job keeps `dist/` as an artifact of the run. On a tag pushed to this repository, and on no other event, the
 `publish` job uploads it to PyPI with `pypa/gh-action-pypi-publish`, in the `pypi` environment. That job asks for an
