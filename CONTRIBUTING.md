@@ -240,7 +240,8 @@ subject too, because GitHub suggests it for the squashed commit. The job runs ag
 **What CI runs.** Each job runs on GitHub's Ubuntu runners for pull requests into any branch, so that a pull request
 stacked on another one is checked too, and for pushes to `main`. A new push cancels the run it makes stale. Each
 workflow's token reads the repository and nothing more, and a job that needs more asks only to read, as `pr-title`
-reads its pull request. Each action is pinned to a commit, with its release beside it, and each tool `uvx` fetches is
+reads its pull request, but for the release workflow's `publish` job, which asks for an OIDC token alone, as
+[Releases](#releases) says. Each action is pinned to a commit, with its release beside it, and each tool `uvx` fetches is
 pinned to a release, so that a tag moved upstream or a new release changes nothing CI runs, and each checkout keeps no
 credentials for a later step to read.
 
@@ -250,7 +251,7 @@ credentials for a later step to read.
 | `lint` | Every hook of the `pre-commit` stage, on every file | `uv.lock` is out of date, or a hook fails or changes a file |
 | `test` | The fast tests, once on each of Python 3.12 and 3.13, with `UV_PYTHON` set to it, after lifting Ubuntu's restriction on unprivileged user namespaces, which bubblewrap needs, and with `PLATOON_HARNESS_REQUIRE_BWRAP=1` | git is older than 2.47, bubblewrap cannot confine, or a test fails |
 | `e2e` | The browser tests, once in each of Chromium, Firefox and WebKit, with `PLATOON_HARNESS_BROWSERS` naming it | A browser test fails in that browser |
-| `build`, of the release workflow | Every distribution built and checked, as [Releases](#releases) says, and nothing published | A build or a check fails |
+| `build`, of the release workflow | The distribution built and checked, and on a `v*` tag the tag too, as [Releases](#releases) says | A build or a check fails |
 
 The commands, job by job:
 
@@ -432,15 +433,18 @@ The list of changes that start with an RFC is in [the RFC index](docs/rfcs/READM
 
 ## Releases
 
-platoon-harness is one distribution, at one version. Below 1.0, as [CHANGELOG.md](CHANGELOG.md) says, a minor
-release may change the Python API, the team file or the command line, and a patch release only fixes bugs. Nothing is
-published or tagged yet. Only the owner tags or publishes, and the names, the tags and the trusted publisher a
-release would publish with are the owner's to rule on.
+platoon-harness is one distribution, `platoon-harness`, at the version `packages/sdk/src/platoon_harness/version.py`
+sets. Below 1.0, as [CHANGELOG.md](CHANGELOG.md) says, a minor release may change the Python API, the team file or the
+command line, and a patch release only fixes bugs.
+
+A tag `vX.Y.Z` pushed to the repository publishes that release to PyPI. The release workflow checks it, and its
+`publish` job uploads by trusted publishing from the GitHub environment `pypi`, which only `v*` tags may deploy to and
+whose required reviewer, a maintainer, approves each deployment. A tag ruleset lets only the repository's admins create
+`v*` tags, and a tag is pushed only at a maintainer's request.
 
 ### Cut a release
 
-**Goal:** a commit on `main` that holds a release's version, its dated notes, and distributions the release workflow
-built and checked, ready for the owner to tag and publish.
+**Goal:** a commit on `main` that holds a release's version and its dated notes, which a maintainer's tag publishes.
 
 1. Choose the version: the next patch release if the release only fixes bugs, and the next minor release otherwise.
 
@@ -466,16 +470,34 @@ built and checked, ready for the owner to tag and publish.
 
 4. Merge it once CI and the release workflow pass on it. The release workflow runs again on the commit on `main`.
 
-5. Tagging and publishing are the owner's. The release workflow publishes nothing: a job that publishes comes with the
-   owner's ruling on the names, the tag and the trusted publisher.
+5. A maintainer tags the merged commit and pushes the tag:
+
+   ```bash
+   git switch main && git pull --ff-only
+   git tag -a v0.2.0 -m "platoon-harness 0.2.0"
+   git push origin v0.2.0
+   ```
+
+   The release workflow checks the tag, builds and checks as on a pull request, and waits for a maintainer to approve
+   the deployment to `pypi`, under Review deployments on the run's page. A tag that fails a check publishes nothing.
 
 ### The release workflow
 
-The release workflow, `.github/workflows/release.yml`, builds platoon-harness and checks it, on each pull request and
-each push to `main`, as CI's other jobs run. Its `build` job runs:
+The release workflow, `.github/workflows/release.yml`, builds platoon-harness and checks it on each pull request, each
+push to `main` and each pushed `v*` tag. On a tag, its `build` job first checks that the tagged commit is on `main` and
+that CHANGELOG.md dates the version:
+
+```bash
+gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status | grep -xE 'identical|behind'
+grep -q "^## ${GITHUB_REF_NAME#v} (2" CHANGELOG.md
+```
+
+On every event, it builds the sdist and the wheel, checks on a tag that the tag names the version built, and checks
+what it built:
 
 ```bash
 uv build --no-sources
+test -f "dist/platoon_harness-${GITHUB_REF_NAME#v}-py3-none-any.whl"
 uvx twine@7.0.0 check --strict dist/*
 uv run --isolated --no-project --with dist/*.whl python -I -c "import platoon_harness"
 uv run --isolated --no-project --with "$(echo dist/*.whl)[cli]" platoon-harness --version
@@ -499,3 +521,7 @@ and `uv tool install` puts the command on PATH. Alone, the library imports with 
 says what to install. The wheel holds every file git tracks in each layer's package, and the `openhands` extra
 requires what the install guide says. The tests take no network, so uv's cache must hold the build backend and each
 requirement, as the steps before them leave it; where it does not, they fail, saying so, and never skip.
+
+The job keeps `dist/` as an artifact of the run. On a tag pushed to this repository, and on no other event, the
+`publish` job uploads it to PyPI with `pypa/gh-action-pypi-publish`, in the `pypi` environment. That job asks for an
+OIDC token and nothing more, which PyPI trades for the right to upload, and runs no code of the repository.

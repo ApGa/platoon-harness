@@ -452,12 +452,12 @@ named here is closed.
   never below the true one; and the CPU and peak memory of its process, the memory None anywhere but Linux. A read-only
   kernel measures nothing, so it has None. These were the writer's private fields, which no op could read, and `Txn` now
   has six members. A command that asks for them is refused, so nothing it does or records rests on them. See [RFC 0069](docs/rfcs/0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md), a draft.
-- **A release workflow, which publishes nothing.** `.github/workflows/release.yml` builds the sdist and the wheel on
-  each pull request and each push to `main`, the wheel from the sdist, checks both with `twine check --strict`, and runs
-  the command line from the wheel with its `cli` extra in an environment of its own. Nothing checked what a
-  release would publish. CONTRIBUTING says under Releases how to cut a release, and shows the workflow's commands, which
-  pass when run by hand; that they pass on GitHub's runners is inferred until a run shows it. It publishes nothing, as
-  the names, the tag and the trusted publisher a release would publish with are the owner's to rule on.
+- **A release workflow, which publishes a `v` tag.** `.github/workflows/release.yml` builds the sdist and the wheel on
+  each pull request and each push to `main`, the wheel from the sdist, checks both with `twine check --strict`, imports
+  the library from the wheel alone, runs the command line with its `cli` extra, and resolves the `openhands` extra with
+  `lmnr-claude-code-proxy` excluded. A `vX.Y.Z` tag pushed to the repository publishes them to PyPI by trusted
+  publishing, once a maintainer approves the deployment, and only for a commit on `main` whose CHANGELOG dates the
+  version the tag names. Before, nothing checked what a release would publish.
 - **platoon-harness tested as a person installs it.** Slow tests, `tests/integration/test_installed.py`, build the wheel
   and install it, offline, in environments of its own: with the `cli` extra the command line says its version, a
   headless run of `examples/sdk-script` settles on the `exec` driver and the command line reads it back, and
@@ -1177,8 +1177,8 @@ named here is closed.
 - **CI's actions pinned to commits, and its token reading only.** Each action a workflow uses is pinned to a commit,
   with its release beside it, where a tag its owner could move named it, so a moved tag changes nothing CI runs. Each
   commit is the one its tag named, so nothing CI runs changed, and the release workflow runs `twine` at a release it
-  names. Each workflow's token reads the repository and nothing more, a job that needs more asks only to read, and
-  each checkout keeps no credentials for a later step to read.
+  names. Each workflow's token reads the repository and nothing more, a job that needs more asks only to read, but the
+  `publish` job, which asks for an OIDC token alone, and each checkout keeps no credentials for a later step to read.
 - **One version, set in one place.** `packages/sdk/src/platoon_harness/version.py` sets the version, where five places
   set it, which a release had to change alike.
 - **Each Git example runs on stand-ins of its own.** The worktree team's no-keys run took the test suite's stand-ins,

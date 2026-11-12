@@ -48,8 +48,14 @@ BY_HAND = {
     "uv run pre-commit run conventional-pre-commit --hook-stage commit-msg --commit-msg-filename message.txt": (
         "the commit-msg hook, on a message not committed"
     ),
+    "git switch main && git pull --ff-only": "a maintainer's, before tagging a release",
+    'git tag -a v0.2.0 -m "platoon-harness 0.2.0"': "a maintainer's, as only maintainers make a release's tag",
+    "git push origin v0.2.0": "a maintainer's, as the tag it pushes publishes the release",
 }
 """Each command the guide shows that neither CI nor a hook runs, and why it is run by hand."""
+PUBLISHES = "github.repository == 'ApGa/platoon-harness' && github.event_name == 'push' && "
+"""How the condition of a job that publishes begins: on a push to this repository, never to a fork or for a pull
+request."""
 PINNED = re.compile(r"(?P<action>[\w.-]+/[\w./-]+)@(?P<commit>[0-9a-f]{40})  # (?P<release>v\d+\.\d+\.\d+)")
 """An action pinned to a commit, with the release it is beside it."""
 FENCE = re.compile(r"^(?P<indent> *)```(?P<language>[\w-]*)$")
@@ -205,9 +211,13 @@ def test_the_example_messages_are_ones_the_title_check_accepts():
 
 def test_every_action_is_pinned_to_a_commit_and_every_workflow_reads_only_by_default():
     """A tag moved upstream, or a release of a tool `uvx` fetches, changes nothing a workflow runs, a workflow's token
-    reads only, and no checkout keeps credentials for a later step, as the guide says."""
+    reads only, and no checkout keeps credentials for a later step, as the guide says. A job that publishes alone asks
+    for more, an OIDC token and nothing else, on a push to this repository, in the `pypi` environment, and runs no code
+    of the repository: it uploads what the build made."""
     workflows = [yaml.safe_load(path.read_text()) for path in (ROOT / ".github" / "workflows").glob("*.yml")]
     jobs = [job for workflow in workflows for job in workflow["jobs"].values()]
+    publishing = [job for job in jobs if "id-token" in job.get("permissions", {})]
+    reading = [job for job in jobs if job not in publishing]
     checkouts = [step for step in steps() if step.get("uses", "").startswith("actions/checkout@")]
     fetched = [line for step in steps() for line in step.get("run", "").splitlines() if line.startswith("uvx ")]
 
@@ -218,7 +228,15 @@ def test_every_action_is_pinned_to_a_commit_and_every_workflow_reads_only_by_def
     )
     assert [line for line in fetched if re.match(r"uvx (--from dist/|[\w-]+@[\d.]+ )", line) is None] == []
     assert [workflow.get("permissions") for workflow in workflows] == [{"contents": "read"}] * len(workflows)
-    assert {access for job in jobs for access in job.get("permissions", {}).values()} <= {"read"}
+    assert {access for job in reading for access in job.get("permissions", {}).values()} <= {"read"}
+    assert publishing and {job["if"].startswith(PUBLISHES) for job in publishing} == {True}
+    assert [(job["permissions"], job["environment"]["name"]) for job in publishing] == [
+        ({"id-token": "write"}, "pypi")
+    ] * len(publishing)
+    assert {step["uses"].partition("@")[0] for job in publishing for step in job["steps"]} == {
+        "actions/download-artifact",
+        "pypa/gh-action-pypi-publish",
+    }
     assert "Each action is pinned to a commit" in " ".join(TEXT.split())
 
 
