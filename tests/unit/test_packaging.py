@@ -165,26 +165,6 @@ def test_each_wheel_ships_a_copy_of_the_license():
         assert (ROOT / folder / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
 
 
-def test_a_first_party_extension_has_a_version_of_its_own_and_requires_the_sdk_s_own_minor_release_alone():
-    """A folder of `extensions/` is a distribution of its own, released on its own version (RFC 0072), which takes the
-    SDK of its own minor release, as the command line does, and nothing else, ships the license, and names the systems
-    and Pythons the SDK names."""
-    release = Version(platoon_harness.__version__)
-    folders = sorted(path.parent for path in (ROOT / "extensions").glob("*/pyproject.toml"))
-
-    assert folders
-    for folder in folders:
-        requirements = [Requirement(line) for line in project(folder)["dependencies"]]
-        minor = SpecifierSet(f">={release.major}.{release.minor},<{release.major}.{release.minor + 1}")
-        assert [(requirement.name, requirement.specifier) for requirement in requirements] == [
-            ("platoon-harness-sdk", minor)
-        ]
-        assert "version" in project(folder) and "version" not in project(folder).get("dynamic", ())
-        assert project(folder)["license-files"] == ["LICENSE"]
-        assert (folder / "LICENSE").read_bytes() == (ROOT / "LICENSE").read_bytes()
-        assert project(folder)["classifiers"] == project(ROOT / "packages" / "sdk")["classifiers"]
-
-
 def test_no_package_names_macos_while_nothing_has_run_there():
     assert "Nothing has run on macOS" in (ROOT / "docs" / "STATUS.md").read_text()
     for folder in PACKAGES:

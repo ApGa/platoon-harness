@@ -16,6 +16,7 @@ from platoon_harness import ConfigError
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers import Driver, DriverError
 from platoon_harness.drivers.levels import CHECKED, Conformance, implementation, unmet_by
+from platoon_harness.drivers.opencode import OpenCodeDriver
 from platoon_harness.drivers.openhands import OpenHandsDriver, worker
 from platoon_harness.drivers.process import status
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, Installed, check_installed, discover, load
@@ -304,16 +305,17 @@ def _said_checked(checkable: bool, checked: dict[str, Any] | None) -> str:
 
 def _runs_as_written(driver: Driver) -> bool:
     """Whether a team `init` writes runs on a harness: one the SDK drives, but `openhands`, which signs in only with a
-    key from an auth profile. A driver an extension installs may need a setting `init` does not write, as `opencode`
-    needs a model."""
-    return type(driver).__module__.partition(".")[0] == "platoon_harness" and not isinstance(driver, OpenHandsDriver)
+    key from an auth profile, and `opencode`, which needs a model. A driver an extension installs may need a setting
+    `init` does not write too."""
+    named = type(driver).__module__.partition(".")[0] == "platoon_harness"
+    return named and not isinstance(driver, (OpenHandsDriver, OpenCodeDriver))
 
 
 @dataclass(frozen=True)
 class Starter:
     """The team `init` writes from the harnesses on PATH: a lead on the first, which starts workers on the second, or on
     the first again where it is alone. It writes no auth profile and no model, so it takes only the harnesses the SDK
-    drives, but `openhands`, which signs in only with a key from one."""
+    drives, but `openhands`, which signs in only with a key from one, and `opencode`, which needs a model."""
 
     lead: str
     worker: str
@@ -348,8 +350,8 @@ def init() -> int:
     """Write a starter `platoon-harness.toml` from the harnesses on PATH, and say how to run it.
 
     A lead on the first, which starts workers on the second. It never overwrites one. It writes no auth profile and no
-    model, so it takes only the harnesses the SDK drives, but `openhands`, which signs in only with a key from one: an
-    installed driver may need a model, as `opencode` does.
+    model, so it takes only the harnesses the SDK drives, but `openhands`, which signs in only with a key from one, and
+    `opencode`, which needs a model.
 
     For example:
 

@@ -13,7 +13,7 @@ rules your code keeps, and links the guide to each.
 | A harness that takes a task and exits | Nothing but its command line | The `exec` driver | A role's `harness = { command = [...], mode = "oneshot" }` | [A one-shot CLI](drivers.md#a-one-shot-cli-exec) |
 | A harness driven from any language | A program that speaks JSON-RPC on stdio | The `wire` driver | A role's `harness = { command = [...], mode = "wire" }` | [A program: the wire](drivers.md#a-program-the-wire) |
 | A driver in Python | A class with the seven methods of `Driver` | The `platoon_harness.drivers` entry-point group, or `module:attr` | A role's `harness`, by the driver's name | [A Python package](drivers.md#a-python-package) |
-| A driver of an agent that speaks ACP | A subclass of `AcpDriver`, from the first-party extension `platoon-harness-acp`, that names the agent's command | The `platoon_harness.drivers` entry-point group, or `module:attr` | A role's `harness`, by the driver's name | [ACP agents](drivers.md#acp-agents-a-first-party-extension) |
+| A driver of an agent that speaks ACP | A subclass of the SDK's experimental `AcpDriver` that names the agent's command | The `platoon_harness.drivers` entry-point group, or `module:attr` | A role's `harness`, by the driver's name | [ACP agents](drivers.md#acp-agents) |
 | An extension | An `Extension`, of [the parts below](#an-extensions-parts) | The `platoon_harness.extensions` entry-point group, or `module:attr` | A team's `extensions = [...]` | [Write an extension](extensions.md) |
 | A topology preset | A function that returns a `Topology` | An extension's `presets` | A team's `[topology.<name>]` table | [Write your own preset](../how-to/topologies.md#write-your-own-preset) |
 | An isolation | An object with `refusal()` and `wrap(writable, readable, hidden)` | An extension's `isolation` | A team that names the extension, and a role's `workspace = "isolated"`, which is [experimental](../reference/python.md#platoon_harnessruntimeisolation) | [Where an isolated agent runs](../how-to/workspaces.md#where-an-isolated-agent-runs) |
@@ -68,10 +68,7 @@ of its fields concern a driver of yours in particular:
 
 - **`check`** names the check that ships with a driver outside the SDK, as `module:function`, which
   `platoon-harness doctor --check` runs against FakeModel and keeps, and which is imported only to run it. The SDK's own
-  drivers name none, as `levels.CHECKED` holds theirs. The ACP driver is the first first-party extension, whose
-  `opencode` driver names `platoon_harness_acp.check:opencode`. That a first-party extension is a distribution of its
-  own under `extensions/`, on a version and a tag of its own, is the default, pending the owner's ruling
-  ([RFC 0072](../rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md), a draft).
+  drivers, `opencode` among them, name none, as `levels.CHECKED` holds theirs.
 - **`credentials`** names where, beneath the agent's folder, its harness keeps a credential, as relative paths that
   cannot leave that folder. When the agent ends, its stop removes them with the harness's `TMPDIR`, and a rest removes
   nothing, as the harness comes back

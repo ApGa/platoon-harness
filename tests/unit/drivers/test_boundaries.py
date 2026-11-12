@@ -1,20 +1,14 @@
 """The SDK stands alone."""
 
 import ast
-import importlib
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from platoon_harness.testing.extension import private_reaches
-
 ROOT = Path(__file__).parents[3]
 SDK = ROOT / "packages" / "sdk" / "src" / "platoon_harness"
-FIRST_PARTY = {path.name for path in ROOT.glob("extensions/*/src/*") if path.is_dir()}
-"""The import package of each first-party extension, a distribution of its own under `extensions/`."""
-ACP = ROOT / "extensions" / "acp" / "src" / "platoon_harness_acp"
 ALLOWED = set(sys.stdlib_module_names) | {"pydantic", "pydantic_core", "platoon_harness"}
 OPENHANDS = {"openhands", "litellm"}
 """What the SDK's `openhands` extra brings, which only the OpenHands worker loads, in its own process."""
@@ -35,32 +29,6 @@ def roots_of(path: Path) -> set[str]:
 def test_the_sdk_imports_nothing_but_the_standard_library_and_pydantic(path):
     """But for the OpenHands worker's own module, which imports what the `openhands` extra brings."""
     assert roots_of(path) <= ALLOWED | (OPENHANDS if path == WORKER else set())
-
-
-def test_the_sdk_never_imports_a_first_party_extension():
-    """Nor does the command line: an extension is installed beside them, and found by its entry point alone."""
-    ours = sorted(ROOT.glob("packages/*/src/**/*.py"))
-
-    assert "platoon_harness_acp" in FIRST_PARTY
-    assert [path.relative_to(ROOT) for path in ours if roots_of(path) & FIRST_PARTY] == []
-
-
-@pytest.mark.parametrize("path", sorted(ACP.rglob("*.py")), ids=lambda path: str(path.relative_to(ACP)))
-def test_the_acp_extension_uses_only_public_names(path):
-    """As any third party's driver would: the standard library, pydantic and the SDK, and of the SDK only the names a
-    module publishes in `__all__`, reaching no underscored name on anything."""
-    tree = ast.parse(path.read_text())
-    imported = [node for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.level == 0]
-    modules = [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
-
-    assert roots_of(path) <= ALLOWED | {"platoon_harness_acp"}
-    assert private_reaches(tree) == []
-    for module in [*modules, *(node.module or "" for node in imported)]:
-        assert not any(part.startswith("_") for part in module.split(".")), module
-    for node in imported:
-        if (node.module or "").split(".")[0] == "platoon_harness":
-            published = set(importlib.import_module(node.module or "").__all__)
-            assert {alias.name for alias in node.names} <= published, node.module
 
 
 def test_only_the_openhands_worker_imports_openhands():

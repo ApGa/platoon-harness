@@ -1,9 +1,9 @@
 # Drivers
 
 A driver presents one harness session to the runtime through seven methods. One instance serves one agent. Drivers for
-`claude`, `codex`, `pi` and `openhands` ship with the SDK, the last a wire worker whose OpenHands comes with the SDK's
-`openhands` extra, [below](#openhands-a-wire-worker). The driver of agents that speak ACP, `opencode` among them, ships
-as a first-party extension, `platoon-harness-acp`, [below](#acp-agents-a-first-party-extension).
+`claude`, `codex`, `pi`, `openhands` and `opencode` ship with the SDK: `openhands` a wire worker whose OpenHands comes
+with the SDK's `openhands` extra, [below](#openhands-a-wire-worker), and `opencode` on the SDK's driver of agents that
+speak ACP, [below](#acp-agents).
 This page is for everyone else: how to write a driver, in Python or any other language, and how to prove it works.
 [Extending platoon-harness](index.md) lists every other way in.
 
@@ -465,15 +465,15 @@ agents start keeps its socket in the directory every tmux of the user's shares. 
   program's does. The driver gives the worker a short directory of its own for tmux's sockets, as OpenHands falls back to the one
   every tmux of the user's shares past a socket's length, and takes it back at `stop`, which a worker killed outright cannot.
 
-## ACP agents: a first-party extension
+## ACP agents
 
-`platoon-harness-acp`, under `extensions/acp`, is a distribution of its own that requires the SDK alone, and installing it
-activates nothing until a team names its driver. `AcpDriver(command)` drives an agent that speaks the Agent Client Protocol
-on stdio, at protocol 1 alone, over the SDK's `Peer`, adding no dependency. `harness = "opencode"` is that driver on
-`opencode acp`, and a driver for another agent of ACP is a subclass that names its command, as `OpenCodeDriver` does:
+`AcpDriver(command)`, the SDK's `platoon_harness.drivers.acp`, drives an agent that speaks the Agent Client Protocol on
+stdio, at protocol 1 alone, over the SDK's `Peer`, adding no dependency. It is experimental, as only a stand-in agent has
+run on it ([STATUS](../STATUS.md)). `harness = "opencode"` is that driver on `opencode acp`, and a driver for another
+agent of ACP is a subclass that names its command, as `OpenCodeDriver` does:
 
 ```python
-from platoon_harness_acp import AcpDriver
+from platoon_harness.drivers.acp import AcpDriver
 
 
 class MyAgentDriver(AcpDriver):
@@ -635,8 +635,7 @@ check ships for, through `check_harness(name, folder)`, on the binary that runs,
 ships for each harness `levels.CHECKED` names, which the SDK drives, and for an installed driver whose `describe` names one in
 `DriverInfo.check`, as `module:function`: a coroutine function of the folder to run in that returns what `check_driver` found,
 imported only to run it, and refused if what it found is of another class than the driver's or names another harness, or if it
-breaks. The `opencode` driver names its own
-this way. The host reads a kept result at every launch and resume and records it on `agent.started` or `agent.resumed`, as a body,
+breaks. The host reads a kept result at every launch and resume and records it on `agent.started` or `agent.resumed`, as a body,
 beside the levels it gave, where it speaks for that harness. A level with no result that speaks for the harness that runs says so,
 and names what makes one: `doctor --check` for the harnesses `levels.CHECKED` names, and `check_driver` and `write_conformance` for
 any other, which `doctor --check` also runs where the driver names a check. A wire program
@@ -644,9 +643,8 @@ is checked as above, and its result kept the same way, by the name its `describe
 result is pinned to the class that implements the driver too, and a program calling itself `claude` earns nothing from what was kept
 of the claude driver's checks. A class outside the SDK is pinned with the release, the distribution and its version, of each
 installed distribution whose driver entry points name its package or the package of a class it is built on, as
-`platoon_harness_acp.opencode:OpenCodeDriver, platoon-harness-acp 0.1.0`, or for a subclass of `AcpDriver` in a distribution of
-your own, yours and then `platoon-harness-acp`, so an upgrade of any of them reads `unverified` until it is checked again, as an
-upgrade of the SDK does. A base class from a distribution that names no driver of its own is not pinned.
+`my_agent:MyAgentDriver, my-agent 1.0.0` for a subclass of `AcpDriver` in a distribution of your own, so an upgrade of any of
+them reads `unverified` until it is checked again, as an upgrade of the SDK does. A base class from a distribution that names no driver of its own is not pinned.
 
 ```python
 from platoon_harness.drivers.levels import Profile, implementation, levels

@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from platoon_harness.drivers import Capabilities, Delivery, Offered
+from platoon_harness.drivers.acp import CAPABILITIES, AcpDriver
 from platoon_harness.drivers.exec import ExecDriver
 from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
 from platoon_harness.drivers.process import Record
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.testing import SHELL, ScriptedDriver, ToolCall, check_driver, every_turn_asks_the_model
-from platoon_harness_acp import CAPABILITIES, AcpDriver
 
 pytestmark = pytest.mark.timeout(120)
 

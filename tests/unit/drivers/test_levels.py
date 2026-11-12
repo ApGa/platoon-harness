@@ -1,7 +1,7 @@
 """Levels: computed from what was verified, each with reasons, and claimed by nobody."""
 
 import socket
-from importlib import metadata
+from pathlib import Path
 
 import pytest
 
@@ -22,7 +22,6 @@ from platoon_harness.drivers.levels import (
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.extensions import DRIVERS, load
 from platoon_harness.testing import harnesses
-from platoon_harness_acp import OpenCodeDriver
 
 PI = "platoon_harness.drivers.pi:PiDriver"
 PROFILE = Profile(driver="pi", implementation=PI, version="1.4.0", login="gateway", tools="visible")
@@ -299,49 +298,68 @@ def test_a_driver_s_implementation_is_its_class_by_module_and_name():
     assert implementation(PiDriver()) == PI
 
 
-def test_a_result_is_pinned_to_the_release_of_a_driver_outside_the_sdk():
-    """An extension releases apart from the SDK, so a result made of its driver at one version of it says nothing of
-    another, as one made under another SDK says nothing of the SDK's drivers."""
-    release = metadata.version("platoon-harness-acp")
-    made = implementation(OpenCodeDriver())
-    earlier = made.replace(f"platoon-harness-acp {release}", "platoon-harness-acp 0.0.1")
-    profile = Profile(driver="opencode", implementation=made, version="2.2.6")
-    checks = (Check(name="turn_end_reported", state="passed"),)
-
-    assert made == f"platoon_harness_acp.opencode:OpenCodeDriver, platoon-harness-acp {release}"
-    for pinned, speaks in ((made, True), (earlier, False)):
-        result = Conformance(
-            driver="opencode", implementation=pinned, version="2.2.6", sdk=__version__, host=HOST, checks=checks
-        )
-        assert speaks_for(profile, result) is speaks
-
-
 AGENT = """
-from platoon_harness_acp import AcpDriver
+from platoon_harness.drivers.acp import AcpDriver
 
 
 class MyAgentDriver(AcpDriver):
     name = "my-agent"
 
-    def __init__(self):
-        super().__init__(("my-agent", "--acp"))
+    def __init__(self, command=("my-agent", "--acp")):
+        super().__init__(command)
 """
 """A driver of another agent of ACP, as the driver guide has one written: a subclass that names its command."""
+KIN = """
+from levels_agent import MyAgentDriver
+
+
+class KinDriver(MyAgentDriver):
+    name = "kin"
+
+    def __init__(self):
+        super().__init__(("kin", "--acp"))
+"""
+"""A driver built on that one, in a distribution of its own."""
+
+
+def released(site: Path, name: str, version: str, module: str, source: str, driver: str) -> None:
+    """A distribution of its own in `site`, holding the module `module`, whose driver entry point is `driver`."""
+    (site / f"{module}.py").write_text(source)
+    info = site / f"{module}-{version}.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text(f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n")
+    (info / "entry_points.txt").write_text(f"[{DRIVERS}]\n{driver}\n")
+
+
+def test_a_result_is_pinned_to_the_release_of_a_driver_outside_the_sdk(tmp_path, monkeypatch):
+    """A driver in a distribution of its own releases apart from the SDK, so a result made of it at one version of that
+    distribution says nothing of another, as one made under another SDK says nothing of the SDK's drivers."""
+    site = tmp_path / "site"
+    site.mkdir()
+    released(site, "levels-agent", "1.2.0", "levels_agent", AGENT, "my-agent = levels_agent:MyAgentDriver")
+    monkeypatch.syspath_prepend(site)
+    made = implementation(load(DRIVERS, "my-agent")())
+    earlier = made.replace("levels-agent 1.2.0", "levels-agent 0.0.1")
+    profile = Profile(driver="my-agent", implementation=made, version="2.2.6")
+    checks = (Check(name="turn_end_reported", state="passed"),)
+
+    assert made == "levels_agent:MyAgentDriver, levels-agent 1.2.0"
+    for pinned, speaks in ((made, True), (earlier, False)):
+        result = Conformance(
+            driver="my-agent", implementation=pinned, version="2.2.6", sdk=__version__, host=HOST, checks=checks
+        )
+        assert speaks_for(profile, result) is speaks
 
 
 def test_a_result_is_pinned_to_the_release_of_each_distribution_its_driver_s_class_is_built_on(tmp_path, monkeypatch):
-    """A driver of another agent of ACP is a subclass in a distribution of its own, and the ACP extension does its
-    driving, so an upgrade of either reads as one."""
+    """A driver built on another distribution's driver, which does its driving, is pinned to both, so an upgrade of
+    either reads as one. The SDK's own classes it is built on are pinned by the SDK's version alone."""
     site = tmp_path / "site"
     site.mkdir()
-    (site / "levels_agent.py").write_text(AGENT)
-    info = site / "levels_agent-1.2.0.dist-info"
-    info.mkdir()
-    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: levels-agent\nVersion: 1.2.0\n")
-    (info / "entry_points.txt").write_text(f"[{DRIVERS}]\nmy-agent = levels_agent:MyAgentDriver\n")
+    released(site, "levels-agent", "1.2.0", "levels_agent", AGENT, "my-agent = levels_agent:MyAgentDriver")
+    released(site, "levels-kin", "3.0.0", "levels_kin", KIN, "kin = levels_kin:KinDriver")
     monkeypatch.syspath_prepend(site)
 
-    made = implementation(load(DRIVERS, "my-agent")())
+    made = implementation(load(DRIVERS, "kin")())
 
-    release = metadata.version("platoon-harness-acp")
-    assert made == f"levels_agent:MyAgentDriver, levels-agent 1.2.0, platoon-harness-acp {release}"
+    assert made == "levels_kin:KinDriver, levels-kin 3.0.0, levels-agent 1.2.0"

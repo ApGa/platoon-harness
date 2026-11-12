@@ -20,6 +20,7 @@ CHECKED: Mapping[str, str] = {
     "claude": "platoon_harness.drivers.claude:ClaudeDriver",
     "codex": "platoon_harness.drivers.codex:CodexDriver",
     "openhands": "platoon_harness.drivers.openhands:OpenHandsDriver",
+    "opencode": "platoon_harness.drivers.opencode:OpenCodeDriver",
     "pi": "platoon_harness.drivers.pi:PiDriver",
 }
 """Each harness a check of ships with the SDK, which `platoon-harness doctor --check` checks where it finds it, by the

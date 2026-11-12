@@ -2,12 +2,19 @@
 
 | | |
 |---|---|
-| Status | Draft |
+| Status | Draft; open question 1 decided 2026-11-12 |
 | Created | 2026-11-08 |
 | Authors | Apurva Gandhi (`ApGa`) |
 | Builds on | [`rpc.py`](../../packages/sdk/src/platoon_harness/rpc.py), [`drivers/__init__.py`](../../packages/sdk/src/platoon_harness/drivers/__init__.py), [`drivers/levels.py`](../../packages/sdk/src/platoon_harness/drivers/levels.py), [`testing/harnesses.py`](../../packages/sdk/src/platoon_harness/testing/harnesses.py), the command line's [`machine.py`](../../packages/cli/src/platoon_harness_cli/machine.py), [architecture section 9](../architecture.md#9-drivers) and [section 17](../architecture.md#17-extensions-and-configuration), [RFC 0008](0008-driver-contract-and-wire.md), [RFC 0024](0024-a-harness-s-own-agents-are-off.md), [RFC 0030](0030-openhands-is-an-extra-of-the-sdk.md), [RFC 0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) and [RFC 0066](0066-an-approval-carries-the-whole-of-what-it-asks.md) |
-| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's questions on where first-party extensions live and what ACP is spoken over, which are open |
-| Implementation | `build: Add the platoon-harness-acp distribution under extensions`, `feat: Drive ACP agents on protocol 1 over the SDK's own JSON-RPC peer`, `feat: Let an installed driver name the check doctor runs for it` and `test: Run check_driver on a scripted ACP agent and on OpenCode against FakeModel` |
+| Discussion | Milestone 4's plan and the critiques of its first draft, kept outside this repository, and the owner's questions on where first-party extensions live and what ACP is spoken over, the first of which was decided on 2026-11-12 |
+| Implementation | `build: Add the platoon-harness-acp distribution under extensions`, `feat: Drive ACP agents on protocol 1 over the SDK's own JSON-RPC peer`, `feat: Let an installed driver name the check doctor runs for it` `test: Run check_driver on a scripted ACP agent and on OpenCode against FakeModel` and `refactor: Drive ACP agents from the SDK's own drivers` |
+
+**Open question 1, decided 2026-11-12.** ACP is driven by a built-in driver of the SDK, which releases with it, not by a
+first-party extension: a distribution of its own costs a PyPI name, a tag and a release environment, and
+`examples/extension-package` already shows how a third party ships a driver or an extension. `AcpDriver` is
+`platoon_harness.drivers.acp`, `opencode` is `platoon_harness.drivers.opencode`, and the check of `opencode` is the SDK's own,
+which `levels.CHECKED` names. `DriverInfo.check` stays, for drivers outside the SDK. Section 1, and what the rest says of
+`platoon-harness-acp`, describe what this replaced.
 
 ## Summary
 
@@ -212,6 +219,7 @@ against `FakeModel` in a home of the check's own, through a provider given in `O
 
 1. Where do first-party extensions live and ship? This builds the default, pending the owner's ruling: `extensions/<name>`, each a
    distribution with its own version and tag. Another place moves a folder and a workspace member and removes nothing else.
+   Decided on 2026-11-12: the ACP driver is the SDK's own, as the note under the status table says.
 2. Should ACP be spoken over the ACP Python SDK or the SDK's own `rpc.Peer`? This builds the default, pending the owner's ruling:
    `rpc.Peer` on protocol 1. The SDK's client would replace `driver.py`'s use of the peer, and it drops an update it cannot parse
    before a client sees it, so an unknown update would keep its gap and lose its raw frame: that answer would change

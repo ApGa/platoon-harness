@@ -96,6 +96,7 @@ EXPERIMENTAL = {
         "`platoon_harness.credit.propagate`, `propagate@4`, experimental and heuristic, in the one producer signature, "
         "at version 4 in place of 1, 2 and 3"
     ),
+    "platoon_harness.drivers.acp": "The ACP driver, architecture section 9.5, `AcpDriver`, a driver of the SDK's own",
     "platoon_harness.drivers.claude": "The `claude` driver",
     "platoon_harness.drivers.codex": "The `codex` driver",
     "platoon_harness.drivers.openhands": "OpenHands as a wire worker",
@@ -327,7 +328,7 @@ def python_reference(root: Path) -> str:
 list, and make it again. A test holds it to them. -->
 
 Every name `tests/public_api.txt` lists, under the module whose `__all__` holds it: the SDK's, `platoon_harness` and
-the modules beneath it, and the ACP extension's, `platoon_harness_acp`.
+the modules beneath it.
 
 By default, pending the owner's ruling, the public API is each name `tests/public_api.txt` lists, and each attribute and
 method without a leading underscore that a class it lists defines, of which the list records only some, and nothing

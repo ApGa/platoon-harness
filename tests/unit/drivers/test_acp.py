@@ -23,10 +23,11 @@ from platoon_harness.drivers import (
     Ready,
     TurnEnded,
 )
+from platoon_harness.drivers.acp import CAPABILITIES, AcpDriver
 from platoon_harness.drivers.levels import Check, Conformance, Profile, implementation, levels
+from platoon_harness.drivers.opencode import OpenCodeDriver
 from platoon_harness.testing import FakeModel
 from platoon_harness.testing.conformance import _CHECKS
-from platoon_harness_acp import CAPABILITIES, AcpDriver, OpenCodeDriver
 
 from .support import Heard, make_spec
 

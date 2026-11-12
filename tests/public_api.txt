@@ -26,6 +26,10 @@ platoon_harness.credit.propagate
 platoon_harness.credit.PROPAGATE
 platoon_harness.credit.propagate(session,episode,*,judge,retained)
 platoon_harness.drivers.Access
+platoon_harness.drivers.acp.AcpDriver
+platoon_harness.drivers.acp.AcpDriver(command)
+platoon_harness.drivers.acp.CAPABILITIES
+platoon_harness.drivers.acp.PROTOCOL
 platoon_harness.drivers.AgentSpec
 platoon_harness.drivers.AgentSpec.wrap
 platoon_harness.drivers.ApprovalRequested
@@ -85,6 +89,8 @@ platoon_harness.drivers.Login
 platoon_harness.drivers.ModelCall
 platoon_harness.drivers.Native
 platoon_harness.drivers.Offered
+platoon_harness.drivers.opencode.OpenCodeDriver
+platoon_harness.drivers.opencode.OpenCodeDriver()
 platoon_harness.drivers.openhands.OpenHandsDriver
 platoon_harness.drivers.pi.PiDriver
 platoon_harness.drivers.process.clean
@@ -569,9 +575,3 @@ platoon_harness.topology.Topology
 platoon_harness.topology.tree
 platoon_harness.topology.Unexpanded
 platoon_harness.topology.union
-platoon_harness_acp.AcpDriver
-platoon_harness_acp.AcpDriver(command)
-platoon_harness_acp.CAPABILITIES
-platoon_harness_acp.OpenCodeDriver
-platoon_harness_acp.OpenCodeDriver()
-platoon_harness_acp.PROTOCOL

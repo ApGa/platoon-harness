@@ -1,9 +1,8 @@
 name: Release
 
-# Builds the sdists and wheels of the SDK, the command line and the first-party extensions, and checks them, on the events
-# ci.yml runs on: what a release would publish, checked before anything is published. It publishes nothing: the names,
-# the tags and the trusted publisher a release would publish with are the owner's to rule on (CONTRIBUTING.md,
-# "Releases").
+# Builds the sdists and wheels of the SDK and the command line, and checks them, on the events ci.yml runs on: what a
+# release would publish, checked before anything is published. It publishes nothing: the names, the tags and the trusted
+# publisher a release would publish with are the owner's to rule on (CONTRIBUTING.md, "Releases").
 on:
   pull_request:
   push:
@@ -47,10 +46,6 @@ jobs:
 
       - name: Run the command line from the wheels in an environment of its own
         run: uvx --from dist/platoon_harness_cli-*.whl --with dist/platoon_harness_sdk-*.whl platoon-harness --version
-
-      # A first-party extension is a distribution of its own (RFC 0072), which installs beside the SDK alone.
-      - name: Load the ACP extension's driver from its wheel and the SDK's, in an environment of their own
-        run: uv run --isolated --no-project --with dist/platoon_harness_acp-*.whl --with dist/platoon_harness_sdk-*.whl python -I -c "from platoon_harness.extensions import DRIVERS, load; load(DRIVERS, 'opencode')"
 
       - name: Install dependencies
         run: uv sync --locked

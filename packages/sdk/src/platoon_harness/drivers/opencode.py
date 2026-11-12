@@ -1,8 +1,7 @@
 """OpenCode, driven through `opencode acp`."""
 
-from platoon_harness.drivers import AgentSpec, DriverError, DriverInfo, Reporter
-
-from .driver import AcpDriver
+from . import AgentSpec, DriverError, Reporter
+from .acp import AcpDriver
 
 __all__ = ["OpenCodeDriver"]
 
@@ -27,10 +26,6 @@ class OpenCodeDriver(AcpDriver):
 
     def __init__(self) -> None:
         super().__init__(("opencode", "acp"))
-
-    def describe(self) -> DriverInfo:
-        """As any ACP agent's, naming the check `doctor --check` runs on it."""
-        return super().describe().model_copy(update={"check": "platoon_harness_acp.check:opencode"})
 
     async def start(self, spec: AgentSpec, report: Reporter) -> None:
         if spec.model is None:

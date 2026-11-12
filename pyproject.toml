@@ -5,7 +5,7 @@ dynamic = ["version"]
 description = "Run the agent harnesses you already use, such as Claude Code, Codex, pi and OpenHands, as one team, in durable sessions you can watch, steer, resume and read back."
 requires-python = ">=3.12"
 license = "MIT"
-dependencies = ["platoon-harness-sdk", "platoon-harness-cli", "platoon-harness-acp"]
+dependencies = ["platoon-harness-sdk", "platoon-harness-cli"]
 
 [dependency-groups]
 dev = [
@@ -33,18 +33,16 @@ package = false
 exclude-dependencies = ["lmnr-claude-code-proxy"]
 
 [tool.uv.workspace]
-# The SDK and the command line, and the first-party extensions, each a distribution of its own (RFC 0072).
-members = ["packages/*", "extensions/*"]
+members = ["packages/*"]
 
 [tool.uv.sources]
 platoon-harness-sdk = { workspace = true }
 platoon-harness-cli = { workspace = true }
-platoon-harness-acp = { workspace = true }
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-src = ["packages/sdk/src", "packages/cli/src", "extensions/acp/src"]
+src = ["packages/sdk/src", "packages/cli/src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF", "ASYNC", "S110"]

@@ -5,7 +5,7 @@
 list, and make it again. A test holds it to them. -->
 
 Every name `tests/public_api.txt` lists, under the module whose `__all__` holds it: the SDK's, `platoon_harness` and
-the modules beneath it, and the ACP extension's, `platoon_harness_acp`.
+the modules beneath it.
 
 By default, pending the owner's ruling, the public API is each name `tests/public_api.txt` lists, and each attribute and
 method without a leading underscore that a class it lists defines, of which the list records only some, and nothing
@@ -30,11 +30,13 @@ state. The mark quotes the start of the row, so it says which.
 - [`platoon_harness.config`](#platoon_harnessconfig)
 - [`platoon_harness.credit`](#platoon_harnesscredit)
 - [`platoon_harness.drivers`](#platoon_harnessdrivers)
+- [`platoon_harness.drivers.acp`](#platoon_harnessdriversacp)
 - [`platoon_harness.drivers.claude`](#platoon_harnessdriversclaude)
 - [`platoon_harness.drivers.codex`](#platoon_harnessdriverscodex)
 - [`platoon_harness.drivers.env`](#platoon_harnessdriversenv)
 - [`platoon_harness.drivers.exec`](#platoon_harnessdriversexec)
 - [`platoon_harness.drivers.levels`](#platoon_harnessdriverslevels)
+- [`platoon_harness.drivers.opencode`](#platoon_harnessdriversopencode)
 - [`platoon_harness.drivers.openhands`](#platoon_harnessdriversopenhands)
 - [`platoon_harness.drivers.pi`](#platoon_harnessdriverspi)
 - [`platoon_harness.drivers.process`](#platoon_harnessdriversprocess)
@@ -63,7 +65,6 @@ state. The mark quotes the start of the row, so it says which.
 - [`platoon_harness.testing`](#platoon_harnesstesting)
 - [`platoon_harness.tools`](#platoon_harnesstools)
 - [`platoon_harness.topology`](#platoon_harnesstopology)
-- [`platoon_harness_acp`](#platoon_harness_acp)
 
 ## `platoon_harness`
 
@@ -772,6 +773,111 @@ Imported from [`platoon_harness.primitives.Usage`](#platoon_harnessprimitivesusa
 
 Imported from [`platoon_harness.primitives.Verdict`](#platoon_harnessprimitivesverdict).
 
+## `platoon_harness.drivers.acp`
+
+**Experimental.** [STATUS](../STATUS.md): The ACP driver, architecture section 9.5, `AcpDriver`, a driver of the SDK's own.
+
+The ACP driver: an agent that speaks the Agent Client Protocol on stdio, at protocol 1 alone, over the SDK's own
+JSON-RPC peer (RFC 0072).
+
+A turn is one `session/prompt`, from its request to its answer, and that is the one boundary there is, as protocol 1
+says nothing of a second prompt during a turn. The agent keeps its own tools, as it is offered no file system and no
+terminal, and reaches ours as one MCP server over HTTP. An update nothing here maps keeps its raw frame, with a gap.
+
+### `platoon_harness.drivers.acp.AcpDriver`
+
+```python
+class AcpDriver:
+    name = "acp"
+    inherits: tuple[str, ...] = ()
+    def __init__(self, command: Sequence[str]) -> None: ...
+```
+
+One agent that speaks ACP, run as `command`, with one session of its own.
+
+A delivery that comes during a turn waits for its end and goes as the next prompt, and one for any other boundary
+is refused, as no fixture has shown an agent taking one. Frames are taken on the read loop, which never waits, so
+the pipe drains, and a permission request waits for its verdict in a task of its own, which is what `Peer` gives a
+request.
+
+**`describe`**
+
+```python
+def describe(self) -> DriverInfo: ...
+```
+
+**`start`**
+
+```python
+async def start(self, spec: AgentSpec, report: Reporter) -> None: ...
+```
+
+**`deliver`**
+
+```python
+async def deliver(self, delivery: Delivery) -> None: ...
+```
+
+**`interrupt`**
+
+```python
+async def interrupt(self) -> None: ...
+```
+
+Cancel the prompt under way, and answer each permission request it waits on `cancelled`, as ACP asks of a
+client. What waits for the next turn never reached the agent, and the runtime offers it again.
+
+**`answer`**
+
+```python
+async def answer(self, approval: str, verdict: Verdict) -> None: ...
+```
+
+Answer with the request's option of the verdict's kind for this once. Where it offers none, the answer is
+`cancelled`, which runs nothing: a denial holds, and an allow fails, saying it was not carried out.
+
+**`reconcile`**
+
+```python
+async def reconcile(self, input_id: str) -> Reconciled: ...
+```
+
+ACP keeps no id of a prompt, so what is known is what this driver saw land, or holds still.
+
+**`stop`**
+
+```python
+async def stop(self, grace: float) -> None: ...
+```
+
+End of stdin ends the agent, and whatever it has running with it.
+
+### `platoon_harness.drivers.acp.CAPABILITIES`
+
+```python
+CAPABILITIES = Capabilities(
+    persistent=True,
+    resume=True,
+    boundaries=frozenset({"turn"}),
+    tool_paths=frozenset({"mcp-http"}),
+    interrupt=True,
+    approvals="native",
+    native_children="opaque",
+    coverage={"prompt": "partial", "tool_results": "partial", "compaction": "partial"},
+)
+```
+
+What an ACP agent is driven with. ACP names no model call and says no spend of one, so there are no call ids and no
+measures, and stable ACP neither shows an agent's own agents nor turns them off.
+
+### `platoon_harness.drivers.acp.PROTOCOL`
+
+```python
+PROTOCOL = 1
+```
+
+The one version of ACP this driver speaks: an agent that answers with another is refused.
+
 ## `platoon_harness.drivers.claude`
 
 **Experimental.** [STATUS](../STATUS.md): The `claude` driver.
@@ -1125,6 +1231,7 @@ CHECKED: Mapping[str, str] = {
     "claude": "platoon_harness.drivers.claude:ClaudeDriver",
     "codex": "platoon_harness.drivers.codex:CodexDriver",
     "openhands": "platoon_harness.drivers.openhands:OpenHandsDriver",
+    "opencode": "platoon_harness.drivers.opencode:OpenCodeDriver",
     "pi": "platoon_harness.drivers.pi:PiDriver",
 }
 ```
@@ -1290,6 +1397,39 @@ The levels a result's failed checks leave unmet for any agent it speaks for.
 
 ```python
 Visibility = Literal["visible", "hidden", "unverified"]
+```
+
+## `platoon_harness.drivers.opencode`
+
+OpenCode, driven through `opencode acp`.
+
+### `platoon_harness.drivers.opencode.OpenCodeDriver`
+
+```python
+class OpenCodeDriver(AcpDriver):
+    name = "opencode"
+    inherits = (
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "all_proxy",
+        "no_proxy",
+        "SSL_CERT_FILE",
+    )
+    def __init__(self) -> None: ...
+```
+
+OpenCode, by `opencode acp`, on the user's own setup with ours beside it, reaching the network as the shell
+does. A start that names no model is refused, as OpenCode with none set sends prompts to a hosted model nobody
+chose.
+
+**`start`**
+
+```python
+async def start(self, spec: AgentSpec, report: Reporter) -> None: ...
 ```
 
 ## `platoon_harness.drivers.openhands`
@@ -10578,138 +10718,3 @@ def union(parts: Iterable[tuple[str, Topology]]) -> Topology: ...
 ```
 
 Merge named fragments. Edges and grants add up; anything defined twice must be defined alike.
-
-## `platoon_harness_acp`
-
-The ACP driver of platoon-harness, a first-party extension that uses the SDK's public names alone (RFC 0072).
-
-### `platoon_harness_acp.AcpDriver`
-
-```python
-class AcpDriver:
-    name = "acp"
-    inherits: tuple[str, ...] = ()
-    def __init__(self, command: Sequence[str]) -> None: ...
-```
-
-One agent that speaks ACP, run as `command`, with one session of its own.
-
-A delivery that comes during a turn waits for its end and goes as the next prompt, and one for any other boundary
-is refused, as no fixture has shown an agent taking one. Frames are taken on the read loop, which never waits, so
-the pipe drains, and a permission request waits for its verdict in a task of its own, which is what `Peer` gives a
-request.
-
-**`describe`**
-
-```python
-def describe(self) -> DriverInfo: ...
-```
-
-**`start`**
-
-```python
-async def start(self, spec: AgentSpec, report: Reporter) -> None: ...
-```
-
-**`deliver`**
-
-```python
-async def deliver(self, delivery: Delivery) -> None: ...
-```
-
-**`interrupt`**
-
-```python
-async def interrupt(self) -> None: ...
-```
-
-Cancel the prompt under way, and answer each permission request it waits on `cancelled`, as ACP asks of a
-client. What waits for the next turn never reached the agent, and the runtime offers it again.
-
-**`answer`**
-
-```python
-async def answer(self, approval: str, verdict: Verdict) -> None: ...
-```
-
-Answer with the request's option of the verdict's kind for this once. Where it offers none, the answer is
-`cancelled`, which runs nothing: a denial holds, and an allow fails, saying it was not carried out.
-
-**`reconcile`**
-
-```python
-async def reconcile(self, input_id: str) -> Reconciled: ...
-```
-
-ACP keeps no id of a prompt, so what is known is what this driver saw land, or holds still.
-
-**`stop`**
-
-```python
-async def stop(self, grace: float) -> None: ...
-```
-
-End of stdin ends the agent, and whatever it has running with it.
-
-### `platoon_harness_acp.CAPABILITIES`
-
-```python
-CAPABILITIES = Capabilities(
-    persistent=True,
-    resume=True,
-    boundaries=frozenset({"turn"}),
-    tool_paths=frozenset({"mcp-http"}),
-    interrupt=True,
-    approvals="native",
-    native_children="opaque",
-    coverage={"prompt": "partial", "tool_results": "partial", "compaction": "partial"},
-)
-```
-
-What an ACP agent is driven with. ACP names no model call and says no spend of one, so there are no call ids and no
-measures, and stable ACP neither shows an agent's own agents nor turns them off.
-
-### `platoon_harness_acp.OpenCodeDriver`
-
-```python
-class OpenCodeDriver(AcpDriver):
-    name = "opencode"
-    inherits = (
-        "HTTPS_PROXY",
-        "HTTP_PROXY",
-        "ALL_PROXY",
-        "NO_PROXY",
-        "https_proxy",
-        "http_proxy",
-        "all_proxy",
-        "no_proxy",
-        "SSL_CERT_FILE",
-    )
-    def __init__(self) -> None: ...
-```
-
-OpenCode, by `opencode acp`, on the user's own setup with ours beside it, reaching the network as the shell
-does. A start that names no model is refused, as OpenCode with none set sends prompts to a hosted model nobody
-chose.
-
-**`describe`**
-
-```python
-def describe(self) -> DriverInfo: ...
-```
-
-As any ACP agent's, naming the check `doctor --check` runs on it.
-
-**`start`**
-
-```python
-async def start(self, spec: AgentSpec, report: Reporter) -> None: ...
-```
-
-### `platoon_harness_acp.PROTOCOL`
-
-```python
-PROTOCOL = 1
-```
-
-The one version of ACP this driver speaks: an agent that answers with another is refused.

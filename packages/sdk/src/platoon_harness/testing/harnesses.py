@@ -20,6 +20,7 @@ from platoon_harness.drivers import DriverError
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.codex import CodexDriver
 from platoon_harness.drivers.levels import CHECKED, Conformance, implementation
+from platoon_harness.drivers.opencode import OpenCodeDriver
 from platoon_harness.drivers.openhands import OpenHandsDriver
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.drivers.process import Record
@@ -32,6 +33,9 @@ from .tools import NAMESPACE, TOOL
 MODEL = "fake-model"
 """The model every check asks for, which FakeModel answers as."""
 
+_OPENCODE_PROVIDER = "fake"
+_OPENCODE_QUIET = {"OPENCODE_DISABLE_AUTOUPDATE": "1", "OPENCODE_DISABLE_MODELS_FETCH": "1"}
+"""What keeps OpenCode off the network but for FakeModel: no update and no catalogue of models fetched."""
 _PI_OFFLINE = "PI_OFFLINE"
 _PI_PRICE = {"input": 1.0, "output": 2.0, "cacheRead": 0.0, "cacheWrite": 0.0}
 _ESCALATED = {"sandbox_permissions": "require_escalated", "justification": "needs an approval"}
@@ -45,17 +49,19 @@ def _home(folder: Path) -> Path:
     return home
 
 
-def _garbling(folder: Path, frame: dict[str, Any]) -> Garble | None:
-    """Write into the harness's own stdout, since nothing makes a real one write a frame no parser knows. Only Linux
-    lets one process write to another's descriptor by its path, so elsewhere that check is skipped."""
+def _garbling(folder: Path, frame: dict[str, Any] | None) -> Garble | None:
+    """Write into the harness's own stdout, since nothing makes a real one write a frame no parser knows, then `frame`,
+    if any, a frame of no kind its driver knows. Only Linux lets one process write to another's descriptor by its path,
+    so elsewhere that check is skipped."""
     if sys.platform != "linux":
         return None
+    written = b"this is no frame\n" + (json.dumps(frame).encode() + b"\n" if frame is not None else b"")
 
     async def garble(_: Any) -> None:
         record = Record.read(folder / "malformed_frame_is_a_gap" / "agent")
         assert record is not None
         pipe = os.open(f"/proc/{record.pid}/fd/1", os.O_WRONLY)
-        os.write(pipe, b"this is no frame\n" + json.dumps(frame).encode() + b"\n")
+        os.write(pipe, written)
         os.close(pipe)
 
     return garble
@@ -150,11 +156,49 @@ def _openhands(folder: Path) -> dict[str, Any]:
     }
 
 
+def _opencode_config(model: FakeModel) -> str:
+    """OpenCode's configuration, given whole in `OPENCODE_CONFIG_CONTENT`: a provider of its own that reaches `model` on
+    a dummy key, and a rule that has every shell command ask first, as with no rule OpenCode asks nothing."""
+    listed = {MODEL: {"capabilities": {"tools": True}, "limit": {"context": 100_000, "output": 1_000}}}
+    settings = {"baseURL": f"{model.url}/v1", "apiKey": "dummy-key"}
+    provider = {"package": "@ai-sdk/openai-compatible", "settings": settings, "models": listed}
+    ask = [{"action": "shell", "resource": "*", "effect": "ask"}]
+    named = f"{_OPENCODE_PROVIDER}/{MODEL}"
+    return json.dumps({"model": named, "providers": {_OPENCODE_PROVIDER: provider}, "permissions": ask})
+
+
+def _opencode(folder: Path) -> dict[str, Any]:
+    """What it gives OpenCode no run has shown (RFC 0072): the provider's shape, the rule that has its shell ask first
+    and the name its model knows its shell by, from a probe of 2.2.5 against another fake server and the 2.2.6
+    release's files. It calls our tool by the name the driver declares and our words use, `mcp__<namespace>__<tool>`, so
+    that it fails where OpenCode's model knows our tool by another. A role names FakeModel by its provider, and OpenCode
+    asks FakeModel for `fake-model`."""
+
+    def access(model: FakeModel) -> dict[str, Secret]:
+        home = _home(folder)
+        variables = {"HOME": str(home), "OPENCODE_CONFIG_CONTENT": _opencode_config(model), **_OPENCODE_QUIET}
+        return {name: Secret(value) for name, value in variables.items()}
+
+    def shell(id: str | None = None) -> Callable[[str], ToolCall]:
+        return lambda command: ToolCall("shell", {"command": command, "description": "conformance"}, id=id)
+
+    return {
+        "access": access,
+        "garble": _garbling(folder, None),
+        "gated": shell("call_gated"),
+        "shell": shell(),
+        "tool": lambda note: ToolCall(f"mcp__{NAMESPACE}__{TOOL}", {"note": note}),
+        "model": f"{_OPENCODE_PROVIDER}/{MODEL}",
+        "timeout": 60.0,
+    }
+
+
 _HARNESSES: dict[str, tuple[Factory, Callable[[Path], dict[str, Any]]]] = {
     "claude": (ClaudeDriver, _claude),
     "codex": (CodexDriver, _codex),
     "pi": (PiDriver, _pi),
     "openhands": (OpenHandsDriver, _openhands),
+    "opencode": (OpenCodeDriver, _opencode),
 }
 """Each harness `check_harness` knows how to check: its driver, and what the checks give it."""
 

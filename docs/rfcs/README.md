@@ -87,7 +87,7 @@ amended or extended an RFC.
 | [0069](0069-metrics-are-folds-and-gauges-and-unknown-stays-unknown.md) | Metrics are folds and gauges, and unknown stays unknown | Draft |
 | [0070](0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md) | A population gives each worker one outcome, which its program records | Draft |
 | [0071](0071-an-installed-extension-s-op-is-a-command.md) | An installed extension's op is a command | Draft |
-| [0072](0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md) | ACP agents are driven by a first-party extension that names its own check | Draft |
+| [0072](0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md) | ACP agents are driven by a first-party extension that names its own check | Draft; open question 1 decided 2026-11-12 |
 | [0073](0073-an-agent-s-page-shows-its-tool-activity-and-live-text-outside-any-chat.md) | An agent's page shows its tool activity and live text outside any chat | Draft |
 | [0074](0074-the-browser-lists-starts-resumes-and-stops-sessions.md) | The browser lists, starts, resumes and stops sessions, on loopback and for you alone | Draft |
 | [0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) | An ended agent's folder keeps its record and no scratch or credential | Draft |

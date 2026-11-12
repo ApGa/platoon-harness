@@ -11,11 +11,13 @@ import json
 from collections import deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from importlib import metadata
 from typing import Any
 from uuid import uuid4
 
-from platoon_harness.drivers import (
+from platoon_harness.rpc import METHOD_NOT_FOUND, Closed, Peer, RpcError, strict_loads
+from platoon_harness.version import __version__
+
+from . import (
     UNREADABLE,
     AgentSpec,
     ApprovalRequested,
@@ -36,9 +38,8 @@ from platoon_harness.drivers import (
     keys_of,
     refuse_unset_model,
 )
-from platoon_harness.drivers.env import harness_env, on_path
-from platoon_harness.drivers.process import LOG, Process
-from platoon_harness.rpc import METHOD_NOT_FOUND, Closed, Peer, RpcError, strict_loads
+from .env import harness_env, on_path
+from .process import LOG, Process
 
 PROTOCOL = 1
 """The one version of ACP this driver speaks: an agent that answers with another is refused."""
@@ -259,10 +260,9 @@ class AcpDriver:
     async def _open(self, spec: AgentSpec) -> None:
         """Agree on protocol 1, then open the session, or take it up again on a resume, with the role's instructions and
         model, which calls no model."""
-        version = metadata.version("platoon-harness-acp")
         hello = {"protocolVersion": PROTOCOL, "clientCapabilities": _CLIENT}
         said = await self._call(
-            "initialize", {**hello, "clientInfo": {"name": "platoon-harness-acp", "version": version}}
+            "initialize", {**hello, "clientInfo": {"name": "platoon-harness", "version": __version__}}
         )
         if said.get("protocolVersion") != PROTOCOL:
             raise DriverError(f"it speaks ACP protocol {said.get('protocolVersion')}, and this driver {PROTOCOL} alone")
