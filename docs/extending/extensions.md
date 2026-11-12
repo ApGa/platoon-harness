@@ -13,11 +13,6 @@ primitive keeps to, and ready to publish.
 [CONTRIBUTING](../../CONTRIBUTING.md#set-up-a-development-environment) says, where each command runs through `uv run`.
 Nothing here needs a harness, a key or a model.
 
-A test, `tests/unit/docs/test_extending.py`, runs this page: each file it shows is the sample's, and each command and
-script it shows prints what it says to expect, with the sample installed as its metadata and its source. It builds no
-wheel and publishes nothing: `tests/integration/test_installed_extensions.py` builds the sample's wheel and installs it in
-an environment of its own.
-
 ## 1. Lay out the package
 
 ```text
@@ -300,11 +295,9 @@ Each vote is drawn by its gist, `a vote on @author's work: yes`, in the author's
 `platoon-harness events` reads it back with its ref, `agent/author@<version>`. The page draws it in no transcript: it
 shows the vote in that ref's Provenance pane, which opens where the page's address names it, `#provenance=<ref>`.
 
-An extension's op is never asked about. The terminal and the page ask once before an op that ends an agent or the session,
-erases a body, or runs a commit's code as you, and that list is the command line's own, to which no extension adds. So
-neither client asks before an op of yours runs, whatever it does. No field of the op table says to ask first: one would
-come with the first extension that needs it, by an RFC
-([RFC 0064](../rfcs/0064-an-act-is-one-form-and-a-read-one-route.md)).
+An extension's op is never asked about: the clients ask once before the command line's own ops that end an agent or the
+session, erase a body, or run a commit's code as you, a list no extension adds to, so neither client asks before an op of
+yours runs, whatever it does.
 
 ## 11. Check it
 
@@ -369,28 +362,18 @@ that failed and why.
 
 What it does not check:
 
-- **A second fault in loading.** The kernel stops loading an extension at its first fault, so where `names` or
-  `naming_law` fails, the other is a skip that says loading stopped short of it, as is `rebuild_equals_live`, since no
-  view was live. The other checks need no kernel, and run. Fix the fault and check again.
-- **Its daemons, its presets and its isolation.** It runs none, and names each in `unchecked`, saying what that leaves
-  unknown: what a daemon does and which effects it performs, whether a preset's topology is valid, and whether an
-  isolation confines. So a pass never reads as more than ran: the SDK's `bwrap`, which is
-  [experimental](../reference/python.md#platoon_harnessbwrap), passes, and its result says that nothing in it says
-  Bubblewrap confines. `team show` and `team check` on a team that uses a preset are how to see its topology.
-- **Names outside the kernel.** `names` holds an extension to the names the kernel loads. One named as a command of the
-  command line's own, such as `run`, passes and gets no commands, as step 7 says, and a preset that takes the name of a
-  built-in preset, of another extension's preset or of a key of `[topology]` passes, and is refused when a team that
-  names the extension is loaded.
-- **What an op does.** It checks no op's result, refusal or event beyond what the scenario runs and the rebuild compares:
-  that a second vote is refused is your test's to show, as `vote.py` shows it.
-- **Who may run an op.** No check reads a grant, so nothing in it says a topology lets anyone cast a vote.
-- **An op that is no tool.** `schemas` and `descriptions` read tools alone. The kernel refuses, when an op is defined,
-  arguments that let an undeclared field through, but nothing asks such an op's fields to say what they are.
-- **Every file of the package.** `public_api_only` reads only the files its parts are defined in, and of their imports
-  holds only those from the kernel to its published names: a module those files import goes unread, and an import from
-  another module of the SDK goes unchecked.
+- **A second fault in loading.** The kernel stops loading at the first fault, so the checks it cut short are skips.
+- **Its daemons, its presets and its isolation.** It runs none, and names each in `unchecked`, so a pass never reads as more
+  than ran: the SDK's `bwrap`, which is [experimental](../reference/python.md#platoon_harnessbwrap), passes with nothing
+  in it saying Bubblewrap confines. `team show` and `team check` show a preset's topology.
+- **Names outside the kernel.** One named as a command of the command line's own passes and gets no commands, and a preset
+  that takes another preset's name or a key of `[topology]` passes and is refused when a team names the extension.
+- **What an op does.** Beyond what the scenario runs and the rebuild compares, that is your test's to show.
+- **Who may run an op.** No check reads a grant.
+- **An op that is no tool.** `schemas` and `descriptions` read tools alone.
+- **Every file of the package.** `public_api_only` reads only the files its parts are defined in.
 - **The package.** Its metadata, its entry point and its requirement on the SDK are discovery's, which
-  `platoon-harness extension list` and a team that names the extension show.
+  `platoon-harness extension list` shows.
 
 ## 12. Publish it
 

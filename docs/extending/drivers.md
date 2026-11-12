@@ -4,16 +4,9 @@ A driver presents one harness session to the runtime through seven methods. One 
 `claude`, `codex`, `pi`, `openhands` and `opencode` ship with the SDK: `openhands` a wire worker whose OpenHands comes
 with the SDK's `openhands` extra, [below](#openhands-a-wire-worker), and `opencode` on the SDK's driver of agents that
 speak ACP, [below](#acp-agents).
-This page is for everyone else: how to write a driver, in Python or any other language, and how to prove it works.
-[Extending platoon-harness](index.md) lists every other way in.
-
-There are three ways in, cheapest first.
-
-| You have | Use | You write |
-|---|---|---|
-| A CLI that takes a task and exits | `exec` | One line of config |
-| A program in any language, or a dependency set that cannot share ours | `wire` | A program that speaks JSON-RPC on stdio |
-| A Python package | The `platoon_harness.drivers` entry-point group | A class with the seven methods |
+This page is for everyone else: how to write a driver, in Python or any other language, and how to prove it works. A
+one-shot CLI needs only a line of config, a program in any language speaks the wire, and a Python package registers a
+class, as [the ways in](index.md#ways-in) list.
 
 ## The contract
 
@@ -31,27 +24,20 @@ class Driver(Protocol):
 A method it cannot honor raises `DriverError`, with the reason. That is how "unsupported" stays loud. The rest is what each
 method promises:
 
-- **`describe`** runs before anything is spent. It must start no harness, and it is asked twice with the same answer. `login` comes
-  from the harness's own status command, with a short timeout, reading that one field and no credential file, and is None when it cannot
-  tell. `prepare` reads it to refuse several agents on one plan login. `version` is the harness version it would run, where it can tell
-  without starting one, which a trainable session's check holds a kept result to before any harness launches; `ready` says the version
-  that runs. `installed` is the paths its harness reads to run, as it reaches them: where `PATH` finds its binary, and what that
-  resolves into, such as a release folder or the `node_modules` it imports from. An isolation shows it those, read-only, and nothing
-  else of your home ([workspaces.md](../how-to/workspaces.md#where-an-isolated-agent-runs)). A harness in the runtime's own process declares
-  none, as nothing can confine it, and an isolated role on it is refused before any cost. `credentials` is where, beneath
-  `spec.folder`, your harness keeps a credential, as relative paths with no `..`, files or folders: when the agent ends, its
-  stop removes them with the harness's `TMPDIR`, whole, whatever your harness kept there, and a rest removes nothing, as the
-  harness comes back. Name the files your harness's own code keeps a login or a key in, where your launch puts its state in the
-  agent's folder and in an isolated harness's home, which is `home/` there, as `homedir` in `platoon_harness.drivers.env` says,
-  and no transcript, as that is the record. A wire program names its own beneath the folder its frame names, `wire/` in the
-  agent's, so the isolated home beside it is no place it can name.
+- **`describe`** runs before anything is spent. It starts no harness, and gives the same answer when asked twice. `login`
+  comes from the harness's own status command, with a short timeout, reading that one field and no credential file, and is
+  None when it cannot tell. `version` is the harness version it would run, where it can tell without starting one; `ready`
+  says the version that runs. `installed` is the paths its harness reads to run, as it reaches them: where `PATH` finds its
+  binary, and what that resolves into. An isolation shows it those, read-only, and nothing else of your home
+  ([workspaces.md](../how-to/workspaces.md#where-an-isolated-agent-runs)); a harness in the runtime's own process declares
+  none, as nothing can confine it. `credentials` is where, beneath `spec.folder`, your harness keeps a credential, as
+  relative paths with no `..`, which the agent's stop removes, whole, once it ends: name the files your harness's own code
+  keeps a login or a key in, where your launch puts its state, and no transcript, as that is the record. A wire program names
+  its own beneath the folder its frame names.
 - **`start`** begins the first turn on `spec.goal`, which is a `Delivery` like any other: hand it over as `deliver` would, under its
   `input`, which is the id of the offer that launched the agent, and say `input.delivered` once it lands, as for any input. That
   report is what confirms the launch. With no goal, or given `spec.resume`, which reopens that native session, it waits
-  for a delivery. The runtime gives `resume` only for a session that took a turn, and starts anew an agent whose harness took none. It also
-  starts a resting agent's harness again this way, after ten minutes between turns ended its process. A harness that exits before
-  it is ready then, as one asked to reopen a session it never wrote down does, has exited on its own a second time, and its agent
-  is lost. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
+  for a delivery. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
   given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. That access is
   variables by name, which `keys_of(spec)` reads and `harness_env` puts in the harness's environment, or a `Gateway`, which only a
   driver that declares `sealed` is given, with `spec.model` the model it serves. Any process on the machine can read a command line,
@@ -70,18 +56,14 @@ method promises:
   the confiner is the group's leader and what the harness starts is confined with it. A driver that starts its harness otherwise must
   do the same.
 - **`deliver`** hands over `delivery.text`. The id goes out with it, so `input.delivered` can say what landed, and `reconcile` can
-  answer after a crash. It returns once the harness has the text, so a harness that has stopped reading holds it up. The host drops it
-  after a minute and queues its entries again under a new input, and a driver may leave what it wrote in the pipe: if the harness reads
-  again, that lands too, at-least-once, and its refs dedupe it. `interrupt` and `answer` get the same minute.
+  answer after a crash. It returns once the harness has the text. Delivery is at-least-once: a delivery can land twice, and its
+  refs dedupe it.
 - **`interrupt`** stops the turn, or the one a delivery on its way is about to begin, and that turn ends `interrupted`. The agent lives
-  on. A delivery the harness took and has not landed when a turn stops short goes back on the runtime's queue, and comes again under a
-  new input, so a driver sends nothing again. Tell a harness that keeps such a thing to drop it, where it can be told, or it may hear it
-  twice, which at-least-once allows.
+  on. A delivery the harness took and had not landed comes again under a new input, so tell a harness that keeps such a thing to
+  drop it, where it can be told.
 - **`stop`** leaves no process behind, a running tool and what it put in the background included. A tool that leads a group of its
-  own outlives a `SIGKILL` of its harness, so ask a harness to end first, and with real grace. `Process` then ends, on Linux, what
-  carries the harness's own `TMPDIR`, whichever group it left for. It reports the gap `crash_window` when it comes to `SIGKILL`, and the
-  workspace may still be being written. A harness under `spec.wrap` comes to it straight after the end of stdin, since its confiner
-  passes no `SIGTERM` on and dies of one, which kills the harness outright.
+  own outlives a `SIGKILL` of its harness, so ask a harness to end first, and with real grace. It reports the gap `crash_window`
+  when it comes to `SIGKILL`.
 
 ### What a driver reports
 
@@ -91,11 +73,11 @@ method promises:
 |---|---|---|
 | `Ready` | `native`, `version`, `effective_model`, `tools_visible` | The harness is up. `tools_visible` is a list only when it was observed |
 | `TurnStarted` | `turn` | No two turns of one agent share a name, across a resume too: a tool call with no id of its own is keyed on it |
-| `TurnEnded` | `reason` | `stopped` if it stopped on its own, `interrupted` after an interrupt, and otherwise what went wrong, such as `aborted` for a turn the harness cut with nobody asking. An `interrupted` turn was someone's own doing, so it wakes nobody. `lost` and `stopped by its owner` are the runtime's own, and a driver that says one has sent an unknown frame. For a one-shot harness this is its end, and `stopped` means it finished |
+| `TurnEnded` | `reason` | `stopped` if it stopped on its own, `interrupted` after an interrupt, and otherwise what went wrong, such as `aborted`. `lost` and `stopped by its owner` are the runtime's own, never a driver's. For a one-shot harness this is its end |
 | `Delta` | `text` | Live text. It is lossy and never journaled |
-| `Item` | `kind`, `gist`, `phase`, `native_id`, `call_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`. `gist` holds at most 280 characters and `body` the whole text. A `tool` or a `patch` is `started`, then `completed`, and a message or a thought has no `phase`. `approval` names the approval an outcome answers. `call_id` names the model call that made it, and `native_id` is the harness's own id for the item. A completed tool item whose `native_id` is the anchor a tool call went under, as Claude Code's `toolUseId` and Codex's `callId` are, and whose `outcome` is `completed`, confirms what the runtime showed in that call's result, so report it once the result is in. Say `failed` when the call's result never came back as it was returned, for an error, an interrupt or a lost reply: that confirms nothing |
+| `Item` | `kind`, `gist`, `phase`, `native_id`, `call_id`, `body`, `approval`, `outcome` | A `message`, `thought`, `tool` or `patch`, its `gist` at most 280 characters and its `body` the whole text. A `tool` or a `patch` is `started`, then `completed`. `call_id` names the model call that made it, and `native_id` is the harness's own id. A tool item whose `native_id` is its call's anchor and whose `outcome` is `completed` confirms what that call's result showed, so report it once the result is in, and `failed` when the result never came back |
 | `InputDelivered` | `input`, `boundary`, `evidence`, `native_id` | A delivery reached the harness, the goal at launch among them: this is the one way an offer is confirmed. `evidence` names what showed it, and `native_id` is the harness's own id for what landed, verbatim, the one its compaction would name that input by, or None when it gives none |
-| `ApprovalRequested` | `id`, `gist`, `body`, `cut` | The harness is waiting on a decision. `body` is the whole of what it asks to do, the command, the patch or the tool's input, as the harness gave it, after a line for each thing its request says beside it, such as why it asks or where a command runs, and None when you cannot say, which is unknown and not an empty ask, and fails `approval_shows_its_ask`, so your driver is not `operational`. Send it whole: the host masks it and keeps its first 64 KiB, cut at a character's end, adding the bytes it left out to `cut`. A program that cuts it first, to keep its frame within a line, says in `cut` how many bytes it left out. A `cut` with no `body` is refused, and the approval denied |
+| `ApprovalRequested` | `id`, `gist`, `body`, `cut` | The harness is waiting on a decision. `body` is the whole of what it asks to do, as the harness gave it, or None when you cannot say, which is unknown and fails `approval_shows_its_ask`. Send it whole: the host masks it and keeps its first 64 KiB, adding the bytes it left out to `cut`. A program that cuts it first says in `cut` how many bytes it left out |
 | `ModelCall` | `call_id`, `model`, `purpose` | A model call, with its id only when the id is real. `purpose` is the harness's own word for why, such as `compaction`, and None unless it said |
 | `Usage` | `tokens`, `usd`, `label`, `scope`, `call_id` | What was spent, once. `scope` is `call`, `turn` or `tree`, and `label` is `provider`, `estimated`, `lower_bound` or `unavailable`. `call_id` names the call a `call` scope paid for |
 | `Compacted` | `forgotten`, `summary` | Context was compacted. `forgotten` holds the native ids of what left it, and `summary` the text that took its place |
@@ -201,7 +183,7 @@ A driver with no sealed launch reads access through `keys_of(spec)`, which refus
 Declaring `sealed` earns nothing either: two checks earn it, in the one result kept for the driver. They prove, on the machine's own
 home as a rollout runs, that the first request goes under the gateway's bearer, holds none of the project's instructions and shows
 only ours, the environment's and the tools `check_driver(kept=)` names. What else of the user's a launch keeps out is how it is
-built, as the table says, which the slow tests read and no check proves.
+built, as the table says, which no check proves.
 
 ## A one-shot CLI: `exec`
 
@@ -244,8 +226,8 @@ workspace, so no driver knows the mode. Nothing checks that a wire program's own
 
 ### In Python
 
-`serve` does the protocol, so a wire driver in Python is a driver plus one line. This one is complete, and it is the program the test
-suite runs through the conformance checks. It asks a model once per turn over Chat Completions.
+`serve` does the protocol, so a wire driver in Python is a driver plus one line. This one is complete, and a test runs it through the
+conformance checks. It asks a model once per turn over Chat Completions.
 
 <!-- example: the wire driver a test runs -->
 ```python
@@ -396,11 +378,6 @@ line's when it starts a session, as [Install](../getting-started/install.md#open
 only a role's auth profile gives it a key. Without the extra, `doctor` names the interpreter to install it for, and an agent's
 start is refused in the same words. Nothing else changes: the SDK, the runtime and the command line never load it.
 
-**A proprietary dependency.** `openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`, a binary under Laminar's own
-terms ("All rights reserved"), so the extra installed from an index brings it in unless you exclude it. Nothing the worker runs
-imports it, as only `lmnr`'s instrumentation of the Claude Agent SDK does, and the worker runs without it: this repository's lock
-leaves it out with `exclude-dependencies`, so no test here has it, and a checkout never installs it.
-
 **An environment of its own.** OpenHands' pins share an environment with little, `mcp` 2.3.0 not among it. Where yours cannot hold
 them, install the SDK with the extra in an environment of its own, and name its interpreter and the module as a wire command:
 
@@ -411,59 +388,21 @@ model = "gpt-5.4"
 auth = "openai"
 ```
 
-The worker is then a wire program like any other: the shell's proxy variables and `SSL_CERT_FILE` reach it only where its auth
-profile names them, nothing that tells Python where modules are reaches it, so its interpreter finds its own, and a tmux its
-agents start keeps its socket in the directory every tmux of the user's shares. Each rule it keeps, in a sentence:
+The worker is then a wire program like any other, so the shell's proxy variables and `SSL_CERT_FILE` reach it only where
+its auth profile names them.
 
-- **One process per agent** holds one `LocalConversation` of OpenHands SDK 1.59.0, driven only through `arun()`, so an interrupt can
-  abandon a model call.
-- **Sign-in** is a key alone: `OPENAI_API_KEY` from the role's auth profile, with `OPENAI_BASE_URL` for an endpoint other than
-  OpenAI's, and a role with none is refused, as is a ChatGPT subscription or an OpenHands Cloud login, which needs a person. Its way
-  out to the network is the shell's: the proxy variables and `SSL_CERT_FILE` pass by name.
-- **The model** is the role's, sent as it is named through litellm's OpenAI provider in the Chat Completions dialect, and an effort
-  goes as `reasoning_effort`, refused for a model litellm's catalog says takes none, as litellm would drop it unsaid.
-- **No retries:** the SDK retries no model call, as a retry is a second call a gateway records, so a failed one ends the turn.
-- **No step cap:** the SDK's cap on the steps of a run is lifted, as a role's budget is what limits it.
-- **Credentials:** the key, the endpoint and our token leave the worker's environment once read, so its terminal cannot read them,
-  and `LITELLM_LOCAL_MODEL_COST_MAP` and `OPENHANDS_SUPPRESS_BANNER` keep it off the network and off stdout.
-- **Tools** are OpenHands' terminal, in a subprocess, its file editor and its task tracker, as its own CLI gives them, and ours
-  through the stdio shim, which gives each call an id of its own, so two identical calls in a turn are two calls. `tool_names` is
-  `bare`, as OpenHands' client of one server shows its tools by their own names.
-- **`ready`** says the conversation's id, the SDK's version, the role's model and the tools the agent offers its model once readied,
-  and the start fails if none of ours is among them, as the SDK only warns of a server that failed.
-- **Instructions:** ours are `AgentContext.system_message_suffix`, the project's load with `load_project_skills=True`, as its own
-  CLI loads them, and a conversation keeps the system prompt it began with, so a resume hands it the same text for nothing.
-- **A delivery** begins a turn, or goes to the one under way and lands at a later model call, and `input.delivered` comes from the
-  request that carried it, which the SDK's completion log shows, and never from the order of its events.
-- **Between runs:** a delivery goes to the conversation only while no `arun()` runs and no action waits, as the SDK rejects, unasked,
-  what a step asks to run once a message came during its model call, and a message after it would come between a call and its
-  result. One that comes while a run goes on asks the run to pause, which it does after the step under way.
-- **Approvals:** every action asks the runtime but a call of our tools and a lone `finish` or `think`, which the SDK never asks
-  about, and one approval covers what a step holds, as the SDK confirms a step whole, with each of its actions, its tool's name
-  and its arguments as JSON, as its whole ask; `deny` rejects it with `The runtime denied this.`
-- **An interrupt** cancels the run under way, which abandons a model call in flight that a gateway may have recorded all the same,
-  so then the turn says its usage is a lower bound, and an approval left open is answered as cut off.
-- **A turn ends** when `arun()` returns with nothing it was handed left to run on: `stopped` when the agent finished,
-  `interrupted`, `stuck` when the SDK found it repeating itself, and otherwise the code of the SDK's error, such as
-  `LLMServiceUnavailableError` for a provider's 500. It leaves no action pending, as the next run would run it unasked: what it did
-  not run is rejected with `The turn ended before this ran.`
-- **Items** come from actions, their observations and the agent's own messages: `finish` is its last message, `think` a thought,
-  and a message the SDK calls the user's is never read as anyone's, as the SDK writes such messages itself.
-- **A model call** is each one the SDK measured, by its response id, which items carry as `call_id`: its tokens are the provider's,
-  prompt and completion, dollars come only where litellm prices the model, as an estimate, and litellm's reasoning tokens, an
-  estimate too, are not reported.
-- **A condensation** is `compacted`, with the event ids it forgot in the conversation's order and its summary, and its call has the
-  purpose `condenser`, the usage id of the SDK's LLM that made it.
-- **Its own agents** are off unless a role allows them; allowed, OpenHands' `task` tool starts its built-in kinds, whose steps ask
-  the runtime as their parent's do, and a child, which has no identity we can see, is the gap `native_child_unattributed`, its
-  spending its parent's at the scope `tree`. An interrupt that cuts off the call of `task` stops its child at the child's next
-  ask, as nothing else reaches it, and a child's copy of the agent's LLM logs nothing, as the SDK would write its log where it works.
-- **A resume** reopens the conversation by its id with the key handed again and the same tools, a conversation that is not there is
-  refused, as the SDK would start one anew under that id, and an action a crash or a stop left with no result is rejected before
-  the next run, which would run it again.
-- **`stop`** ends the turn and closes the conversation, which ends its terminal and the shim, and then the group ends as any wire
-  program's does. The driver gives the worker a short directory of its own for tmux's sockets, as OpenHands falls back to the one
-  every tmux of the user's shares past a socket's length, and takes it back at `stop`, which a worker killed outright cannot.
+What an OpenHands agent does differently from the others:
+
+- **Sign-in** is a key alone, `OPENAI_API_KEY` from the role's auth profile, with `OPENAI_BASE_URL` for an endpoint other than
+  OpenAI's; a role with none is refused.
+- **No retries:** a failed model call ends the turn, as a retry is a second call a gateway records.
+- **No step cap:** the role's budget is what limits a run.
+- **One approval per step:** every action asks the runtime but a call of our tools and a lone `finish` or `think`, and one
+  approval covers what a step holds, with each of its actions as its ask.
+- **Its own agents are off** unless a role allows them; allowed, a child is the gap `native_child_unattributed`, its spending
+  its parent's.
+- **Spending:** tokens are the provider's, and dollars come only where litellm prices the model, as an estimate. An interrupt
+  abandons a model call in flight, which a gateway may have recorded all the same, so that turn says its usage is a lower bound.
 
 ## ACP agents
 
@@ -483,7 +422,7 @@ class MyAgentDriver(AcpDriver):
         super().__init__(("my-agent", "--acp"))
 ```
 
-Each rule it keeps, in a sentence ([RFC 0072](../rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md)):
+Each rule it keeps, in a sentence:
 
 - **Protocol 1 alone:** it asks for 1, and stops an agent that answers anything else before it opens a session, as ACP has
   a client disconnect from a version it does not speak. It offers no file system and no terminal, so the agent keeps its own
@@ -498,7 +437,7 @@ Each rule it keeps, in a sentence ([RFC 0072](../rfcs/0072-acp-agents-are-driven
   OpenCode then sends prompts to a hosted model nobody chose.
 - **A turn** is one `session/prompt`, from its request to its answer, and the turn is the one boundary declared. A delivery
   during a turn waits for its end and goes as the next prompt, an interrupt drops what waits, and one for any other boundary is
-  refused until a recorded fixture shows an agent taking a prompt during a turn.
+  refused.
 - **A delivery lands** at the first update after its prompt that is not of the session's state, or at the prompt's answer.
 - **Text** comes as live deltas, and a message or a thought is one item once another kind of update, another message or the
   turn's end follows.
@@ -624,27 +563,14 @@ own checks. What a driver leaves running, the suite reaps.
 | `kept` | None | The names of the tools of the harness's own that a sealed launch keeps, each of which acts on nothing, such as OpenHands' `finish` and `think` |
 | `timeout` | 10 s | How long one check may take |
 
-The result is pinned to the driver, by its name and the class that implements it, the harness version it reported, the SDK and the
-host it ran on, as the checks prove your driver's code and the binary together, where they ran, and `levels` reads it. A result made
-elsewhere says nothing of this agent, and nor does one of a version nobody said: a harness that reports no version earns no level
-from any result.
-
-The runtime earns an agent's levels from a result kept under the root, one for each driver: `write_conformance(root, result)`, from
-`platoon_harness.runtime.paths`, keeps one, and `platoon-harness doctor --check` makes and keeps one for each harness it finds that a
-check ships for, through `check_harness(name, folder)`, on the binary that runs, against `FakeModel` and on no account. A check
-ships for each harness `levels.CHECKED` names, which the SDK drives, and for an installed driver whose `describe` names one in
-`DriverInfo.check`, as `module:function`: a coroutine function of the folder to run in that returns what `check_driver` found,
-imported only to run it, and refused if what it found is of another class than the driver's or names another harness, or if it
-breaks. The host reads a kept result at every launch and resume and records it on `agent.started` or `agent.resumed`, as a body,
-beside the levels it gave, where it speaks for that harness. A level with no result that speaks for the harness that runs says so,
-and names what makes one: `doctor --check` for the harnesses `levels.CHECKED` names, and `check_driver` and `write_conformance` for
-any other, which `doctor --check` also runs where the driver names a check. A wire program
-is checked as above, and its result kept the same way, by the name its `describe` gives. A name is a driver's own to give, so a
-result is pinned to the class that implements the driver too, and a program calling itself `claude` earns nothing from what was kept
-of the claude driver's checks. A class outside the SDK is pinned with the release, the distribution and its version, of each
-installed distribution whose driver entry points name its package or the package of a class it is built on, as
-`my_agent:MyAgentDriver, my-agent 1.0.0` for a subclass of `AcpDriver` in a distribution of your own, so an upgrade of any of
-them reads `unverified` until it is checked again, as an upgrade of the SDK does. A base class from a distribution that names no driver of its own is not pinned.
+The result is pinned to the driver, by its name and the class that implements it, the harness version it reported, the SDK, the
+host it ran on and, for a class outside the SDK, the release of each distribution that holds it. So a program calling itself
+`claude` earns nothing from what was kept of the claude driver's checks, a result made elsewhere, or of a version nobody said,
+says nothing of this agent, and an upgrade reads `unverified` until it is checked again. The runtime reads a result kept under the
+root at every launch and resume, where `write_conformance(root, result)`, from `platoon_harness.runtime.paths`, keeps one, and
+`platoon-harness doctor --check` makes one for each harness `levels.CHECKED` names and for an installed driver whose
+`DriverInfo.check` names its check, as `module:function`, imported only to run it. A level with no result that speaks for the
+harness that runs says so, and names what makes one.
 
 ```python
 from platoon_harness.drivers.levels import Profile, implementation, levels
@@ -713,8 +639,3 @@ call that sent it first. A `Call` step, which no model chose, sends no id, so th
 one in the same turn is answered as a repeat. `Ask(gist, body)` asks for an approval with `body` as its whole ask, and the approval
 its `shell`, or any tool of its own that `AskModel` meets, asks for carries the tool's name and its input as JSON. A step that
 raises, of its own or of a subclass's, fails its turn saying what it raised, and the next turn runs.
-
-### Extensions
-
-`check_extension` does for an extension what `check_driver` does for a driver: [Write an extension](extensions.md#11-check-it)
-runs it on the sample extension package, and says what each check holds an extension to and what no check covers.

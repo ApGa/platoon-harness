@@ -17,8 +17,8 @@ rules your code keeps, and links the guide to each.
 | An extension | An `Extension`, of [the parts below](#an-extensions-parts) | The `platoon_harness.extensions` entry-point group, or `module:attr` | A team's `extensions = [...]` | [Write an extension](extensions.md) |
 | A topology preset | A function that returns a `Topology` | An extension's `presets` | A team's `[topology.<name>]` table | [Write your own preset](../how-to/topologies.md#write-your-own-preset) |
 | An isolation | An object with `refusal()` and `wrap(writable, readable, hidden)` | An extension's `isolation` | A team that names the extension, and a role's `workspace = "isolated"`, which is [experimental](../reference/python.md#platoon_harnessruntimeisolation) | [Where an isolated agent runs](../how-to/workspaces.md#where-an-isolated-agent-runs) |
-| A program | A Python script that starts its session as `program:<name>` and drives it through the session's ops | Nothing: you run it | `until = "program"`, which leaves the session to the program | [Programs](#programs) |
-| A training system | An `Authority` that admits each agent through a gateway of yours, and what trains | Nothing: your program passes it to `Session.start` | `authority=` and `trainable=True` | [The training contract](#the-training-contract) |
+| A program | A Python script that starts its session as `program:<name>` and drives it through the session's ops | Nothing: you run it | `until = "program"`, which leaves the session to the program | [Run a program from Python](../how-to/topologies.md#run-a-program-from-python) |
+| A training system | An `Authority` that admits each agent through a gateway of yours, and what trains | Nothing: your program passes it to `Session.start` | `authority=` and `trainable=True` | [Training on sessions](training.md) |
 | An estimator | Code that reads the record and writes rewards or credit beside the journal through `Session.annotate` | Nothing: you run it | The producer and version each statement names | [Write credit](../how-to/provenance.md#write-credit) |
 
 ## An extension's parts
@@ -50,9 +50,8 @@ A role's `harness` and a team's `extensions` name your code in one of two ways:
 | `module:attr` | `harness = "my_drivers:MyDriver"`, `extensions = ["ballot:extension"]` | When the team is loaded, from a layer you trust | You try something out, or your code is in no package |
 
 There are two entry-point groups: `platoon_harness.drivers`, whose names are drivers' names and whose values are driver
-classes, and `platoon_harness.extensions`, whose names are extensions' names and whose values are `Extension`s. A kind
-of code gets a group when a second independent user needs a short name for it. Discovery reads installed metadata and
-imports nothing, so before any code loads or any cost is spent it refuses a name that two distributions both register,
+classes, and `platoon_harness.extensions`, whose names are extensions' names and whose values are `Extension`s. Discovery
+reads installed metadata and imports nothing, so before any code loads or any cost is spent it refuses a name that two distributions both register,
 unless the team pins one as `name@version` by a version the other does not have, and a distribution whose requirement on
 `platoon-harness` excludes the release that runs. `platoon-harness extension list` shows what each group holds, from
 metadata alone.
@@ -60,38 +59,6 @@ metadata alone.
 `module:attr` imports, so it is taken only from a layer you trust: Python, your user config, `--set` and the
 environment. A project or team file that names one is refused without `--trust`, as
 [troubleshooting](../how-to/troubleshooting.md#a-team-file-needs-trust) says.
-
-## What a driver says of itself
-
-A driver's `describe` returns a `DriverInfo` before anything starts, as [the contract](drivers.md#the-contract) says. Two
-of its fields concern a driver of yours in particular:
-
-- **`check`** names the check that ships with a driver outside the SDK, as `module:function`, which
-  `platoon-harness doctor --check` runs against FakeModel and keeps, and which is imported only to run it. The SDK's own
-  drivers, `opencode` among them, name none, as `levels.CHECKED` holds theirs.
-- **`credentials`** names where, beneath the agent's folder, its harness keeps a credential, as relative paths that
-  cannot leave that folder. When the agent ends, its stop removes them with the harness's `TMPDIR`, and a rest removes
-  nothing, as the harness comes back
-  ([RFC 0075](../rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft).
-
-## Programs
-
-A program is a Python script that starts its session as `program:<name>`, as any script may, and drives it through the
-session's ops, so control flow stays out of the team file. It keeps nothing that must survive a restart: after a crash it
-is run again on the session, reads what the record holds, and sends each command under a key it makes the same way on
-every run, so a command the journal answered before acts once. A team leaves its session to its program with
-`until = "program"`, and a person's start or resume of such a team is refused, naming the script way.
-`platoon_harness.patterns` holds a program's building blocks, `population` among them
-([RFC 0068](../rfcs/0068-a-program-is-a-script-that-owns-its-session.md),
-[run a program from Python](../how-to/topologies.md#run-a-program-from-python)).
-
-## The training contract
-
-A training system runs a session per rollout, from a program of its own, and admits each agent through its `Authority`,
-which gives the agent model access through a gateway and hears how it ended. It asks the record what can train, and
-writes rewards and credit beside the journal, each an estimate by a named producer at a version. The SDK names no
-training system: [Training on sessions](training.md) is the contract, what the SDK owns and what the training system
-owns, and [architecture §14](../architecture.md#14-training) is its design.
 
 ## Rules your code keeps
 

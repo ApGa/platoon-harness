@@ -1,8 +1,7 @@
 # Training on sessions
 
 A training system runs a session per rollout and trains on what its agents' model calls did. It builds on one contract, which this
-page describes, and the SDK names no training system in it. The first to build on it is Platoon's `platoon-teams` extension, in a
-fork of Platoon's repository, not released. [architecture.md](../architecture.md) section 14 is the design of record.
+page describes, and the SDK names no training system in it. Section 14 of [the architecture](../architecture.md) is the design.
 
 What the SDK owns is execution and evidence: the session, its journal and what the record says of each agent. What the training
 system owns is identity and model access, through its authority, and what trains.
@@ -63,8 +62,7 @@ class MyAuthority:
 - **`finish`** tells you how an agent ended: its `status`, `finished`, `cancelled`, `retired`, `lost` or `failed`, and its
   report, the gist, which is the agent's own for a finish and the session's words for any other end, and then the body, its last
   words. A child that ended with its parent is `cancelled` only if a turn of its was under way, and `retired` otherwise, even on
-  its way to a turn, as its parent's end cut no turn of its
-  ([RFC 0062](../rfcs/0062-a-child-ends-cancelled-with-its-parent-only-for-a-turn-under-way.md)). It comes last in the agent's
+  its way to a turn, as its parent's end cut no turn of its. It comes last in the agent's
   stop, once its harness has ended or failed to, and until it returns the agent's parent is handed nothing and a `wait` the
   parent holds open does not answer `released`, so settle the agent there and return once you have. A parent at work on its own
   when the agent ended can still read of the end first, by a call it makes. A stop that a crash cut is said again, alike, so take
@@ -131,18 +129,10 @@ cut short while an admit was under way. Read it as history.
 
 ## What can train
 
-`session.eligibility(agent, episode)` answers from the record alone, alike after a rebuild, on a closed copy and with the
-conformance store gone:
-
-- **Attribution:** `exact` where every start of the agent recorded its trainable level met and no other agent's admission names any
-  of its backend ids, `forked` once a native child of its harness is seen, whose calls go on its key, and None otherwise.
-- **Verdict:** eligible when nothing bars it. An agent's bars are `not_trainable`, `shared_key`, `forked` and `no_end`, and a call's
-  own are `outside_episode`, `person` and `purpose`; a call is eligible when its agent is and it has none.
-- **Purpose:** a call reported with none is its turn's, and one reported for `compaction` is a compaction's; any other purpose bars
-  it. A sealed launch makes no call but these: it retries nothing, warms no cache, and labels each compaction call as it makes it.
-  A call your gateway recorded that no harness reported has no call id to join, so it never trains.
-
-[provenance.md](../how-to/provenance.md#what-can-train) says what each bar means. What trains is still yours to decide.
+`session.eligibility(agent, episode)` answers from the record alone, alike after a rebuild and on a closed copy, whether an
+agent's calls in an episode can train: an agent is barred by `not_trainable`, `shared_key`, `forked` or `no_end`, and a call
+by `outside_episode`, `person` or `purpose`. A call your gateway recorded that no harness reported has no call id to join, so it
+never trains. [provenance.md](../how-to/provenance.md#what-can-train) says what each bar means; what trains is yours to decide.
 
 **Labels.** Give your team a vocabulary for its work, each label with the values it may take, and its agents label the tasks they
 add and the agents they spawn, from it alone, as their tools' schemas show them:
@@ -171,33 +161,25 @@ watch what each label's work comes to.
 
 ## What a sealed launch is
 
-A gateway goes only to a driver that declares `sealed`, and that driver launches its harness on the gateway's model with nothing of
-the user's: no settings, extensions, skills or project instructions of theirs, no tool of the harness's own that acts, no native
-agents and no retries. How each driver keeps these out is [drivers.md](drivers.md#a-sealed-launch)'s to say. ScriptedDriver, pi,
-OpenHands and a wire program that declares it launch sealed; Claude Code, Codex, `exec` and ACP do not, and a gateway admission to
-one fails, naming why.
+A gateway goes only to a driver that declares `sealed`, which launches its harness on the gateway's model with nothing of the
+user's: no settings, extensions, skills or project instructions, no tool of the harness's own that acts, no native agents and
+no retries. ScriptedDriver, pi, OpenHands and a wire program that declares it launch sealed; Claude Code, Codex, `exec` and ACP
+do not, and a gateway admission to one fails, naming why. [drivers.md](drivers.md#a-sealed-launch) says how each keeps these
+out. What a trainer can count on:
 
-- **The bearer goes only by environment,** under `PLATOON_HARNESS_BEARER`. A file the launch writes names the variable, as
-  `${PLATOON_HARNESS_BEARER}`, never its value, so the session folder, which is your export, holds no key. A wire program finds the
-  variable's name in its launch frame, beside your origin, model, tools and compaction headers.
-- **Your environment's tools are a second MCP server,** named `environment`, at `Gateway.tools`, under the same bearer, beside the
-  session's own tools. Each reaches the model named by that server, never bare, so a tool of yours named `finish` cannot collide
-  with a harness's own: pi and ScriptedDriver show it as `mcp__environment__finish`, and OpenHands as `environment_finish`, as its
-  SDK's client of two servers names a server's tools. A policy calls your tools by those names, and your server is called by the
-  names it lists. Agents run at once, and so do their calls ([what runs at once](../architecture.md#what-runs-at-once)), so a
-  team's wall clock rests on how your server takes calls that come together: one that runs an environment's tools one at a time
-  across the agents sharing it makes them take turns on those tools.
-- **Compaction stays on, and each compaction call carries your `compaction_headers`,** so your gateway tells it apart as it arrives
-  and can keep it out of a step budget. The harness reports each such call as `model.call` of purpose `compaction`, with the id
-  your model gave it: ScriptedDriver's `Compact` step, OpenHands' condenser, a wire program from its launch spec, and pi through
-  the extension our driver loads, which runs pi's own `compact`, one call or two for a split turn, each with the headers and its id.
-  Pi compacts when your gateway refuses a request as longer than its window, in its dialect's own words, and retries it once.
-- **A sealed launch is earned, never declared.** `doctor --check`, or `check_driver` with `write_conformance` for a driver it ships
-  no check of, runs `sealed_first_request_holds_only_ours` and `environment_tools_in_first_request` beside the rest, on `FakeModel`
-  acting as a gateway, and keeps them in the one result an agent's levels read. They prove, on the machine they ran on and its own
-  home, that the first request goes under the gateway's bearer, holds none of the project's instructions, and shows only our tools,
-  the environment's, each named by its server, and those the harness keeps that act on nothing. What else a sealed launch keeps out,
-  the user's settings, extensions and skills, is how each driver builds its launch, which the slow tests read and no check proves.
+- **The bearer goes by environment alone,** under `PLATOON_HARNESS_BEARER`, so the session folder, which is your export, holds
+  no key.
+- **Your environment's tools are a second MCP server,** named `environment`, at `Gateway.tools`, under the same bearer: pi and
+  ScriptedDriver show a tool of yours as `mcp__environment__finish`, and OpenHands as `environment_finish`. Agents' calls
+  arrive at once ([what runs at once](../architecture.md#what-runs-at-once)), so a server that runs tools one at a time
+  across the agents sharing it makes them take turns.
+- **Each compaction call carries your `compaction_headers`,** and is reported as `model.call` of purpose `compaction`, with
+  the id your model gave it. Pi compacts only when your gateway refuses a request as longer than its window, in its dialect's
+  own words, and then retries it once.
+- **A sealed launch makes no call but its turns' and its compactions',** as it retries nothing and warms no cache.
+- **It is earned, never declared.** `doctor --check`, or `check_driver` with `write_conformance`, proves on `FakeModel` acting
+  as a gateway that the first request goes under the bearer, holds none of the project's instructions and shows only our
+  tools and the environment's.
 
 ## Write rewards and credit
 
@@ -240,9 +222,7 @@ row, so is unscored; a team reward that is not scored passes its status to each 
 edge to an event no older than its own, makes every row `invalid`. What reached the events of no agent, or of one that never
 started, as one whose launch failed, which has no start for a row to target, is the reward less the agents' rows, and what an
 agent kept in no span, such as an end out of a turn that nothing joins to a call, is its row less its spans' rows, and no span's
-row holds it. Its agent rows are those `propagate@3` wrote, and where no claimant's event of a claim is reached, so are its span
-rows; where no span took another principal's event, those are `propagate@2`'s, whose agent rows were `propagate@1`'s. Pin an
-earlier SDK to run an earlier version, as a run recorded on `propagate@3` does.
+row holds it.
 
 What credit reaches depends on what you close on, so close each topology on what its team came to:
 
@@ -259,19 +239,16 @@ What credit reaches depends on what you close on, so close each topology on what
   its workers' results, as `task.list` shows them, reaches every span that held their claims.
 
 A worker that claims and completes three tasks in one turn, a model call for each step, closed on the three results, has three
-spans, each holding its own task's result and claim. Under `propagate@2` each held a quarter, and the rest reached the task you
-added, which is nobody's; under `propagate@3` the task statement each claim showed, and the message that began the turn, take a
-share each, for nobody, and the spans hold 5/24, 2/9 and 2/9. A call that completes one task and claims the next puts the next
-one's claim in the first one's span, which never held it: under `propagate@3` the first span kept that claim's share, and under
-`propagate@4` the span that held the claim does, so the spans hold 5/24, 2/9 and 2/9 again. A worker that crafts with the
-environment's tools in one span, says how far it has come, which cuts its turn, and completes the task in the next, is credited
-in both: both held its claim.
+spans, each holding its own task's result and claim, and the spans hold 5/24, 2/9 and 2/9: the task statement each claim showed,
+and the message that began the turn, take a share each, for nobody. Where a call completes one task and claims the next, the
+span that held the claim keeps its share. A worker that crafts with the environment's tools in one span, says how far it has
+come, which cuts its turn, and completes the task in the next, is credited in both: both held its claim.
 
 Its incentives: citing, and taking, give away all but `retained` of what reaches the event, being cited or taken by a credited
 span earns credit, broadcasting draws more takes, reading in a last turn costs, and work nobody cites or takes earns nothing from
 it. The default template asks every agent to cite, so training under it pulls against that request: watch the citation rate, and
-what each span read and sent. Rows like these are fractions of the team reward, so a training system centers them per role, as
-Platoon's keyed credit does at a group size above one. A span's row is a slice of its agent's, so pooling spans as agents of their
+what each span read and sent. Rows like these are fractions of the team reward, so center them per role across your rollouts. A
+span's row is a slice of its agent's, so pooling spans as agents of their
 own would tie an agent's advantage to how many spans it was cut into: center agents' rows per role, train each scored span's calls
 on its row less its agent's baseline shared equally by that agent's scored spans, and the calls no scored span holds on nothing.
 
@@ -282,8 +259,7 @@ its journal. It holds no key, as bearers lived only in the harnesses' environmen
 scratch or a file its driver names as where its harness kept a credential, once that agent has ended and its stop has run,
 which removes them before your `finish` hears of the end. So end every agent, as above, and wait until your `finish` has heard
 of each before you leave the session: a stop that has not begun when the session stops runs only at a resume, which a
-trainable session never has, and an agent that has not ended keeps them ([RFC
-0075](../rfcs/0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md), a draft). The scratch goes whole, with pi's
+trainable session never has, and an agent that has not ended keeps them. The scratch goes whole, with pi's
 full text of a tool result it cut among it, which its transcript names by a path that then names nothing; what the model was
 shown stays. Read it with `Session.attach` once its runtime has stopped: eligibility, lineage, exposure and annotations all
 answer on it, alike on a copy. To show what a model call took in, read each offer its harness said it took, a
@@ -302,7 +278,6 @@ digest. The form a gist is shown in is the SDK's to change, so read it there.
   with each dialect's own refusal of a request too long for the model's window.
 - **`ScriptedDriver` launches sealed** with no binary: its tool calls are real MCP, its `AskModel` step a real model call, and its
   `Compact` step a compaction call with the headers.
-- **The contract test,** `test_a_managed_session_runs_as_a_training_authority_drives_it` in this repository's
-  `tests/integration/test_contract.py`, runs your whole use of the SDK with no training system behind it, on ScriptedDriver and, in
-  the slow pass, on pi and OpenHands. Beside it, in the slow pass, `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback`
-  runs an agent `isolated` under `bwrap`, on a scripted harness on the wire, pi and OpenHands.
+- **An example to read:** this repository's `tests/integration/test_contract.py`, whose
+  `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use of the SDK with none
+  behind it, on ScriptedDriver, pi and OpenHands.
