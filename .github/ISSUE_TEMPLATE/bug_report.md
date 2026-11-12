@@ -21,10 +21,12 @@ may be there already.
 ## Versions
 
 <!-- What `platoon-harness --version` prints, or the commit of the checkout you ran it from; each harness the team runs,
-such as `claude`, `codex`, `pi` or `openhands`, and its version; and your OS, such as Ubuntu 24.04. -->
+such as `claude`, `codex`, `pi` or `openhands`, and its version; the Python it runs on, which `uv tool list --show-python`
+shows for a tool; and your OS, such as Ubuntu 24.04. -->
 
 - platoon-harness:
 - Harness and its version:
+- Python:
 - OS:
 
 ## What `platoon-harness doctor` prints
