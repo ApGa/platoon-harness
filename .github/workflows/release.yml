@@ -68,7 +68,7 @@ jobs:
       - name: Run the command line from the wheel with its cli extra, in an environment of its own
         run: uv run --isolated --no-project --with "$(echo dist/*.whl)[cli]" platoon-harness --version
 
-      # As the install guide says: the openhands extra resolves with Laminar's proxy excluded.
+      # The openhands extra resolves with Laminar's proxy excluded, as the checkout's lock has it.
       - name: Resolve the openhands extra with lmnr-claude-code-proxy excluded
         run: echo "platoon-harness[openhands] @ ./$(echo dist/*.whl)" | uv pip compile --excludes <(echo lmnr-claude-code-proxy) -
 

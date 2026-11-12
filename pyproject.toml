@@ -52,12 +52,8 @@ The library alone, which needs pydantic and nothing more: `uv add platoon-harnes
 [The project's README](https://github.com/ApGa/platoon-harness#readme) says what it gives you and how to start, and
 [its documentation](https://github.com/ApGa/platoon-harness/tree/main/docs) the rest.
 
-Its `openhands` extra pins OpenHands' SDK and tools. `openhands-sdk` requires `lmnr`, which requires
-`lmnr-claude-code-proxy`, a binary under Laminar's own terms, which the OpenHands worker runs without. The extra brings
-`lmnr-claude-code-proxy` unless you exclude it: uv's `--excludes`, with a file that names it, does for
-`uv tool install` and `uv pip install` alike, as
+Its `openhands` extra pins OpenHands' SDK and tools, for agents on OpenHands, as
 [the install guide](https://github.com/ApGa/platoon-harness/blob/main/docs/getting-started/install.md#openhands) shows.
-Either way, platoon-harness itself stays under the MIT license.
 """
 
 [project.urls]

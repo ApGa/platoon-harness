@@ -434,8 +434,8 @@ uv run pytest -q -m slow tests/integration/test_installed.py
 Each step checks what an install from PyPI would get, on Python 3.12, the oldest the distribution names: a wheel built
 from the sdist, so an sdist that leaves out a file the wheel needs fails; metadata and a description that render on PyPI;
 the library imported alone and the command run with its `cli` extra, each in an environment of its own; and the
-`openhands` extra resolved with `lmnr-claude-code-proxy` excluded, as [Install](docs/getting-started/install.md#openhands)
-says. `tests/integration/test_installed.py` builds the wheel again and installs it as a person does, taking no network,
+`openhands` extra resolved with `lmnr-claude-code-proxy` excluded, as the checkout's lock has it.
+`tests/integration/test_installed.py` builds the wheel again and installs it as a person does, taking no network,
 so uv's cache must hold what it installs, as the steps before it leave it; where it does not, it fails, saying so.
 
 The job keeps `dist/` as an artifact of the run. On a tag pushed to this repository, and on no other event, the

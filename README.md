@@ -101,6 +101,4 @@ experimental.
 
 MIT; see [LICENSE](LICENSE). `platoon-harness web` serves SwarmChat 0.1.0's page from the installed package, under
 SwarmChat's MIT license (© The SwarmChat Authors); it is not vendored. The terminal UI's agents are drawn from the icon of
-[Platoon](https://github.com/ApGa/platoon) (MIT, © Apurva Gandhi). The optional `openhands` extra brings
-`lmnr-claude-code-proxy`, a binary under Laminar's own terms, unless you exclude it, as
-[Install](docs/getting-started/install.md#openhands) says.
+[Platoon](https://github.com/ApGa/platoon) (MIT, © Apurva Gandhi).

@@ -15,7 +15,7 @@ no code. **DOCUMENTED-ONLY** has no code to read.
 | Platoon | 0.5.0 | MIT AND Apache-2.0 (tool parsers). Optional extension; keep its NOTICE if parser code is ever copied | A training authority, on the contract this repository holds ([RFC 0049](../rfcs/0049-the-contract-a-training-authority-gets.md)). Nothing here depends on Platoon | IMPLEMENTED: gateway, child mint, trajectories, env forks, extensions. EXPERIMENTAL: credit, policies, Responses and Messages dialects. DRAFT: `AgentGraph`, `RewardEvent`, attribution levels, native selectors, `bus` | The only exact identity for an external agent is one key per agent, from `POST /v1/platoon/agents` |
 | SwarmChat | 0.1.0 | MIT. Its notice heads each of its scripts we serve. Exact pin, `swarmchat==0.1.0` in the `cli` extra | Second client: its five page files, each held to its SHA-256, over our own backend, from `platoon-harness web`, with an overlay of ours that acts through `/x/command`. Its server never runs | IMPLEMENTED: server, agent API and a read-only viewer. No composer exists or is documented. Nothing DRAFT | Messages have no idempotency key, no metadata and no caller ids, so a projection into its server cannot be idempotent |
 | Toad | 0.6.20 | AGPL-3.0. Ideas only: no code, no dependency. Its `textual-diff-view` is AGPL too | Interaction reference | IMPLEMENTED: own ACP v1 client. Nothing DRAFT | Copying is ruled out by license, not merely unnecessary |
-| OpenHands | SDK 1.59.0, CLI 1.16.0 | MIT. The SDK requires proprietary `lmnr-claude-code-proxy` 0.2.0 through `lmnr`: the worker runs without it, the repository's lock excludes it, and the extra installed from an index brings it in unless excluded | Wire worker on SDK `arun()`, from the `openhands` extra | IMPLEMENTED: SDK, agent server, `openhands acp`. Docs list `--streaming`, absent from CLI 1.16.0 | Passed the exact path on a minted key. Cannot share an environment with `mcp` 2.3.0 or ACP 1.0.0rc3, and the CLI pins SDK 1.28.1 |
+| OpenHands | SDK 1.59.0, CLI 1.16.0 | MIT | Wire worker on SDK `arun()`, from the `openhands` extra | IMPLEMENTED: SDK, agent server, `openhands acp`. Docs list `--streaming`, absent from CLI 1.16.0 | Passed the exact path on a minted key. Cannot share an environment with `mcp` 2.3.0 or ACP 1.0.0rc3, and the CLI pins SDK 1.28.1 |
 | Codex | 0.164.0, and 0.167.0 from 2026-11-06 | Apache-2.0 with NOTICE. User-installed. Never read or copy `auth.json` | `codex app-server` over stdio, no `experimentalApi` | IMPLEMENTED in behavior, labelled Experimental upstream. `codex mcp-server` is removed. `turn/steer`, `thread/fork`, `thread/inject_items` are on the stable handshake | The model reaches MCP tools only from inside a Code Mode script, so `omit_tools_from: ["deferred"]` is required |
 | Claude Code | 2.1.316; its public repository holds a changelog and examples only | Proprietary. Never bundle, vendor or patch. Agent SDK wheels bundle the CLI: no default dependency, no re-hosting | `claude -p` stream-json with the control protocol on the user's own binary | IMPLEMENTED. Undocumented: `--permission-prompt-tool stdio`, `command_lifecycle`. EXPERIMENTAL: agent teams, which do not run in `-p` | `ANTHROPIC_BASE_URL` alone keeps a saved login active, so it is never set without a gateway credential |
 | OpenCode | 2.2.5 (`@opencode/cli`; `opencode-ai` stops at 1.19.5) | MIT. User-installed | Generic ACP driver first. An HTTP driver is a later option | IMPLEMENTED: `opencode acp`, `opencode serve`. Its `/api` spec calls itself experimental. `/api/experimental/*` is EXPERIMENTAL | With no model set, prompts go to a hosted free model, with no credentials configured |
@@ -50,8 +50,7 @@ Consequences:
   `openhands` extra pins `openhands-sdk==1.59.0` and `openhands-tools==1.59.0`, so an environment with the extra holds OpenHands'
   pins, and one that cannot runs the worker from an environment of its own, as a wire command. `litellm`, which the worker
   imports too, is not pinned: it floats in the range `openhands-sdk` asks, `litellm>=1.93.0,<1.106`, and every test here ran on
-  1.105.7. The repository's lock leaves out `lmnr-claude-code-proxy`, which the extra installed from an index brings in unless
-  excluded, as uv's `--excludes` does.
+  1.105.7.
 - **Harness versions.** Exact, user-installed, shown by `doctor`, checked on this machine by `doctor --check`, which keeps what it
   found for the version it ran on, under that SDK on that host, and recorded from `ready` on `agent.started` and `agent.resumed`, with
   that result when it speaks for the harness that runs. Adapters seen:
@@ -345,7 +344,7 @@ not stand in for a laptop. Ack p99 is at least twice the sync time, so a sync ab
 | `claude`, `codex` | User-installed binary |
 | `opencode` | `@opencode/cli`, platform binary, no Node at runtime. Check the major version: bins are `opencode` and `opencode2` |
 | `pi` | Node >= 22.19 |
-| `openhands` | The `openhands` extra, in the runtime's environment or, run as a wire command, one of its own: Python 3.12+. An environment of the worker with OpenHands' tools and without the proxy was 498 MB, and 387 MB without the tools. The OpenHands CLI needs Python 3.12 alone and is not used |
+| `openhands` | The `openhands` extra, in the runtime's environment or, run as a wire command, one of its own: Python 3.12+. The OpenHands CLI needs Python 3.12 alone and is not used |
 | Codex sandbox on Linux | Bubblewrap and user namespaces. A bundled `bwrap` is the fallback. With user namespaces blocked, sandboxed commands cannot run (docs, not reproduced). Never fall back to `danger-full-access` silently |
 | `isolated` workspaces | The SDK's `bwrap` extension: Linux, `bwrap` on `PATH` and unprivileged user namespaces, which a kernel setting, AppArmor or a container's seccomp can block, and which its probe says before any cost. Run on bubblewrap 0.4.1 alone. No provider for macOS |
 
@@ -401,7 +400,6 @@ plan login needs an explicit opt-in, and why we recommend an API key for teams, 
 **Terms and licenses.**
 
 - OpenAI's terms, read only through search snippets, need review from the source.
-- `lmnr-claude-code-proxy` is proprietary, and the `openhands` extra installed from an index brings it in unless excluded, as uv's `--excludes` does. The worker runs without it, and the repository's lock excludes it. No install of the extra from PyPI has run yet. The release workflow resolves it from the built wheel with `--excludes`, which leaves the proxy out.
 - Concurrency of one plan login across many processes is unknown for both Claude Code and Codex.
 
 **Harness behavior not measured.**

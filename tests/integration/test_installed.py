@@ -22,8 +22,6 @@ pytestmark = [pytest.mark.slow, pytest.mark.timeout(600)]
 
 GUIDE = ROOT / "docs" / "getting-started" / "install.md"
 SCRIPT = Path(__file__).with_name("counting.py")
-BRINGS = "brings `lmnr-claude-code-proxy` unless you exclude it"
-"""What the install guide and the wheel's description each say of the `openhands` extra installed from a wheel."""
 VERSION = f"platoon-harness {platoon_harness.__version__}\n"
 WHERE = "import platoon_harness, platoon_harness_cli; print(platoon_harness.__file__, platoon_harness_cli.__file__)"
 HELD = "import importlib.metadata as m; print(*(d.metadata['Name'].lower() for d in m.distributions()))"
@@ -154,9 +152,7 @@ def test_uv_tool_install_puts_the_command_on_path_with_the_cli_extra(installed: 
 
 
 def test_the_built_wheel_s_openhands_extra_requires_what_install_md_describes(installed: Installed):
-    """The extra requires OpenHands' SDK and tools at the release the guide names, exactly, and nothing more. No wheel
-    can leave out what those require, Laminar's proxy among it, so the guide and the wheel's description each say that
-    the extra installed from a wheel brings it unless you exclude it."""
+    """The extra requires OpenHands' SDK and tools at the release the guide names, exactly, and nothing more."""
     guide = " ".join(GUIDE.read_text().split())
     [(sdk, tools, release)] = re.findall(r"pinning `([\w-]+)` and `([\w-]+)` at ([\d.]+) exactly", guide)
     metadata = installed.metadata("platoon-harness")
@@ -168,5 +164,3 @@ def test_the_built_wheel_s_openhands_extra_requires_what_install_md_describes(in
 
     assert metadata.get_all("Provides-Extra") == ["cli", "openhands"]
     assert extra == {sdk: f"=={release}", tools: f"=={release}"}
-    assert BRINGS in guide
-    assert BRINGS in " ".join(str(metadata.get_payload()).split())

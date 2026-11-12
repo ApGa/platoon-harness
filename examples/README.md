@@ -26,15 +26,13 @@ Every example but the extension package needs:
   ```console
   $ uv venv --python 3.12 examples-env
   $ source examples-env/bin/activate
-  $ echo lmnr-claude-code-proxy > excludes.txt
-  $ uv pip install "platoon-harness[cli,openhands]" --excludes excludes.txt
+  $ uv pip install "platoon-harness[cli,openhands]"
   $ platoon-harness --version
   $ git clone --branch vX.Y.Z https://github.com/ApGa/platoon-harness.git
   ```
 
   The environment's `python` runs a script example, and its `platoon-harness` every command, with OpenHands on its
-  interpreter. [Install](../docs/getting-started/install.md#openhands) says why `excludes.txt` leaves Laminar's proxy
-  out. Each page writes the clone's path as `path/to/platoon-harness`;
+  interpreter. Each page writes the clone's path as `path/to/platoon-harness`;
 - for a team with pi, `pi` on your PATH, on Node 22.19 or later, which needs no login here;
 - a model at an endpoint that speaks OpenAI's Chat Completions, such as OpenRouter's or any provider's OpenAI-compatible
   URL, and your key for it, in the two variables each team's auth profile names, as

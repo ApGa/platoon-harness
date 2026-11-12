@@ -34,8 +34,6 @@ OpenHands becomes an optional extra of the SDK.
   names that interpreter to install it for, and an agent's start is refused in the same words. Nothing else changes.
 - **An environment of its own stays one wire command away.** Where a user's environment cannot hold OpenHands' pins, they install the
   SDK with the extra in one of its own and name its interpreter and the module as a wire command.
-- **The proprietary proxy stays out of our lock.** `exclude-dependencies` keeps `lmnr-claude-code-proxy` out, and the docs say that
-  the extra installed from an index brings it in unless excluded, as uv's `--excludes` does.
 
 ## Alternatives
 
@@ -72,5 +70,4 @@ OpenHands becomes an optional extra of the SDK.
 - `tests/integration/test_openhands.py`, slow, on the real SDK against FakeModel, from the dev environment, the worker named as a wire
   command among it.
 - By hand, in an environment of the SDK and the command line alone: `doctor` named its interpreter to install the extra for, `team
-  check` found no problem, and a `run` failed its agent at start with the same words. A dry run of uv's resolver installing the extra
-  brought in `lmnr-claude-code-proxy` 0.2.0, and with `--excludes` naming it did not.
+  check` found no problem, and a `run` failed its agent at start with the same words.

@@ -58,9 +58,8 @@ OPENHANDS_UNLISTED = {
     "openhands-tools": (),
 }
 """What each distribution the optional `openhands` extra brings whose license is not on the allowlist states: no
-license, the LGPL, or words that name none."""
-KEPT = "Either way, platoon-harness itself stays under the MIT license."
-"""What the install guide and the distribution's description say of the extra that brings Laminar's proxy."""
+license, the LGPL, or words that name none. The maintainers admit these, and Laminar's proxy, which the extra brings
+too."""
 IDENTIFIER = re.compile(r"[^\s()]+")
 
 
@@ -211,8 +210,9 @@ def test_the_classifiers_name_the_pythons_ci_tests_and_nothing_else():
 
 def test_every_runtime_dependency_s_license_is_on_the_allowlist():
     """What installing platoon-harness with its `cli` extra brings states a license on the allowlist, every one. The
-    `openhands` extra brings besides only what `OPENHANDS_UNLISTED` names, and the proxy the checkout excludes, whose
-    license nothing here can read, as it is not installed."""
+    `openhands` extra brings besides only what `OPENHANDS_UNLISTED` names, and Laminar's proxy, which the checkout
+    excludes, so that nothing here can read its license. A dependency added since fails until the maintainers admit
+    it."""
     plain, missing = required(("platoon-harness", ("cli",)))
     extra, excluded = required(("platoon-harness", ("cli", "openhands")))
 
@@ -222,20 +222,14 @@ def test_every_runtime_dependency_s_license_is_on_the_allowlist():
     assert unlisted(extra) == OPENHANDS_UNLISTED
 
 
-def test_the_workspace_excludes_the_proprietary_dependency_and_install_md_says_a_published_install_brings_it():
-    """OpenHands' SDK requires `lmnr`, which requires Laminar's proxy. The workspace's lock leaves it out, so no
-    checkout installs it, and the install guide says so, and that the extra installed from a wheel brings it unless you
-    exclude it. The guide and the distribution's description say that platoon-harness stays MIT either way."""
+def test_the_checkout_s_lock_leaves_out_laminar_s_proxy():
+    """OpenHands' SDK requires `lmnr`, which requires Laminar's proxy. The checkout's lock leaves it out, so no
+    checkout installs it."""
     excluded = tool()["uv"]["exclude-dependencies"]
     lock = tomllib.loads((ROOT / "uv.lock").read_text())
-    guide = " ".join((ROOT / "docs" / "getting-started" / "install.md").read_text().split())
 
     assert excluded == ["lmnr-claude-code-proxy"] and lock["manifest"]["excludes"] == excluded
     assert "lmnr" in {Requirement(line).name for line in metadata.requires("openhands-sdk") or []}
     assert "lmnr-claude-code-proxy" in {Requirement(line).name for line in metadata.requires("lmnr") or []}
     with pytest.raises(metadata.PackageNotFoundError):
         metadata.distribution("lmnr-claude-code-proxy")
-    assert "`openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`" in guide
-    assert "The checkout's lock leaves it out with `exclude-dependencies`, so a checkout never installs it" in guide
-    assert "the extra installed from the wheel, as an install from PyPI is, brings" in guide
-    assert KEPT in guide and KEPT in " ".join(project()["readme"]["text"].split())

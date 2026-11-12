@@ -49,16 +49,8 @@ worker alone loads OpenHands, which platoon-harness's `openhands` extra brings, 
 `openhands-tools` at 1.59.0 exactly. Install the extra with the command line:
 
 ```console
-$ echo lmnr-claude-code-proxy > excludes.txt
-$ uv tool install "platoon-harness[cli,openhands]" --excludes excludes.txt
+$ uv tool install "platoon-harness[cli,openhands]"
 ```
-
-`openhands-sdk` requires `lmnr`, which requires `lmnr-claude-code-proxy`, a binary under Laminar's own terms. Nothing
-the worker runs imports it, as only `lmnr`'s instrumentation of the Claude Agent SDK does, so the worker runs without
-it. A wheel carries no exclusion, so the extra installed from the wheel, as an install from PyPI is, brings
-`lmnr-claude-code-proxy` unless you exclude it: `--excludes` with that file does, for `uv tool install` as above or for
-`uv pip install` in a virtual environment, and pip has no way to. The checkout's lock leaves it out with
-`exclude-dependencies`, so a checkout never installs it. Either way, platoon-harness itself stays under the MIT license.
 
 OpenHands keeps no login, so its role needs an auth profile that names its key. Where OpenHands' pins cannot share an
 environment with yours, [Drivers](../extending/drivers.md#openhands-a-wire-worker) runs the worker on an interpreter of
