@@ -10,10 +10,10 @@ own, checked before it spends anything.
 **Prerequisites:** for the Python forms, the SDK, `pip install platoon-harness`. The TOML forms go in a team file, whose
 every key [the team file reference](../reference/team-file.md) lists.
 
-Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team, as TOML and as Python, and a test
-checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each, and `run` runs
-each but those under `until = "program"`, git-swarm's and the reviewers' of [Run a program from Python](#run-a-program-from-python),
-whose session is its program's, a script that starts it.
+Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Each example is a team, as TOML and as Python, and
+then what `team show` prints of it. `team check` accepts each, and `run` runs each but those under `until = "program"`,
+git-swarm's and the reviewers' of [Run a program from Python](#run-a-program-from-python), whose session is its program's, a
+script that starts it.
 
 ```python
 from platoon_harness.team import Budget, Role, Team
@@ -301,30 +301,21 @@ async def swarm(session: Session) -> dict[str, str]:
     return outcomes
 ```
 
-A worker's outcome is one of five, which its worker is told beside its goal:
+Each worker comes to one outcome, which it is told beside its goal, and which the program records as an entry on `outcomes`
+named for it, citing what it rests on:
 
 - `contribute`: it made commits in its worktree and nominated nothing.
-- `nominate`: it sent one message to `#nominations` whose `based_on` cites one recorded commit, by the ref `repo.commit` gives for
-  its SHA, and committed nothing.
+- `nominate`: it sent one message to `#nominations` citing one recorded commit, and committed nothing.
 - `abstain`: it did neither.
 - `invalid`: it did anything else.
-- `failed`: it ended any way but finishing. A worker whose turn ended with nothing more to come for it, as a failed turn leaves
-  one, is retired, and fails.
+- `failed`: it ended any way but finishing.
 
-Each is an entry on `outcomes` named for its worker, `<outcome>: <what>`, citing what it rests on, and the board takes no second.
-A contribution's and a nomination's give the `sha` of its commit in their `fields`. Every outcome counts against `attempts`,
-abstaining too, so a population that only abstains still ends. The population reads out no winner: choosing among the nominations
-is yours, from the board. Workers start as `worker-1`, `worker-2` and on. A population keeps nothing, so run `swarm` again on the
-session after a crash, with `Session.resume`, and it goes on from what the record holds.
-
-A worker builds on a peer's commit by checking out the `sha` its entry records on its own branch, `git reset --hard <sha>`, which
-its worker is told. Every worktree shares the repository's objects, so every commit a worker made is in each, and the look after the
-builder's turn records its commit with the peer's as its parent. The runtime moves no branch: the worker moves its own. So a
-population runs only in worktrees, and refuses any other workspace before it starts anyone, saying why: in `shared` every worker
-works in one checkout, and a `snapshot` or an `isolated` workspace is a repository of its own, which holds no peer's commits.
-
-[examples/git-swarm](../../examples/git-swarm/README.md) runs a population from a script, on pi and a model you name, on a feature the
-sample project asks for.
+A contribution's and a nomination's entry give the `sha` of its commit in their `fields`, and a worker builds on a peer's
+commit by checking that `sha` out on its own branch. Every outcome counts against `attempts`, so a population that only
+abstains still ends, and it reads out no winner: choosing among the nominations is yours, from the board. A population keeps
+nothing, so run `swarm` again on the session after a crash, with `Session.resume`, and it goes on from what the record
+holds. It runs only in worktrees, which share the repository's objects, and refuses any other workspace before it starts
+anyone, saying why. [examples/git-swarm](../../examples/git-swarm/README.md) runs one from a script.
 
 ## Mix presets
 
@@ -390,15 +381,11 @@ Presets with fixed names (`pipeline`, `ring`, `git-swarm`) cannot be used twice 
 ## Merge worktrees through a queue
 
 Workers in worktrees of their own hand their branches to one merger, rather than merge each other's: a `merges` queue the workers
-add to and a `merger` role claims from, the merger in a worktree of its own. It is a queue and a role, so it is written out and is no
-preset. The runtime never merges: the merger merges each branch a task names into its own branch with git, and the look after its turn
-records the merge commit as the merger's, or the merge under way and its conflicted paths, which put the merger under Needs you while
-it rests on them. On a conflict the merger completes the task with a result naming the paths, and the worker reads it from its task,
-by `task.list` or by a `wait` on `task/merges/<id>`, which whoever adds to a queue may do. A worker that does not stay waits so, as a
-turn that ends with nothing left to wait for ends it, and a lead that does not stay is kept while a worker of its waits, as its end
-would retire that worker. `task.fail` is no way back to the worker: it returns the task to the queue's readers, the merger, until it
-dies. Each role's `instructions` say this to its agents: a worker adds a task naming its branch, and a merger merges what it claims
-and completes it with what came of that.
+add to and a `merger` role, in a worktree of its own, claims from. It is a queue and a role, so it is written out and is no
+preset. The runtime never merges: the merger merges each branch a task names with git, and the look after its turn records the
+merge commit, or the conflict, which puts the merger under Needs you. On a conflict the merger completes the task with a result
+naming the paths, so a conflict reaches its worker as its task's result, by `task.list` or a `wait` on `task/merges/<id>`. Each
+role's `instructions` say its part.
 
 ```toml
 [roles.lead]
@@ -566,13 +553,11 @@ The program adds to queue `reviews`; reviewers claim from it. Closes when the pr
 
 A program keeps nothing that must survive a restart. If its script dies, run it again on the session, with
 `Session.resume("reviews")` in place of `Session.start`: each command it sent before is answered from the journal under the same key,
-so it adds no task and starts no reviewer twice, and it goes on from there. `Session.submit` takes a key, while `Session`'s own
-methods, such as `task_add`, choose a new one for each call, so send what must act once through `submit`, keyed by what it is for and
-not by when it was sent: a second run can read what the first did not. The session issues no owner credential, so anyone who attaches
-only reads, and it cannot detach: its runtime runs in the script's process, and the script leaving stops it, resumable.
-`platoon-harness session resume` is a person's, so it refuses such a session, naming this way. On a plan login, a role only the
-program starts counts as several agents, as it may start more than one at once, so the start is refused before any cost unless
-`max_live` is 1 or the script says `plan_login=True` to `Session.start`.
+so it adds no task and starts no reviewer twice. `Session`'s own methods, such as `task_add`, choose a new key for each call, so send
+what must act once through `submit`, keyed by what it is for. The session issues no owner credential, so anyone who attaches only
+reads, and its runtime runs in the script's process: the script leaving stops it, resumable, and `platoon-harness session resume`,
+a person's, refuses it. On a plan login, a role only the program starts counts as several agents, so the start is refused before
+any cost unless `max_live` is 1 or the script says `plan_login=True` to `Session.start`.
 
 ## Check before you spend
 
@@ -586,24 +571,27 @@ known = {"claude": Capabilities(measures={"tokens", "usd"}), "codex": Capabiliti
 problems = team_check(team, capabilities=known)
 ```
 
-It refuses recursive `may_spawn` with no `max_depth`, a wake cycle with no `max_hops`, a budget a role cannot measure, a sandbox its
-harness lacks, a role that stays on a harness that cannot, a role's own `preamble` on a harness that reaches none of our tools, and
-any preset, harness, extension, role, group or auth profile it cannot find. It warns about a role that can never start, a role with no
-path to anyone, a relation no `may_spawn` makes true, an entry that can wake more than 8 agents, a wake cycle that runs through a child
-that can stay, a role that lets its harness start agents of its own, saying what that gives up, a preamble that leaves out `{tools}` or
-`{ending}`, words that name a tool a role cannot hold, and a team's `preamble` that a role on a harness that reaches none of our tools
-is never told. It says nothing of `until = "program"`, as it checks a team before anyone starts it: a person's start of such a team
-is refused, and a program's goes ahead. Under it, it warns of a role only the program starts, none with the session and no role by
-`may_spawn`, when no budget, the role's or the session's, sets a limit: nothing in the team then stops the program starting more,
-or what they spend. Any limit does once it is reached, as a spawn past it is refused and the session stops, though only `agents`
-counts how many start: under `wall` alone, the program starts as many as it likes until then. A program may bound them itself, as a
-population's `attempts` does, so it is a warning.
+It refuses:
 
-A cycle means a loop of wakes between roles. A reply up a tree is not one: `parent`, `children`, `ancestors` and `descendants` never
-count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as a message from the
-parent wakes the child and its answer wakes the parent, for as long as they go on. Any child on a persistent harness can stay, since a
-spawn may ask it to, so `team check` warns of every role that may spawn one and can message it, unless `max_hops` bounds them. The
-`manager-worker` and `tree` presets bound them, at 8 unless you say otherwise.
+- recursive `may_spawn` with no `max_depth`, and a wake cycle with no `max_hops`;
+- a budget a role cannot measure, a sandbox its harness lacks, and a role that stays on a harness that cannot;
+- a role's own `preamble` on a harness that reaches none of our tools;
+- any preset, harness, extension, role, group or auth profile it cannot find.
+
+It warns of:
+
+- a role that can never start, a role with no path to anyone, and a relation no `may_spawn` makes true;
+- an entry that can wake more than 8 agents, and a wake cycle that runs through a child that can stay;
+- a role that lets its harness start agents of its own, saying what that gives up;
+- a preamble that leaves out `{tools}` or `{ending}`, words that name a tool a role cannot hold, and a team's `preamble` that a
+  role on a harness that reaches none of our tools is never told;
+- under `until = "program"`, a role only the program starts, when no budget sets a limit, as nothing in the team then stops the
+  program starting more of them.
+
+A cycle is a loop of wakes between roles: a reply up a tree is none, as `parent`, `children`, `ancestors` and `descendants` never
+count, and neither does a channel that wakes no one. A parent and a child that can stay are the exception, as each one's message
+wakes the other, and any child on a persistent harness can stay, so `team check` warns of every role that may spawn one and can
+message it, unless `max_hops` bounds them. The `manager-worker` and `tree` presets bound them, at 8 unless you say otherwise.
 
 ## Write your own preset
 

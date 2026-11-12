@@ -1,7 +1,7 @@
 # Replay a session
 
 Play a session's record back in the terminal or the browser, from its start, at the pace it happened or faster, and go
-forward and back an event or a turn at a time or to any event or moment. A replay draws the session exactly as it stood
+forward and back an event or a turn at a time or to any event or moment. A replay draws the session as its record had it
 at each point: who was working, what needed you, what changed and what each agent said, from a copy of its record that
 grows as it plays. Nothing in a replay acts on the session.
 
@@ -112,17 +112,9 @@ Open the session itself, with `platoon-harness attach fix-auth` or Open on the s
 
 ## Long sessions
 
-A replay makes checkpoints of the session's views once it opens, one after another, at most eight, evenly spaced
-through the record and at least 1,024 events apart, so a seek back, or far on, starts from the nearest and stays quick:
-at 10,008 events, from 1 to 92 ms here once they were made. A record of 1,024 events or fewer has none, as a copy of it
-from the start is as quick. A seek before they are made copies from the start: 1.5 s to the end of 10,008 events here,
-as they were being made. They take about four times the journal's size on disk until the replay ends. One that cannot
-be made, as on a full disk, is logged, and seeks go on from those made, or from the start.
-
-The page keeps its own fold of the record, which it draws from, and a copy of it each checkpoint's spacing as it folds
-past one, so a seek back in the browser starts from the nearest of those: at 10,008 events, from 16 to 270 ms here,
-once the page had played or jumped that far. Its first jump far on folds every event up to there into the page, 2.8 s to
-the end of 10,008 events here. The terminal keeps no fold of its own, so its seek is the replay's.
-
-See [RFC 0080](../rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md), a draft, for
-the design.
+A replay makes checkpoints of the session's views once it opens, at most eight, evenly spaced through the record and at
+least 1,024 events apart, so a seek back, or far on, starts from the nearest one. A record of 1,024 events or fewer has
+none, as a copy of it from the start is as quick. Checkpoints take about four times the journal's size on disk until the
+replay ends; one that cannot be made, as on a full disk, is logged, and seeks go on from those made, or from the start.
+The page keeps its own fold of the record, with a copy at each checkpoint's spacing, so a seek back in the browser starts
+from the nearest of those.

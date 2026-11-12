@@ -1,8 +1,7 @@
 # Provenance
 
 A session's journal says what each agent was handed, what it claimed to rest on, and what followed from what. This guide is how to
-ask it. Architecture section 11 is the design of record, and [RFC 0038](../rfcs/0038-provenance-is-answered-from-the-record.md) the
-decision.
+ask it. Section 11 of [the architecture](../architecture.md) is the design.
 
 **Goal:** ask a session's journal what reached an agent, what an event rests on, what came of it and whose work an outcome
 reaches, write an estimate beside the journal, and ask whether an agent's work can train.
@@ -50,11 +49,9 @@ When what you write rests on something you read, put its `ref` in `based_on`.
 ```
 
 That line, the template's `{citing}` slot, is the one place an agent is asked: a tool's description says what `based_on` is and
-never asks. It costs 78 bytes in every request of such an agent, 20 tokens by Qwen3's tokenizer, and a refused write and its retry
-for each citation that names nothing or no lines of its event. A team that copies the default and leaves the slot out asks nothing,
-and its agents' citations are still checked and kept. In two live runs, one on each of Claude Code and Codex, each of the two
-citations made named something its citer had been shown, and none was refused; two runs measure no rate, and
-[STATUS.md](../STATUS.md) keeps them.
+never asks. A citation that names nothing, or no lines of its event, costs a refused write and its retry. A team that copies the
+default and leaves the slot out asks nothing, and its agents' citations are still checked and kept. How often agents cite has not
+been measured, so how thin or full an answer here is depends on the agents.
 
 ## Ask the record
 
@@ -106,14 +103,10 @@ the agent's latest turn has not ended, as a tool item reported late can still jo
 claims and completes three tasks in one turn, a call for each, has three spans, each ending at a completion, the last holding its
 last words. [compatibility.md](../reference/compatibility.md), Provenance per harness, says where each harness's turns are cut.
 
-Each span also names the claims its agent held while its calls were made, oldest first, and carries the labels of the work it was
-done for, from the team's vocabulary: those of the task it held, else those its agent was spawned with, else none. A claim is held
-from the call after the one that chose it through the one that chose its completion, failure or release, or to its lease's lapse
-or its agent's end, so a call that completes one task and claims the next ends the first one's span, which held the first alone.
-Where the record cannot place a claim or its end to say whether a span held it, as a claim tied to no call in a turn that was cut
-or lost, or a lapse in the middle of a turn, the span's claims are `None`, unknown. Its labels are those of each task it held or
-may have held, and its spawn's unless it surely held one, even for its calls before the claim; where these differ they are `None`,
-and never one of them:
+Each span also names the claims its agent held while its calls were made, and the labels of the work it was done for, from the
+team's vocabulary: those of the task it held, else those its agent was spawned with, else none. Where the record cannot place a
+claim or its end to say whether a span held it, as a claim tied to no call in a turn that was cut, the span's claims are `None`,
+unknown, and where the labels of what it held or may have held differ, so are its labels, never one of them:
 
 ```python
 async def labelled_spans(session, agent):
@@ -121,16 +114,6 @@ async def labelled_spans(session, agent):
     found = await session.spans(agent)
     return {span.ref: (span.claims, span.labels) for span in found.spans}
 ```
-
-The terminal's and the browser's provenance say it on a model call, under Credit and rewards: on the call that names a span, that a
-credit row on it is the whole span's, the calls of its turn from its first to this one, with each write the record ties to them,
-and on any other call, which span it lies in. An ended turn of one span says why nothing cut it: one call alone chose the
-writes the record ties to it, or the record ties none, as when the agent wrote nothing in it or its harness joins no tool call to
-the model call that chose it, as OpenHands and Codex do not, which makes each of their turns one span. While a turn is under way,
-its last span takes each call reported after it, which then names it, so the panel says its call names it so far, and a later
-report can still tie a write to a call and cut a span there, which the panel says too. The panel reads `spans` a page at a
-time, from the agent's first to the one that holds that turn's last span, so on an agent of many spans it takes a page for each 32
-before it.
 
 ## Who reached whom
 
@@ -162,15 +145,9 @@ async def who_reached_whom(session):
 An answer is `open` while an offer it counts as unconfirmed went to an agent that had not ended, whose harness can still say it
 took it, so asking again later may find it observed.
 
-Each page walks the journal to its head and stores nothing, so it takes longer as a session grows: about 2.3 s at 91,670 events in
-[RFC 0067](../rfcs/0067-who-reached-whom-is-counted-from-the-record-kind-by-kind.md)'s measurement. A pair counts reach in the
-record and is never credit.
-
-`/reached` in the terminal's provenance panel, and Who reached whom in the page's top bar, on a view link too, draw it in the
-words `platoon_harness_cli.provenance` gives both clients: each pair a heading, a line under it for each kind of edge it holds,
-labelled by the kind, saying how that kind is known and opening the event that holds the first of them, the unconfirmed offers
-on a line of their own as unknown, and each agent's unknowns below. Each shows the first page and names the command that reads
-on.
+Each page walks the journal to its head and stores nothing, so it slows as a session grows. A pair counts reach in the record and
+is never credit. `/reached` in the terminal, and Who reached whom in the page's top bar, draw it, each pair a heading over a line
+for each kind of edge.
 
 ## Follow it in the terminal and the browser
 
@@ -178,24 +155,26 @@ on.
 
 *The Provenance pane of the lead's answer, on the mixed team's session as a live run on DeepSeek V4.1 Flash recorded it.*
 
-A person follows provenance from where they read: `/provenance` in the terminal, or `p` with the transcript in focus, on the chosen
-line, and Provenance among a message's actions in the browser, on a view link too. Both show one event at a time, in the same words,
-in four parts: its sources, its uses, its contributors, and what estimators said of it. Each link is labelled by how it is known,
-`declared`, `observed`, `cause`, `ancestry` or `gap`, and following one shows that event's provenance; a line that opens nothing says
-why. Each part says the head it was read at, where it stops counting, and whether its turn was still open, and a page an answer cut
-names the command below that reads on. A harness's report of a tool item names the model call it says chose it and opens what each
-command of its agent's under that call's id made, so an agent's own transcript leads to its writes. What was not said below a bound
-reads as not said there, never as never. [tui.md](tui.md) and [web.md](web.md) are the clients' guides.
+A person follows provenance from where they read: `p` on the chosen line in the terminal, or `/provenance` with a ref,
+and Provenance among a message's actions in the browser, on a view link too. Both show one event at a time, in the same
+words, in four parts:
 
-A ref a message's text names is a link in both, a click on it in the terminal's transcript and a button in the page: it shows that
-ref's own provenance, which says first that it was opened from a ref in text, which records no link. Naming an event in text is no
-citation, so nothing checks it, and one that names no event says so. A ref is found in text as `stream@version`, with `#La-b` for
-lines, standing apart from the words around it, so none is found inside a link's address, by one pattern both clients follow,
-`REF_IN_TEXT` in `platoon_harness_cli.provenance`. Not every ref a text names is a link: in the terminal, one in the body of an
-opened line is none, and in the page, one in a fenced code block or in a message Search draws with its matches marked. A ref can
-be opened by hand too: through `/provenance`'s form in the terminal, filled in with the chosen line's, and the pane's field in the
-page, each showing that event's provenance, or why there is none. Opening a ref by hand, rather than searching by ref, is the
-default pending the owner's ruling.
+- **Sources:** who made it, in which turn and model call, what it cites, with what its citer had been handed of each, its
+  causes, and its previous version or a commit's parents.
+- **Uses:** what cites it, what follows from it, its next version, and each agent it was handed to.
+- **Contributors:** each maker a walk back along citations, causes and ancestry reaches, with the kinds that reached it,
+  weighing and ranking nobody.
+- **Credit and rewards:** what estimators said of it, each by its producer, version and params, never summed; on a model
+  call, first which span the call lies in, as a credit row on a span's last call is the whole span's.
+
+Each link is labelled by how it is known, `declared`, `observed`, `cause`, `ancestry` or `gap`, and following one shows that
+event's provenance; a line that opens nothing says why. Each part says the head it was read at, where it stops counting,
+and whether its turn was still open, and what was not said below a bound reads as not said there, never as never.
+
+A ref a message's text names, standing apart from the words around it, is a link in both clients, and shows that ref's own
+provenance, saying first that it was opened from a ref in text: naming an event in text is no citation, so nothing checks
+it. A ref can be opened by hand too, through `/provenance`'s form in the terminal or the pane's field in the page. Opening
+a ref by hand, rather than searching by ref, is the default pending the owner's ruling.
 
 ## What `unknown` means
 
@@ -249,28 +228,11 @@ async def even_split(session, outcome):
 A client shows a value only with its producer and version, beside any other estimate of the same target, and never sums two: the
 terminal's and the browser's provenance list each under Credit and rewards, as it was said.
 
-The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@4`, and it is a heuristic, run only when someone runs it.
-It splits an episode's one team reward, on its `episode.closed`, over the refs the episode closed on; each event it reaches keeps
-`retained` of what reached it for its maker and passes the rest equally along its causes, its previous version or a commit's parents,
-its citations, an agent's only where its exposure says `seen`, and what its span took: the events, but its own agent's, that offers
-its harness confirmed taking showed before that span's calls, below the event's bound, never along an unconfirmed offer. An entry
-that carries an event, as a child's report does, takes nothing of its own: it reaches that event, and what it took, as its cause.
-What an agent's event keeps is also its span's when the event lies in one: the span holding the model call that made it, for an
-entry that carries an event, as a child's report does, that event's, and for an event tied to no call its turn's, when that turn is
-one span. But what a claimant's event of a claim keeps, the claim, and the completion, failure or release that ended it, is shared
-equally by the spans that held the claim, as `spans` names them, and kept by the event's own span only where none did: a worker
-that crafted in one span, said how far it had come, which cut its turn, and completed the task in the next, is credited in both
-when its result is reached. It writes one local `credit` row per span it reached, on the span's name, and one per agent it
-reached, on that agent's first `agent.started`, holding all its events kept, and none for a span or an agent it never reached,
-which stays unscored, nor for one that never started, as one whose launch failed, whose events keep their share for no row. An
-agent's row is its spans' rows and what it kept in no span, such as an end out of a turn that nothing joins to a call: one joined
-to its call lies in that call's span, as any write does. Its agent rows are those `propagate@3` wrote, and where no claimant's
-event of a claim is reached so are its span rows; where no span took another principal's event, those are `propagate@2`'s, whose
-agent rows were `propagate@1`'s. Citing or taking gives away all but `retained` of what reaches the event, and work nobody cites
-or takes earns nothing from it, unless it was done under a claim whose events are reached, so training on it pulls against the
-default template's request to cite. [training.md](../extending/training.md) shows it run, and
-[RFC 0061](../rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and
-[RFC 0078](../rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md) say why.
+The SDK ships one producer, `platoon_harness.credit.propagate`, `propagate@4`, a heuristic run only when someone runs it: it
+splits an episode's team reward over what the episode closed on, back along causes, citations and what each span confirmed
+taking, and writes a `credit` row for each span and each agent it reached. Citing or taking gives away all but `retained` of
+what reaches an event, so training on it pulls against the default template's request to cite, as
+[training.md](../extending/training.md#write-rewards-and-credit) says with how it splits.
 
 ## What can train
 
@@ -313,6 +275,3 @@ $ platoon-harness annotations fix-auth --target task/tasks/1@3
 
 [examples/mixed-team](../../examples/mixed-team/README.md) runs a team whose writes cite what they rest on, and asks `uses` and
 `contributors` of its lead's answer.
-
-A session closed before an upgrade changed a view refuses a query, naming the views behind its journal. `platoon-harness session
-refold fix-auth` brings them up to it while no runtime holds the session, as a runtime does as it opens, and writes no event.

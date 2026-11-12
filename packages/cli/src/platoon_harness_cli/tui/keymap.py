@@ -290,7 +290,7 @@ KEYMAP: tuple[Key, ...] = (
         "model",
         "Switch the model of the agent in view",
         "workspace",
-        planned="switching an agent's model is planned",
+        planned="the driver contract cannot switch a running agent's model; switching it is planned",
     ),
     Key(
         "alt+t",
@@ -298,7 +298,10 @@ KEYMAP: tuple[Key, ...] = (
         "takeover",
         "Drive the agent in view in its own terminal",
         "workspace",
-        planned="driving an agent's own terminal is planned: `agent hold` holds its deliveries and no more",
+        planned=(
+            "the driver contract carries no agent's terminal, and `agent hold` holds its deliveries and no more; "
+            "driving it is planned"
+        ),
     ),
     Key(
         "ctrl+d",

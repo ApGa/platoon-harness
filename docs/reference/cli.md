@@ -7,7 +7,7 @@ Each command under Ops on a session takes the session's name first, and runs one
 with the arguments an agent's `ph` uses: `ph task.claim --queue tasks` is `platoon-harness task claim SESSION --queue
 tasks`. A read runs on a view credential, which writes nothing, and anything else on a control credential. `wait` and
 the ops on a wait have no command, as a wait parks a turn and a person has none: `events --follow` watches a session,
-and a script has `Session.wait`. The [headless quickstart](../how-to/headless.md) shows them together.
+and a script has `Session.wait`. [Run headless](../how-to/headless.md) shows them together.
 
 An installed extension's op is a command too, made in the same way under the extension's name: `ph ballot.cast --agent
 @author --choice yes`, the op of [the sample extension package](../../examples/extension-package/README.md), is

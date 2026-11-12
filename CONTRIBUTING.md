@@ -460,8 +460,7 @@ whose required reviewer, a maintainer, approves each deployment. A tag ruleset l
    - in [CHANGELOG.md](CHANGELOG.md), by dating the release's heading, `## 0.2.0 (unreleased)` becoming
      `## 0.2.0 (YYYY-MM-DD)` with the day it merges;
    - on each page that shows what `--version` prints, `platoon-harness 0.1.0` today: this guide, whose line a
-     test holds to the version, [Install](docs/getting-started/install.md) and
-     [the headless quickstart](docs/how-to/headless.md).
+     test holds to the version, and [Install](docs/getting-started/install.md).
 
 3. Check the pull request as the release workflow does, with the commands below, and run the slow tests, which need the
    harness binaries CI does not have: `uv run pytest -q -m slow`, as [Run the tests](#run-the-tests) says. Then run the

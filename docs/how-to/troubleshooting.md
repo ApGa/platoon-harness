@@ -9,12 +9,10 @@ exit codes, which [the command line reference](../reference/cli.md#exit-codes) l
 $ platoon-harness doctor
 ```
 
-`doctor` says what this machine has and whether it can run a session: each harness with its version and the kind of its
-login, the root where sessions live, each driver and extension installed, a `problem` line for each reason it cannot,
-and `usable` or `not usable`. It never names a harness's account, but it prints this machine's paths, whose home folder
-is often your user name, the user id in its sockets line, and the host a kept check was made on when that check may not
-speak for the binary that runs: take out what you would not post before you paste its output into an issue.
-[Install](../getting-started/install.md#check-the-installation) shows its output.
+`doctor` says what this machine has and whether it can run a session, with a `problem` line for each reason it cannot, as
+[Check the installation](../getting-started/install.md#check-the-installation) shows. It never names a harness's account,
+but it prints local paths, your user id and the host name: remove what you would not post before you paste it into an
+issue.
 
 ## doctor says `not usable`
 
@@ -23,11 +21,10 @@ problem    no harness is on PATH
 not usable
 ```
 
-It exits 78. No harness it drives is on PATH, and the SDK's `openhands` extra is not installed either: install `claude`,
-`codex` or `pi` and sign it in as you usually do, or install the extra, as
-[Install](../getting-started/install.md#openhands) says. Its other problems are a root it cannot use, below, and a
-driver or an extension that more than one package defines, one that needs another version of the SDK, or an extension
-named as one of the SDK's own, which every session holds, so that no session can load it.
+It exits 78. No harness it drives is on PATH, and the `openhands` extra is not installed either: install `claude`, `codex`
+or `pi` and sign it in as you usually do, or install the extra, as [Install](../getting-started/install.md#openhands)
+says. Its other problems are a root it cannot use, below, or a conflict among installed drivers and extensions, which
+`platoon-harness extension list` names.
 
 ## doctor's `openhands` line names an interpreter
 
@@ -55,9 +52,9 @@ there, or deactivate the environment.
 platoon-harness: harness: none is on PATH: install one of claude, codex, pi
 ```
 
-It exits 78. `init` writes a team of the first harnesses it finds on PATH among these three. It writes no auth profile
-and no model, so it passes over OpenHands, which signs in only with a key from one, and over a harness an extension
-drives, such as OpenCode, which needs a model: that is why `doctor` can say `usable` while `init` finds nothing. Install one of the three and sign it in, or write the team file yourself, as
+It exits 78. `init` writes a team of the first harnesses it finds on PATH among these three, with no auth profile and no
+model, so it passes over OpenHands, which needs an auth profile, and OpenCode, which needs a model: that is why `doctor`
+can say `usable` while `init` finds nothing. Install one of the three and sign it in, or write the team file yourself, as
 [the team file reference](../reference/team-file.md) lists its keys.
 
 ## init says the file exists
@@ -76,8 +73,8 @@ platoon-harness: plan_login: lead, worker would run several agents headless on o
 
 It exits 78, before any cost, and `team check` says the same. Several agents on your own plan login need you to say this
 is your own work: add `--plan-login`, or give each role an auth profile, which runs it on a key instead. A role that another
-role can spawn counts as several, and so does one that only a script's program starts, under `until = "program"`, unless
-`max_live` is 1: a script says so with `Session.start(team, plan_login=True)`.
+role can spawn counts as several, and so does one only a script's program starts, unless `max_live` is 1; a script says
+`Session.start(team, plan_login=True)`.
 
 ## A name that is taken
 
@@ -107,28 +104,22 @@ platoon-harness: roles.lead.harnes: `harnes` is not a key here. Did you mean `ha
 It exits 78, naming every problem at once, each at its dotted place in the team.
 [The team file reference](../reference/team-file.md) lists every key of every table.
 
-## A team names a program, or a preset that is gone
-
 ```text
 platoon-harness: topology.program: `program` is not a key of [topology], and a preset is a table.
 ```
 
-It exits 78, as any unknown key does. A topology names no program: control flow runs from a Python script that starts the
-session as `program:<name>`, as [Run a program from Python](topologies.md#run-a-program-from-python) shows, and
-`until = "program"` leaves the session to it. A `[topology.program]` table is refused as an unknown preset, and so is
-`[topology.map-reduce]`, which is gone: write its queues and board out, and add to them from such a script. `git-swarm`'s
-`episodes` is gone too: its program, `population`, takes `attempts`.
+Under `[topology]`, a table names a preset, and one no preset or extension gives is refused so. A topology names no
+program: control flow runs from a script, as [Run a program from Python](topologies.md#run-a-program-from-python) shows.
 
-## A run or a resume names the script way
+## A team a program owns
 
 ```text
 platoon-harness: topology.until: `program` leaves the session to the program that owns it, and `human:you` is a person: start it from a script, with `Session.start(team, principal="program:<name>")`
 ```
 
 It exits 78, before any cost. A session under `until = "program"` is done only when its program closes it, so `run`,
-`serve` and the terminal UI refuse to start such a team as a person, and `session resume` refuses to resume such a
-session. Start it, and run it again after a crash, from its script, as
-[Run a program from Python](topologies.md#run-a-program-from-python) shows.
+`serve`, the terminal UI and `session resume` refuse it as a person's. Start it, and run it again after a crash, from its
+script, as [Run a program from Python](topologies.md#run-a-program-from-python) shows.
 
 ## attach says there is no terminal
 
@@ -158,10 +149,9 @@ answer approvals by a stated policy with `--approvals`, as [the headless quickst
 lost: its input.delivered report was refused: not_found: no offer ***09
 ```
 
-Every value an auth profile hands a harness is masked as a secret, `***`, wherever it is found in what the harness
-reports, and a value of a character or two, such as a dummy key `1` that a local server takes, is found inside the ids
-a report names too, which then name nothing, so the agent is lost. Give each variable the profile names a value of more
-than a few characters, which no id holds, and run again. That a short value is masked so is a known defect, which
+Every value an auth profile hands a harness is masked as `***` wherever it is found in what the harness reports, and a
+value of a character or two, such as a dummy key `1`, is found inside the ids a report names too, so the agent is lost.
+Give each variable the profile names a value of more than a few characters, and run again; this is a known defect, which
 [STATUS](../STATUS.md) records.
 
 ## Still stuck

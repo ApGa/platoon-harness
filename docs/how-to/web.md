@@ -1,26 +1,25 @@
 # The browser
 
-This guide shows how to watch a session from a browser and act on it there. `platoon-harness web SESSION` serves
-[SwarmChat](https://swarmchat.io)'s page over one session's journal, and `platoon-harness web` alone a page of your sessions,
-which opens, starts, resumes and stops each, and edits the project's team. A session's page is a client like any other: it
-reads what the journal holds, decides nothing, and computes no status, and what a person does there is an op, through the
-same path as the terminal's.
-The sessions page's acts are not ops of a session, and they are the terminal's sessions screen's: Start starts a session
-with no prompt on a runtime of its own, Resume is `session resume` and Stop is `session stop`. [tui.md](tui.md) is the
-terminal's guide and [cli.md](../reference/cli.md) the command line's reference.
+`platoon-harness web SESSION` serves [SwarmChat](https://swarmchat.io)'s page over one session's journal, and
+`platoon-harness web` alone a page of your sessions, which opens, starts, resumes and stops each, and edits the project's
+team. Either page is a client like any other: it reads what the journal holds and decides nothing, and what a person does
+there is an op, through the same path as the terminal's.
 
-**Goal:** start, open, resume and stop your sessions from one page, set up the project's team there, read a session's chats
-as yourself or as one of its agents, answer what needs you and act on the session as you, and give someone else a link that
-only reads.
+1. Run `platoon-harness web` in your project's folder.
+2. Open the sessions link it prints.
+3. Start a session, or open one, and act on it from its page.
+4. Stop `web` with Ctrl+C, which leaves every session as it was.
+
+**Goal:** start, open, resume and stop your sessions from one page, read a session's chats as yourself or as one of its
+agents, answer what needs you and act on the session as you, and give someone else a link that only reads.
 
 **Prerequisites:**
 
 - platoon-harness installed as [Install](../getting-started/install.md) says;
 - a session: one a runtime holds, to act on, as `web SESSION` starts and resumes nothing, or one no runtime holds, to read
   its history; or none, as [your sessions](#your-sessions) start one;
-- a browser on this machine, or on another that can forward a port to it. The page's tests pass in Chromium, Firefox
-  and WebKit, Safari's engine, headless, WebKit on GitHub's Linux runners alone
-  ([compatibility](../reference/compatibility.md#6-supported-platforms)).
+- a browser on this machine, or on another that can forward a port to it. The page's tests run headless in Chromium,
+  Firefox and WebKit ([compatibility](../reference/compatibility.md#6-supported-platforms)).
 
 ## Open it
 
@@ -34,18 +33,17 @@ platoon-harness: web: from another machine, forward this port under the same num
 
 From another machine, forward the port as that last line says, under the same number: the page's requests must name the
 port served, so through a forward to another number every one is refused. Where the browser reaches a machine that reaches
-this one, as an editor's port forwarding does, run that command on the machine in between. Each link opens the page; the
-address alone sends a browser there too.
+this one, as an editor's port forwarding does, run that command on the machine in between.
 
-Open a link in a browser. `web` is a guest of the session's runtime, on your own control credential, as the terminal is.
-`web SESSION` starts and resumes nothing, since resuming can spend money: on a session no runtime holds, the page shows its
-history, says so at the top right, and names `platoon-harness session resume`. When a runtime takes the session up again,
-from any shell, the page follows it. Ctrl+C or `SIGTERM` stops `web`, which ends every browser's session and leaves the session
-itself as it was. It serves one session on one port, as the page keeps one session in the browser per address, and one
-`web` serves a session at a time, as one folds its projection: a second is refused, saying where the first serves, whose
-page makes new links on your own page there. While it runs, `web` is a client holding your control credential, so a run
-whose agent asks for an approval waits for you to answer it, from the page or anywhere, instead of ending `needs_human`
-at once: stop `web` for a run that should end that way.
+`web` is a guest of the session's runtime, on your own control credential, as the terminal is. `web SESSION` starts and
+resumes nothing, since resuming can spend money: on a session no runtime holds, the page shows its history and names
+`platoon-harness session resume`, and when a runtime takes the session up again, from any shell, the page follows it. One
+`web` serves a session at a time, and a second is refused, saying where the first serves. Ctrl+C or `SIGTERM` stops `web`,
+which ends every browser's session and leaves the session itself as it was.
+
+While `web` runs, it is a client holding your control credential, so a run whose agent asks for an approval waits for you
+to answer it, from the page or anywhere, instead of ending `needs_human` at once: stop `web` for a run that should end that
+way.
 
 ## Your sessions
 
@@ -56,63 +54,33 @@ platoon-harness: web: sessions link, which lists, starts, resumes and stops your
 platoon-harness: web: from another machine, forward this port under the same number, which the page's requests must name: ssh -N -L 43117:127.0.0.1:43117 devbox
 ```
 
-With no session, `web` serves a page of every session under the root, as `platoon-harness` alone opens the terminal's sessions
-screen: each with whether a runtime holds it and its state, which is unknown, saying why, for one whose journal cannot be read.
-Look again reads them again, as does coming back to the page.
-
-Open serves that session's page here, on a port of its own, as `web SESSION` would, and goes to a control link of it in the
-same tab, and `web` says on stderr where it serves it. A session no runtime holds opens as its history. Opened again, it makes
-another control link of the same page. A session another `web` serves is refused, saying where that one serves, as one `web`
-serves a session at a time. The sessions page's address, without its link, opens the page again in that tab, which keeps its
-token.
+With no session, `web` serves a page of every session under the root, as `platoon-harness` alone opens the terminal's
+sessions screen, each with whether a runtime holds it and its state, which is unknown, saying why, for one whose journal
+cannot be read. Open serves that session's page on a port of its own, as `web SESSION` would, and goes to a control link
+of it in the same tab; a session no runtime holds opens as its history.
 
 | Act | What it asks first | What it does |
 |---|---|---|
-| Start | Nothing, as the form says above Start that it launches the team's harnesses here, in the folder `web` runs in, which can spend money, and Start is disabled, saying why, until the list has come, which says that folder. Then, before anything runs, once each: trust, when the team's files name what would run as you, a command, a `module:attr` or a test command, or a credential to pass on, an auth profile, each shown by its place and as the team holds it, defaults filled in, as `roles.lead.harness = "tools.lead:Lead"`; and several agents on one plan login, in the terminal's words, `lead would run several agents headless on one plan login. Is this your own work?` | Starts a session from the team file named, read from that folder as `run --team` reads one, or left empty the project's own, `platoon-harness.toml`, named as given or from the time, on a runtime of its own, which runs on once you leave the page, then opens it as Open does. It takes no prompt: write to it on its page. A team file changed between the question and your yes is asked about again, as trust covers what you were shown, and the question and the team that runs come from one read of its files. Cancel starts nothing |
-| Resume | `Resume fix-auth? Its harnesses come back, which can spend money.` | Resumes a session no runtime holds, on a runtime of its own, then opens it. Disabled, saying why, where a runtime holds it |
-| Stop | `Stop fix-auth? Its turns are interrupted and its harnesses end; it stays resumable.` | Sends the owner's stop, as `session stop` does, and says so once the runtime has let go. A page this `web` serves of it follows it into its history. Disabled, saying why, where no runtime holds it |
-| Replay | Nothing, as a replay acts on nothing | Serves a replay of the session here, on a port of its own, as `web SESSION --replay` would, and goes to a control link of it, as Open does: see [Replay a session](replay.md) |
+| Start | Trust, where the team's files name what would run as you or a credential to pass on, each shown as the team holds it, and whether several agents on one plan login are your own work, once each, before anything runs. The form says above Start that it launches the team's harnesses here, which can spend money | Starts a session from the team file named, or the project's own, `platoon-harness.toml`, on a runtime of its own, which runs on, and can spend, once you leave the page, then opens it. A team file changed between the question and your yes is asked about again. Cancel starts nothing |
+| Resume | `Resume fix-auth? Its harnesses come back, which can spend money.` | Resumes a session no runtime holds, on a runtime of its own, then opens it |
+| Stop | `Stop fix-auth? Its turns are interrupted and its harnesses end; it stays resumable.` | Sends the owner's stop, as `session stop` does, and says so once the runtime has let go |
+| Replay | Nothing, as a replay acts on nothing | Serves a replay of the session, as `web SESSION --replay` would: see [A replay](#a-replay) |
 
-Each question is a dialog whose Cancel has focus, and Esc is a no. While an act waits for its answer every act is
-disabled, saying so, and a refusal is said with its reason, in the command line's words: a name that is taken, a team that
-cannot load, with each of its problems, or a harness that cannot start. A disabled act takes focus, and its reason is its
-accessible description, shown beside it on focus or a press, which does nothing else. Nothing a person allowed is kept: the
-next start asks again.
+Each question is a dialog whose Cancel has focus, and Esc is a no. An act that cannot run now is disabled, saying why,
+and a refusal is said with its reason, in the command line's words. Nothing a person allowed is kept: the next start
+asks again. The sessions link is yours alone: only the terminal that ran `web` says one, and the page is served on
+loopback alone, as its link acts as you on every session here, so `--host` naming any other address exits 64.
 
-Its link is yours alone: only the terminal that ran `web` says one, the page makes none, no link of a session's page opens
-it, and its own opens no session's page. It serves loopback alone, as its link acts as you on every session here: `--host`
-naming any other address exits 64. Every session it opens is served on loopback too, so it opens and starts a session on a
-plan login as the terminal does, asking once where several agents would run on one, and the refusal of other addresses
-below never comes into it. From another machine, forward its port as that last line says, and each session's port as `web`
-says it when it opens one: the address the page went to opens once its forward is up, within the link's ten minutes. Ctrl+C
-or `SIGTERM` stops `web`, which ends every browser's session on every page it serves, and leaves every session as it was,
-those it started among them.
-
-### The project's team
-
-Edit, under The project's team, opens the team editor on `platoon-harness.toml` in the folder `web` runs in: a field for
-each key a person sets, its roles with their harness, model and effort among them, its topology, budget, labels, auth
-profiles and test command, each problem under its field as `team check` says it, what the team allows in `team show`'s
-sentences, and the diff a save makes. Save writes the file in place, keeping its comments and layout, never through a
-link, refusing a file found changed since it was read, though a change made in the moment before its write is
-overwritten, and asking once first where it writes what would run as you or a credential to pass on. Start, with Team file
-left empty, saves the editor's changes first. [Edit a team](edit-a-team.md) is its guide, and the terminal's
-sessions screen draws the same editor.
+Edit, under The project's team, opens the team editor on `platoon-harness.toml` in the folder `web` runs in, the one the
+terminal's sessions screen draws: [Edit a team](edit-a-team.md) is its guide. Start, with Team file left empty, saves the
+editor's changes first.
 
 ## A replay
 
-`platoon-harness web fix-auth --replay`, or Replay on the sessions page, serves the page over a replay of the session: a
-read-only copy of its record, from before its first event, drawn as the session is and moving as it plays. A banner under
-the top bar always says it is a replay, of which session, at which event of how many and when, and beside it are its
-controls: Play or Pause, Speed, Step, Back, Next turn, Turn back and Jump, to an event or a time into the session. A
-control link moves the replay, and a view link watches it, each of its controls disabled, saying so. Going back draws
-the page anew from a snapshot, from the nearest copy of its own record the page kept as it went; the banner names where
-what the page draws stands, so it names where the replay went once the page has drawn it. Every act of the session's is
-disabled, saying that a replay acts on nothing, a diff among them, and an estimate in an event's provenance says when it
-was written. As its links act on nothing, not even as you, a replay is served past loopback whatever login its
-session's agents ran on, by a default that waits for the owner's ruling, as [Security](#security) says. Stopping `web`
-takes its copies back.
-[Replay a session](replay.md) is its guide.
+`platoon-harness web fix-auth --replay`, or Replay on the sessions page, serves the page over a read-only copy of the
+session's record, which plays forward and back under a banner that always says it is a replay: a control link moves it,
+and a view link watches it. Every act of the session's is disabled, as a replay acts on nothing, and stopping `web` takes
+its copies back. [Replay a session](replay.md) is its guide.
 
 ## Choose a link
 
@@ -122,14 +90,13 @@ takes its copies back.
 | Control | The session, as you: what you do through it is your op, through the same path as the terminal's, and your grants decide what you may do |
 
 A link opens once, within ten minutes, and is spent for a session in that browser of the same kind, which lasts twelve
-hours. Its secret is after `#`, so it never reaches a server log or a referrer. A link opened a second time says it was
-used already. `web` keeps only hashes of what it gave out, in its own memory, so stopping it ends every browser's session:
-open a new link. A page that acts can make more links of either kind, from your own page: see Acting. Your own credential never reaches a browser, and who sends from a page is the credential's, never anything the page
-says.
+hours. Its secret is after `#`, so it never reaches a server log or a referrer. `web` keeps only hashes of what it gave
+out, in its own memory, so stopping it ends every browser's session: open a new link. A page that acts can make more links
+of either kind, from your own page. Your own credential never reaches a browser, and who sends from a page is the
+credential's, never anything the page says.
 
 A control link acts as you, on your login. Never hand one to somebody else: on a plan login that would be your login
-serving another person, which its terms do not allow. Give them a view link. For the same reason `web` serves a session on
-a plan login on loopback alone: see [Security](#security).
+serving another person, which its terms do not allow. Give them a view link.
 
 ## What the page shows
 
@@ -139,213 +106,75 @@ a plan login on loopback alone: see [Security](#security).
 history.*
 
 - **Chats.** A channel's chat for each topic, group, queue and board, and direct chats. Every agent has a direct chat with
-  you from its start, which the page says the runtime made, and a direct chat between two agents merges both their inboxes,
-  in the order the journal has them. An agent's goal is the first message in its chat with whoever started it.
-  A queue's or board's chat holds what it announced, as the terminal's channel lines do.
-- **Tasks and entries.** Tasks, in a queue's chat, as a chat and as a board, opens its tasks in the pane, which the address
-  names, `tasks=` and the queue's name, in the words the terminal's `/tasks` says: each task's state, by whom it is claimed,
-  which attempt that is and until when its lease holds, on the session's clock in the zone of the machine `web` runs on,
-  which it names, its gist and its result. Entries, in a board's chat, opens its entries, `entries=`: each entry with every
-  version, its author, gist and fields. The pane is read through `x_read` as it opens, and again whenever the feed says that
-  what it reads moved: an event of one of its tasks or entries, a claim or a lease's expiry among them, which its chat never
-  hears of, or for a queue an agent's end. No timer of the page's decides anything, so a claim stands until the runtime
-  records its lease's expiry. It reads 256 tasks or versions at most, and past them says how many more there are and the
-  command that reads on, and where Entries stops short, each entry says its versions read may not be all, and offers no
-  Revise. Each act it offers opens its op's form, as Acting says. Esc or × closes it.
-- **Messages.** A message shows its gist, or its body when the body is text that begins or ends with the gist, as a
-  message the terminal sent with a long text does. A body longer than 20,000 characters, what a SwarmChat message shows, is
-  cut there, saying so, and a body a message does not show whole comes as a file, which SwarmChat's own viewer opens whole.
-  A reply, or a message in a thread, shows under what it answers when that is in the same chat. The terminal's `/thread`
-  holds a thread's messages from every chat, so a reply sent to another chat, as `Session.reply` sends one to its
-  sender's inbox, is in its thread there and here only in the chat it went to.
+  you from its start, and an agent's goal is the first message in its chat with whoever started it.
+- **Messages.** A message shows its gist, or its body when the body is text that begins or ends with the gist. A body past
+  20,000 characters is cut there, saying so, and one a message does not show whole comes as a file. A reply shows under
+  what it answers when that is in the same chat.
 - **What an agent says.** What its harness says in a turn is its message to you, in its chat with you. Thoughts, tool
-  calls and their output, token counts and live text never enter a chat: Tool activity, on its page, shows its calls and
-  what it is saying now.
-- **Tool activity.** Tool activity, on an agent's page, opens its tool calls in the pane, which the address names,
-  `tools=` and the agent, read through `x_read`, so a view link and history show them too. They come a page at a time,
-  newest first, in whole turns, as many as 100 calls take. That keeps a call with its end, and a spawn with its call,
-  only where the harness reports them within the turn that made the call: the kernel refuses no item outside a turn,
-  and that each harness keeps to it is unverified. The newest page says first the head it was read at: it is read as it
-  opens and on Read again, so a call or a turn that ended since reads as it stood then. Each turn is a heading, with the
-  id its harness gave it and how it ended, or `not ended`, over its calls. A call is one line: what its first item says
-  it was called with, beside how its last end says it ended, `completed`, `failed`, or an approval's `allow` or `deny`,
-  or `started` where the journal holds no end of it, which is not to say it still runs. A call that came under no id
-  cannot be joined to its end, so each of its items is a line of its own, `unjoined`, saying its own phase and that no
-  id joins it to its call's other items. A child the agent spawned stands under the call whose id the spawn's anchor
-  holds, and one that joins none, as OpenHands' and an `exec` harness's do, whose calls reach us under ids of their own,
-  stands where the journal has it, saying it joins no known call. Where the journal holds no tool item of the agent's,
-  the pane says so, and that this is not to say it made no call: an `exec` harness reports none. Each line follows into
-  its event's provenance, and Back comes back. Read again reads the newest calls again, and Read on draws the turns
-  before them, below them. A turn of more than 100 calls is listed in its newest, saying how many it leaves out and the
-  `platoon-harness events` command that prints them. None of it enters a chat.
-
-  Above its calls is what the agent is saying now, its live text, under words saying the journal does not hold it yet:
-  what it said since the journal last took what it said, its newest 20,000 characters, led by an ellipsis where some
-  before them was lost on the way or cut. It goes once the item it becomes is recorded, which reaches its chat with you
-  where it is a message, and a thought never does, and with the runtime that said it, which the pane then says, so what
-  a runtime that comes back says stands alone. Where the agent has ended, the pane says it says nothing more. `web` reads
-  it only while a page's pane asks for it: each ask is held until what the agent says moves, for at most 25 s, and the
-  page lets go of its ask as the pane closes, so `web` lets the reader go 25 s after no ask is held for it.
-- **Agents and people.** A person's picture is round and an agent's square, and the top bar counts agents and people
-  apart. Each agent's status is the roster's, the same words the terminal uses: its group, then what it waits on or what
-  it is doing. The people list shows it beside each agent's name, where SwarmChat shows a first field, so who is working
-  and who needs you reads at a glance. An agent's end is one line in its chat with you, saying what the terminal says of it: its report when it
-  finished with one, and otherwise how it ended and why.
-- **Approvals.** An approval left for you is a card under its question in the agent's chat with you, which says who
-  decided it and through what, or that it went moot with the turn that asked. While it waits on you, Read it whole opens
-  the whole of what it asks in the pane, which the address names, `ask=`, in the words the terminal's `/ask` says: the
-  command, the patch or the tool's input past the 280 characters its question holds, as text, each line as it was asked.
-  Where the record cut it, it says how many bytes more it asks, which Allow allows too, and where the record holds no
-  more than its question, it says that what more it asks is unknown.
-- **Delivered to.** Where SwarmChat says "Read by", the page says "Delivered to": the agents a message was for that a
-  handover landed it in, or a tool's result showed it to, which is evidence, and when; a goal reached its agent when the
-  agent's first turn began on it. It never says one understood it. A
-  person's reading leaves no evidence, so a person is in neither list. "What had reached" an agent, beside a message it
-  sent, says how much of each of its chats had been delivered to it then.
-- **Provenance.** Provenance among a message's actions opens a pane on the event the message shows, in the words the terminal's
-  `/provenance` uses ([tui.md](tui.md) has them part by part): Sources, Uses, Contributors, and Credit and rewards. It begins
-  "This is what the record holds: a citation is the agent's claim, being handed something is not using it, and what reached an
-  agent through a file or a shell leaves nothing here. An estimate is its producer's, never a fact." Each link is labelled by how
-  it is known, and choosing it, by a click or by Tab and Enter, shows that event's provenance, and when a chat shows the event,
-  opens that chat at its message too. A message's actions show while focus is in it, so Tab reaches Provenance. The address names
-  the event, so Back goes back a hop and a reload keeps it, and Esc or × closes the pane. It is read when it opens, and again when
-  its Provenance is pressed again. It is a read, so a view link has it, and on history it answers what the journal holds. Credit
-  is only what an estimator said, by producer, version and params. Each ref a message's text names, standing apart from the words
-  around it and in no link's address, is a button, which Tab reaches, and opens that ref's own pane, which says first that it was
-  opened from a ref in text, which records no link: naming an event in text is no citation. The address says so too, `from=text`,
-  so a reload keeps it. One that names no event says so in the pane. A ref in a fenced code block, or in a message Search draws
-  with its matches marked, is no button, as SwarmChat draws those apart from the rest of a message's text, where a mark or a
-  highlighted token could split a ref. The pane's field holds the ref it shows, and a ref typed there, `stream@version`, opens
-  that event's pane, as the terminal's `/provenance` form does, or the pane says why it opens none, in the terminal's words; the
-  browser does not send a field that holds no ref, and says what it takes. Opening a ref by hand, rather than searching by ref, is
-  the default pending the owner's ruling.
-- **Who reached whom.** Who reached whom, in the top bar, opens a pane, `interactions=1` in the address, in the words the
-  terminal's `/reached` uses ([tui.md](tui.md) has them): the head it was read at, each pair of makers a heading, oldest first,
-  over a line for each kind of edge it holds, `declared`, `observed`, `cause` and `ancestry`, saying how that kind is known and
-  never summed, and one for its offers no harness said it took, `unconfirmed`, as unknown; then each agent's unknowns, so an
-  agent no pair names is not shown to be reached by nobody; and, past the first page, the command that reads on. Each line that
-  opens an event is a button, which follows into the provenance of the event that holds the first edge it counts, and into its
-  chat where one shows it, and Back comes back. It is read when it opens and when Who reached whom is pressed again, and each
-  read walks the journal, so it takes longer as a session grows. It is a read, so a view link has it, and from the Map it shows
-  the chats beside it. That it is listed beside provenance, and not on the Map, is the default pending the owner's ruling.
+  calls, token counts and live text never enter a chat.
+- **Tool activity.** On an agent's page, its tool calls, newest first, in whole turns, as far as its harness reports a
+  call within the turn that made it, which is unverified for each harness, each call one line beside how it ended, and
+  above them what the agent is saying now, until the journal holds it. A call the journal holds no end of says
+  `started`, which is not to say it still runs, and no tool item is not to say no call: an `exec` harness reports none.
+- **Agents and people.** Each agent's status is the roster's, in the words the terminal uses, and an agent's end is one
+  line in its chat with you.
+- **Approvals.** An approval left for you is a card in the agent's chat with you, which says who decided it and through
+  what. While it waits on you, Read it whole opens what it asks, as whole as the record holds it. An ask the record cut
+  at 64 KiB says how many bytes more it asks, which Allow allows too, and one whose record holds no body says that what
+  it asks beyond its gist is unknown.
+- **Delivered to.** Where SwarmChat says "Read by", the page says "Delivered to": the agents a handover landed a message
+  in, or a tool's result showed it to, which is evidence, never that one understood it. A person's reading leaves none.
+- **Tasks and entries.** Tasks, in a queue's chat, and Entries, in a board's, open its tasks or entries in the pane, in
+  the words the terminal's `/tasks` says, read again whenever what they read moved.
+- **Search.** Every message the page shows, newest first, in any case, by text, sender, chat, file, time and who it was
+  brought to.
+- **Provenance and who reached whom.** Provenance among a message's actions, and Who reached whom in the top bar, open the
+  panes [Provenance](provenance.md#follow-it-in-the-terminal-and-the-browser) describes, on a view link too.
 - **As an agent.** Seeing the session as an agent shows its chats, how far each was delivered to it, and what waits to
-  reach it, oldest first. Nothing is marked. A person and the runtime cannot be seen as, for the same reason: the picker
-  draws them disabled, saying so, and an address that names one shows everyone.
-- **The Board.** Board in the top bar, or Open as a board on a chat, shows a chat's top-level messages as posts, each
-  with how many messages are below it in its thread, and Front page shows every channel's and group's, never a direct
-  chat's. Seen as an agent, it shows that agent's chats alone. A post opens with its replies, each under what it answers.
-  New sorts by when a post was written and Active by its newest reply. A session's messages take no reactions, so Hot
-  and Top, which rank by votes, are disabled, saying why, an address that names one is sorted new, saying so, and each
-  post's vote control is drawn disabled with no count: a 0 would say people had voted.
-- **The Map.** Map in the top bar shows everyone at once: each agent and person in a chat, and whoever wrote one, joined
-  to the channels and groups they are in and to each other by their direct chats, sized by what they sent, with a
-  timeline of every message below. Dragging across the timeline weighs each chat and person by the messages of that stretch alone.
-  With nothing under the mouse, its pane lists who writes most, people and the runtime among them, and the busiest chats.
-  Clicking an agent sees the session as it, and the timeline and the stretch then count that agent's chats alone; a person
-  and the runtime cannot be seen as, and their See as says so.
-- **Times.** The Board's and the Map's times are the journal's, when each message was written, and never when `web`
-  read it.
-- **A phone's width.** In a window narrower than 760 px, as a phone held upright is, the page is one column: the top bar,
-  the list, what the address shows and the pane, each at most as tall as the screen, and the page scrolls down them. It
-  goes to what you open, as it opens and each time you go somewhere, Back and Forward among them: to the pane, or else to
-  what the address shows, a chat with its composer at the screen's foot, or at home, to the top. A message's actions show below it
-  while focus is in it, which a press on it gives it. At 390 px the page scrolls no wider than the screen, and every act,
-  scrolled into view, lies within it with nothing over it. At any width the top bar's controls take as many rows as they
-  need. From 760 px to about 1,000 px, as a phone held sideways is, the list, what the address shows and the pane stand
-  side by side, as SwarmChat lays them out, and an open pane leaves a chat too narrow to read: close the pane, or turn
-  the phone upright.
-- **A resize.** A resize keeps where each list is read: a chat at its foot stays at its foot, so it goes on following the
-  session, and any other list keeps its first line in view where it was. It keeps focus, and the composer's target, which
-  the address names. Into a phone's width, the page goes to the part that has focus, or else to what you opened.
+  reach it.
+- **The Board and the Map.** The Board shows a chat's top-level messages as posts, sorted new or active, as a session's
+  messages take no votes, and the Map shows everyone at once, joined to their chats, over a timeline of every message, by
+  the journal's times.
+- **A phone's width.** Narrower than 760 px, as a phone held upright is, the page is one column. From 760 px to about
+  1,000 px, an open pane leaves a chat too narrow to read: close the pane, or turn the phone upright.
 
-Browsing writes nothing to the journal, moves no agent's cursor, and moves no mark of yours: the terminal's unread counts
-are yours alone.
+Browsing writes nothing to the journal, moves no agent's cursor, and moves no mark of yours.
 
 ## Acting
 
 On a control link, each act is one op, sent to `/x/command` and run by `Session.submit`, as the terminal runs it, so your
-grants decide what you may do here as anywhere. Every control you cannot use now is drawn disabled, saying why: on a view
-link, on a session no runtime holds, which names `platoon-harness session resume`, in a chat between two agents, which you
-are not in, in a queue's or a board's chat, while you see the session as an agent, for an op your grants do not hold, and
-while an act you took waits for its answer. Tab still reaches it, and its reason is its accessible description, which
-screen readers announce with a control, though none has been run on the page. Each pane's accessibility tree, the role,
-name, state and words a screen reader is given for each part of it, is pinned by an aria snapshot in the page's tests, so
-a change to it is seen. A snapshot pins the tree and detects no violation: no rule-based check, such as axe-core, runs on
-the page, and it claims no WCAG level, which is the default, pending the owner's ruling. The mouse shows the reason over it, focus
-or a press shows it beside it, where it stays while the control has focus, and a press does nothing else. Needs you,
-each post's vote control and each name the as-picker offers are buttons Tab reaches too, and Enter or Space presses
-them. Needs you takes focus as it opens, so Tab reaches its actions first, and Escape gives it back to its row, as
-closing any popover gives focus back to what opened it, and its row keeps focus as the sidebar is drawn again. A request
-you allow or deny keeps focus on its card, which then says what came of it. Elsewhere a list drawn again as the session
-moves drops focus from a control in it.
+grants decide what you may do here as anywhere. Every control you cannot use now is drawn disabled, saying why, and Tab
+reaches it. No accessibility audit has been run on the page, and it claims no WCAG level, which is the default, pending the
+owner's ruling.
 
 | Act | Where | What it sends |
 |---|---|---|
-| A message | The composer at the foot of a chat, which names its target, `@agent`, `#topic` or `+group`. Enter sends and Shift+Enter starts a new line | `message.send`. A text too long for a gist is cut as the terminal cuts one: its first 279 characters and an ellipsis are the gist, and the whole is the body, which the message shows |
-| A reply | Reply on a message opens its thread, with a composer at the foot that answers that message | `message.send` with `reply_to`, the entry the message is in the journal. What an agent said in its turn, and an approval, are no entry a reply can cite, so their Reply is disabled, saying so |
-| A file | Attach, beside Send, whose title says the most a body may be. A file larger is refused before it is sent, saying both sizes | The file to `/x/body`, saying how much has gone, then `message.send` with it as the body. A body keeps no name, so the gist is your text and the file's name, `TEXT (file NAME)`, or `file NAME` alone, made by the function the terminal's composer calls, and refused when the two run past 280 characters, as there |
-| An approval | A card in the agent's chat with you, Read it whole, which opens what it asks in the pane and answers nothing, then Allow and Deny | `approval.resolve` with the card's version and `via` `browser` |
-| Needs you | The first row under All activity, with how many places there are. It opens a list of each, with its actions, read through `x_read`, so a view link and history show it too, each action disabled, saying why | Each action as the runtime's `attention` view offers it, with the version it was drawn from. One that leaves arguments to you, as a budget's Set the budget leaves you its limits, opens its op's form in the pane, as Commands does, filled in with what it fixes, for a budget the limits and estimate its scope was set to, which `budget set` replaces whole, and the address keeps them as `args=`. A place its agent's next turn settles, a lost turn, a wake past `max_hops`, a failure or a conflict of an agent's, offers Write to it, and a dead task Add it again, each opening its op's form. A conflict an agent's merge stopped on says on which files, and to tell the agent or to resolve it in your own checkout, never in its workspace, where a commit is recorded as the agent's, since the runtime never resolves one. Your checkout's has no action, and says to resolve it there. So has a failure of no agent's, saying that nothing tries it again, and a daemon that keeps failing, saying where its traceback is and what starts it anew. A mention is a message to read in its chat, and the page keeps no marks, so the list holds none |
-| An agent's acts | Its page: Interrupt, Stop below, Retire and Cancel | `agent.interrupt`, with `below` for Stop below, `agent.retire` and `agent.cancel`. What came of each is said under them |
+| A message | The composer at the foot of a chat, which names its target | `message.send` |
+| A reply | Reply on a message, which opens its thread | `message.send` with `reply_to` |
+| A file | Attach, beside Send | The file to `/x/body`, then `message.send` with it as the body |
+| An approval | Its card in the agent's chat with you: Allow and Deny | `approval.resolve`, with `via` `browser` |
+| Needs you | The first row under All activity: each place you must act, with its actions | Each action as the runtime's `attention` view offers it |
+| An agent's acts | Its page: Interrupt, Stop below, Retire and Cancel | `agent.interrupt`, with `below` for Stop below, `agent.retire` and `agent.cancel` |
 | The session's | Your own page: Close the session and Cancel the session | `session.close`, which drains, and `session.cancel`, which stops now |
-| A link | Your own page: New view link and New control link | `/x/link`, which gives a link of that kind, opening once, within ten minutes, said under the buttons. A view link makes none |
-| Review changes | Review changes, in the top bar and on an agent's page, opens what changed in the pane, which the address names, `review=changes`, in the words the terminal's `/review` says, read through `x_read`: each workspace's commits and uncommitted paths, each commit with Patch and Test, and each workspace with Uncommitted diff. Patch and Uncommitted diff open the diff in the same pane, `review=` naming it, a page at a time with Read on, every line numbered as a citation names it, what follows a form feed or U+2028 in a line led by an arrow in that line's colour, above it where it was read and, for an uncommitted diff, when, and below a cut patch where it was cut. A click on a line's number chooses it, Shift and a click, or Shift+Enter on a number, every line from it to the one chosen first, and a click on the one line chosen alone chooses none. Read again reads what changed again | Patch and Uncommitted diff send `repo.diff`, each time the diff opens, and read its record through `x_read`, so a commit's patch is read once. Test asks once, saying whose code it runs as you, unconfined, then sends `repo.test`, as the terminal does, or is disabled, saying why, for a commit whose code runs only in an isolation. Comment, below a diff, sends `message.send` to the change's maker, the agent whose workspace made it, saying whom and on what, `Comment to @ada on lines 40 to 52 of 3f9c2a1b2c3d's patch`, with `based_on` citing those lines, or with none chosen the commit, or an uncommitted diff whole, its words made its gist as the composer's are. A change no agent's workspace made has nobody to take a comment, and Comment says so |
-| A task's or an entry's act | Tasks or Entries, in the pane: Add a task or Post an entry above the list, Claim on an open or a failed task, Complete, Fail, Release and Renew on one you hold, Add it again on a dead one, and Revise on an entry, each disabled on a view link and on history, saying why, as every act is | The op's form in the pane, as Commands opens it, filled in with what the line knows and the address keeps as `args=`: the queue and the task, and on one you hold its fence; a dead one's ref to cite; or the board, the entry, the version it revises and that version's fields, as a revision replaces them whole. Back goes back to the list |
-| Any op you hold that writes | Commands, in the top bar, lists one for each op the session's `ops.list` says you hold, an extension's among them, but a query, which a pane draws, and `wait` and the ops on a wait, as the terminal's palette lists them. Typing finds one, as Search does, and choosing it opens its form in the pane, which the address names, so Back and a reload keep it, and Esc or × closes it | The op, worded as its command's help, with a field per flag in that flag's words: text, yes or no, a choice, a whole number, a number, several separated by commas, JSON, which takes JSON alone and says why before anything is sent, or a body, whose text is stored, or cited where it is a body's ref, as the command line's flag takes it. A field left empty is left out, so the op's own default, shown in it, stands, and a gist too long for one is refused, as at the command line. `via` is said as `browser`. What came of it is said under Run: done, with what the op answered as text, or the refusal |
+| A link | Your own page: New view link and New control link | `/x/link` |
+| Review changes | The top bar and an agent's page, in the terminal's `/review` words: Patch, Uncommitted diff, Test and Comment | `repo.diff`, `repo.test` and `message.send` |
+| A task's or an entry's act | Tasks or Entries, in the pane | The op's form, filled in with what the line knows |
+| Any op you hold that writes | Commands, in the top bar | The op, through a form with a field per flag |
 
-**Asked first.** Retire, Cancel, and closing or cancelling the session ask you once, beside the button, before they run,
-and so does Run on the form of any op the terminal asks about, beside Run, saying the op and what was given it: these are
-the ops that end an agent or the session, erase a body, or run a commit's code as you, one set both read, and nothing takes
-them back. An extension's op is never asked about. Review changes lists the commits a person may test, each with its Test,
-and `repo test` in Commands takes a commit's SHA in its form.
+Retire, Cancel, closing or cancelling the session, and Run on the form of any op the terminal asks about, ask once first:
+the ops that end an agent or the session, erase a body, or run a commit's code as you. An extension's op is never asked
+about. A conflict an agent's merge stopped on says under Needs you to tell the agent, or to resolve it in your own
+checkout, never in its workspace ([workspaces](workspaces.md#resolve-an-agents-conflict)).
 
-**Once.** The page makes a key for each draft sent or button pressed, 128 random bits, and keeps it until the act is
-answered. Until then it sends the act again, after a lost connection, after a reload of the page, and from a new control
-link opened in the same tab, since it keeps unanswered acts in the tab's own storage, and `web` answers a key it has seen
-with its first answer, whichever link sends it. So a retry is one operation: one message, one decision. An act whose page's
-session ended before it was answered, as when `web` stops, says it was not answered, and goes again from the next control
-link you open in that tab. A view link opened there sends none of it, since it acts on nothing, and says what waits. `web`
-puts the key under `web/`, so no other client's meets it.
+**Once.** Until an act is answered, the page sends it again under the same key, after a lost connection, after a reload,
+or from a new control link opened in the same tab, and `web` answers a key it has seen with its first answer, so a retry
+is one operation: one message, one decision.
 
-**Refusals.** A refusal is an answer and is shown with its reason, never as success: under the composer, under a person's
-acts, or as a notice. An approval someone decided first says who and through what: `Already decided by you via tui.`
+**Refusals.** A refusal is an answer and is shown with its reason, never as success. An approval someone decided first
+says who and through what: `Already decided by you via tui.`
 
-**Both clients at once.** The terminal and the page can be attached to one session together. What either sends is in both,
-once, and an approval answered in both at the same moment takes effect once: the other is told who decided and through
-what, and its card or dock updates as the journal moves.
-
-## SwarmChat's requests, here
-
-Each request SwarmChat's page can make gets a real answer from the session, or its control is disabled with the reason.
-
-| Request | Here |
-|---|---|
-| `view_page`, `view_info`, `view_snapshot`, `view_feed` | Real: the page, the session, and what comes, held until something does or the page's own wait is up, at most 25 s |
-| `view_messages`, `view_thread`, `view_receipts`, `view_text`, `view_download` | Real |
-| `view_search` | Real: every message the page shows, newest first, in any case, by text, sender, chat, file, time, and who it was brought to |
-| `view_as` | Real for an agent. A person is refused, saying why |
-| `view_knew` | Real, from delivery evidence, for a message an agent sent |
-| `view_posts` | Real: posts from one chat, or from every channel and group, sorted new or active, and with `as` an agent's chats alone. Hot and top are refused, saying why, and a post's `votes` is null, which is unknown, never 0 |
-| `view_activity` | Real: messages over time across every chat, or an agent's, and with `from` and `to` how many each chat had in that stretch and from whom, by the journal's times |
-
-The page asks one read of ours beside them, `x_read`, for each pane of ours, in the terminal's words, and a view link may ask it,
-as it asks the others, but for a diff. It reads through the session's queries, which the kernel refuses for an op that writes,
-and for a diff, an ask and an agent's tool calls the journal and a body, which it reads and never writes, so nothing is written through it. Its `provenance` pane is one event's provenance,
-by its ref, and the message it is in its chat, if one shows it. Its `interactions` pane is who reached whom, the first page
-of `interactions`, in the lines the terminal's `/reached` draws. Its `attention` pane is every place you must act, but a mention.
-Its `tasks` pane is a queue's tasks, by `queue`, and its `entries` pane a board's entries, by `board`, in the words the
-terminal's `/tasks` says, and the feed's `x_moved`, naming the chat, says that what one reads moved. Its `tools` pane is an
-agent's tool calls, by `agent`, a page before the seq `before`, or the newest, with the `cursor` of the page before it.
-Its `saying` pane is what an agent, by `agent`, is saying now, once it moves past the `version` the page shows, held until
-then for at most 25 s, and on history until a runtime takes the session up again, for as long; `over` says the agent has
-ended.
-Its `changes` pane is what changed, in the lines the terminal's `/review` draws, none of them new, as the page keeps no marks. Its
-`diff` pane is, by the effect `repo diff` gave, the diff that effect read with every line of its patch, which the page draws 500
-at a time, held until the journal records it, for at most 25 s, and saying it is still `reading` past that. Asking for a diff is an
-act, so a view link reads none, as the `diff` pane refuses it, and history can ask for none, and Patch and Uncommitted diff say
-why. Its `ask` pane is what the approval its card names asks, in the words the terminal's `/ask` says: the whole of it, read
-by its body's ref, as `blob.get` gives no text for a line longer than one result holds, and below it how many bytes more it asks
-where the record cut it, or, where the record holds no body, that what it asks beyond its gist is unknown.
+**Both clients at once.** The terminal and the page can be attached to one session together. What either sends is in
+both, once, and an approval answered in both at the same moment takes effect once.
 
 ## Not built yet
 
@@ -355,36 +184,23 @@ Pictures in a body are offered as a download and not drawn. [STATUS.md](../STATU
 
 What the whole of platoon-harness protects, and what it does not, is in [security.md](../security.md). The page's part:
 
-- **Where it listens.** Loopback, unless `--host` names another address, which needs TLS, `--certificate` and `--key`, and
-  is refused without them. Your sessions, `web` with no session, are served on loopback alone, and each session opened from
-  that page on the same host, on a port of its own: any other address exits 64, as its link acts as you on every session
-  here. A wildcard such as `0.0.0.0` or `::`, or a name that resolves to one, as `0` does, is refused, since a browser's
-  requests must name the host served.
-  A session on a plan login is served on loopback alone, and another address exits 78, saying why: one started with
-  `--plan-login`, one of whose agents' harnesses came up last on a plan login, or one with a role that names no auth
-  profile and whose harness says, by its own status command, that it is signed in on one, as a control link can spawn an
-  agent of any role. That is checked as `web` starts, before anything listens. While it serves another address, `web`
-  stops with 78 once an agent comes up on a plan login after all, as when a harness was signed in on one since, and what
-  a control link did before then stands. A harness that cannot say which login it has is not counted, as the runtime
-  does not count it either. From another machine, forward the loopback port, as Open it shows.
-  A replay is the one exception: `web SESSION --replay` serves one past loopback whatever login its agents ran on, as
-  its links act on nothing, not even as you, though a link to one reads every event and view of the record as its
-  runtime did. That is
-  [RFC 0080](../rfcs/0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md)'s default for its
-  question 3, pending the owner's ruling.
-  A name with several addresses, as `localhost` has, is served on one port at each, so no other program on the machine can
-  take that port on one of them and be what a browser reaches. A port that is the scheme's own, 80 or 443, is left out of
-  the address, as a browser leaves it out.
-- **What it believes.** Every request is bounded before it is believed, by the same code as the SDK's tool server: a head
-  of at most 16 KiB, then `Host`, which must name the authority served, which defeats DNS rebinding, then on a POST
-  `Origin`, which must be the page's own, then the bearer, and only then a body of a stated length, each part of it within
-  10 s of the last, so a large file crosses a slow link and a client that stops is cut, with a cap on connections and on
-  the requests the feed holds at once. A page on another origin is refused before its bearer is read, and a name rebound
-  to this machine is refused by its `Host`.
-- **What it runs.** SwarmChat's five page files are read from the installed package, `swarmchat==0.1.0`, and each is held to
-  its SHA-256: a file that differs stops `web` before anything is served, saying which. Its own server never runs. The page
-  runs under SwarmChat's own policy, scripts by hash alone, with the hashes made for what is served, and every answer says
-  `Cache-Control: no-store`.
+- **Where it listens.** Loopback, unless `--host` names another address, which needs TLS, `--certificate` and `--key`,
+  and is refused without them. Your sessions, and each session opened from that page, are served on loopback alone: any
+  other address exits 64. A wildcard such as `0.0.0.0` or `::`, or a name that resolves to one, is refused, since a
+  browser's requests must name the host served, and a name with several addresses, as `localhost` has, is served on one
+  port at each, so no other program can take that port on one of them.
+- **Plan logins.** A session on a plan login is served on loopback alone, and another address exits 78, saying why: one
+  started with `--plan-login`, one of whose agents' harnesses came up last on a plan login, or one with a role that names
+  no auth profile and whose harness says it is signed in on one, as a control link can spawn an agent of any role. While
+  it serves another address, `web` stops with 78 once an agent comes up on a plan login after all, and what a control
+  link did before then stands. A harness that cannot say which login it has is not counted. A replay is the one
+  exception: it is served past loopback whatever login its agents ran on, as its links act on nothing, not even as you,
+  though a link to one reads every event and view of the record. That is the default, pending the owner's ruling.
+- **What it believes.** Every request is bounded in size and in time before it is believed, by the same code as the SDK's
+  tool server: its `Host` must name the authority served, which defeats DNS rebinding, and a POST's `Origin` must be the
+  page's own.
+- **What it runs.** SwarmChat's page files are read from the installed `swarmchat==0.1.0`, each held to its SHA-256, so a
+  file that differs stops `web` before anything is served. Its own server never runs.
 - **What it keeps.** The page's projection of the session is `swarmchat.sqlite` in the session folder, readable by you
-  alone, which nothing reads back into the journal. Dropping it is harmless: `web` folds it again from the journal, and a
-  new version of it does that by itself. A body erased in the journal is erased from it too.
+  alone, which nothing reads back into the journal. Dropping it is harmless, as `web` folds it again from the journal, and
+  a body erased in the journal is erased from it too.

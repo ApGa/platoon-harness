@@ -28,8 +28,8 @@ workspace = "worktree"            # "shared" (the default) | "worktree" | "snaps
 ```
 
 There is no branch, path, base, lock or removal option. The mode recorded is the one that ran: a mode that cannot be given fails
-loudly, before any cost where that can be seen, and never becomes another. [RFC 0031](../rfcs/0031-a-workspace-is-a-place-git-already-knows.md)
-has the decisions behind this page, and [compatibility.md](../reference/compatibility.md#workspaces) what each harness sees.
+loudly, before any cost where that can be seen, and never becomes another. Section 13 of [the architecture](../architecture.md) is
+the design, and [compatibility.md](../reference/compatibility.md#workspaces) says what each harness sees.
 
 ### What each mode promises
 
@@ -57,13 +57,10 @@ original's HEAD.
 ## Where a snapshot lives
 
 At the same place, `agents/<agent>/workspace`, as a repository of its own on the branch `platoon-harness/<session>/<agent>`, which
-lives in that repository and not in yours. Its first commit is your HEAD when nothing differs, and otherwise one commit over it by
-`platoon-harness <runtime@platoon-harness.invalid>` holding your tree as your git saw it: what `git add -A` would stage, under your own
-config, so your excludes and attributes apply and your ignored files, such as a `.venv`, stay out. It takes your `user.name` and
-`user.email`, so an agent commits there as it would in a worktree, and how your git reads and writes files. Your repository's own
-`.git/hooks` do not run there, since it is a repository of its own, while a `core.hooksPath` your global or system config sets still
-does. It reads your objects through alternates and holds in its own pack everything else it needs, so your unstaging and pruning
-cannot take from it what it holds. A split index of yours is written whole into it, and nothing is written into your git directory.
+lives in that repository and not in yours. It holds your tree as your git sees it, what `git add -A` would stage, so your ignored
+files, such as a `.venv`, stay out, and it takes your `user.name` and `user.email`, so an agent commits there as in a worktree.
+Your repository's own hooks do not run in a snapshot, though a `core.hooksPath` your global or system config sets does, and
+nothing is written into your git directory.
 
 ## Where an isolated agent runs
 
@@ -97,30 +94,24 @@ and then kills it outright, saying so as the gap `crash_window`, since its confi
 What stays reachable: everything you can read outside those folders, the network, every loopback service, every abstract socket,
 and every socket file outside those folders, since a read-only mount does not stop a connect to one. It runs on the same kernel, as
 you. Our tools and a training system's gateway are on loopback, so they stay reachable too. It is experimental: its escape tests have
-passed on one Linux host, on bubblewrap 0.4.1.
+run on one Linux host ([compatibility](../reference/compatibility.md#6-supported-platforms)).
 
 Its harness's home is `home/` in the agent's folder, so none of your harness settings, logins or memory are read or written. A role
 needs an auth profile, or a training system's gateway, for model access. Neither its git nor the runtime's git in its tree reads
 your global git config, so your global excludes do not apply there: a file only they would ignore shows as untracked, and the stop
 keeps the workspace for it.
 
-Everything the runtime runs in that tree goes through the same isolation: each look, the check at a launch or a resume that the tree
-is still a work tree of its repository, the stop's reading of what removal would lose, making a kept snapshot whole, finding its
-objects for `commits.bundle`, and each [diff](#read-a-diff) of it or of a commit a look found there. So a filter or an fsmonitor an agent writes into its own repository's config runs inside, never as you,
-and on the same allowlist its harness gets, `PATH` and `HOME` alone, never a variable the runtime's environment holds that the
-harness does not. Each of those git calls pays the confiner's start, about 0.05 s on the host it ran on. The runtime's own
-bookkeeping files in the agent's folder — its process record, its log, its instructions, the `ph` shim — it writes and reads
-following no symlink the confined harness could plant there, so none of them can be made to land outside the tree. Only a launch
+Every git call the runtime makes in that tree, each look and each [diff](#read-a-diff) among them, goes through the same
+isolation, with `PATH` and `HOME` alone, so a filter or an fsmonitor an agent writes into its own repository's config runs inside,
+never as you. Only a launch
 inside the isolation records assurance `isolated`; every other agent's is `cooperative`. A [runtime test](#test-a-commit) of a
-commit a look of such a workspace found, or one built on it, is refused, as its code runs only there, and no test reads an isolated
-workspace's objects.
+commit a look of such a workspace found, or one built on it, is refused, as its code runs only there.
 
 Before any cost, besides wherever a snapshot is refused, `isolated` is refused when no extension the team names gives an isolation,
 when two do, naming both, when the isolation cannot confine here, as `bwrap` cannot where a kernel setting, AppArmor or a container's
 seccomp blocks user namespaces, when a harness declares no path it is installed at, as one in the runtime's own process cannot, and
 for a role with no auth profile whose harness signs itself in, since that login is in your home. A spawn asks the isolation again
-before it builds the snapshot. [compatibility.md](../reference/compatibility.md#workspaces) says what each harness declares, and [RFC
-0034](../rfcs/0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md) why.
+before it builds the snapshot. [compatibility.md](../reference/compatibility.md#workspaces) says what each harness declares.
 
 ## Before any cost
 
@@ -155,8 +146,8 @@ A worktree holds what is committed at its base and nothing else: untracked proje
 hooks run for agents' commits there, while `post-checkout` does not run when the runtime makes one. Claude Code's auto memory is keyed
 on the repository and shared by every worktree of it, a channel no topology binds.
 
-Claude Code's own worktree tools are off on every launch ([RFC 0033](../rfcs/0033-a-harness-s-own-worktrees-are-off.md)). A worktree an
-agent makes with git from a shell is its own affair, and outside what the runtime records.
+Claude Code's own worktree tools are off on every launch. A worktree an agent makes with git from a shell is its own affair, and
+outside what the runtime records.
 
 **Codex** keeps `.git` read-only under its `workspace-write` and `read-only` sandboxes, so each commit asks for an approval that runs
 outside the sandbox. Choose one of three postures for a Codex role in a worktree or a snapshot:
@@ -223,7 +214,7 @@ show them. A fetch with a branch to land on, as here, is what makes a snapshot's
 
 At the end of each agent's turn, and when a resumed agent comes back, the runtime looks at what it left: first your checkout's new
 commits, then the agent's own workspace. Looks of different agents' workspaces run at once, and looks of one workspace, your
-checkout's among them, run one at a time ([RFC 0077](../rfcs/0077-a-look-waits-only-for-looks-of-its-own-workspace.md), a draft).
+checkout's among them, run one at a time.
 A stopping agent's stop looks once more before it ends the workspace. A look changes no ref, index or file, and records on
 `repo/<name>`, `<name>` being your repository's folder name:
 
@@ -235,14 +226,10 @@ A stopping agent's stop looks once more before it ends the workspace. A look cha
 - each workspace's head, branch, any merge, rebase, cherry-pick, revert or bisect under way, and its uncommitted paths, conflicted
   first, with their lines added and removed, or `?` for an untracked or binary file, which nobody measured.
 
-Your checkout's uncommitted state is recorded only when a role works there, since your own edits are not the session's. Declare what
-a commit builds on with a trailer, `git commit --trailer Informed-By=<sha>`: a value of 4 to 40 hex digits naming one commit in its own
-repository is resolved to its full SHA, and the commit's record cites that commit's once the journal holds it. A trailer can name
-what informed it in the session too, by its ref, such as the board entry it implements, `Informed-By=board/notes/spec@3`, which the
-record cites once it is checked as any citation is, it must name an event and a range lines of that event's body, and only when the
-commit is an agent's that made that event or was handed it. A trailer travels with its commit between clones and sessions, so one
-fetched from elsewhere, or made in your checkout, cites no event here. Anything else, a branch name among them, is kept as written,
-with why it cites nothing. [provenance.md](provenance.md) says how lineage and contributors read a commit's citations.
+Your checkout's uncommitted state is recorded only when a role works there, since your own edits are not the session's. A commit
+declares what it builds on with a trailer, a commit by its SHA or an event of the session by its ref, as
+`git commit --trailer Informed-By=board/notes/spec@3`, which its record cites once checked, as
+[Refs and citations](provenance.md#refs-and-citations) says.
 
 The terminal's header counts what changed, `/review` lists it, and a merge stopped on conflicts waits in the dock, and under Needs you
 in the browser, saying what settles it, as [below](#resolve-an-agents-conflict), until its agent's next turn. What an agent wrote of
@@ -323,7 +310,7 @@ seconds it took and the bytes it printed, and carries the last 64 KiB of that as
 --ref repo/<name>@<version>` reads, a page at a time. The `changes` view's commit row gives the latest outcome as `tests`, with why it failed or
 erred and the ref of its record, and the terminal's `/review` shows the outcome and the reason and tests the chosen commit with `t`. A clean checkout lacks untracked and ignored files, so its outcome can honestly differ
 from the agent's own run. A test keeps its session from settling until it ends, and one a crash or a stop cut off runs again when the
-session resumes. [RFC 0056](../rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) has why.
+session resumes.
 
 ## Read a diff
 
@@ -341,15 +328,9 @@ files, staged or not, then each untracked file git does not ignore, as a new one
 its agent's stop if the stop kept it; your checkout only while a role works there, as your own edits are not the session's. An
 agent never asks for a diff: it reads a commit through `repo.commit` or its own git.
 
-The runtime reads it where the workspace lives: a commit in the repository of the workspace whose look recorded it, which for a
-snapshot may be the only one that holds it, or in yours once that workspace has gone, and an isolated workspace inside its
-isolation. It reads with `--no-ext-diff`, `--no-textconv` and `--no-color` and git's own `a/` and `b/` prefixes, so no external
-diff, diff driver, textconv, pager or colour a repository's config names runs or shapes it, and its git runs no hook and no
-fsmonitor and reaches no remote, so no promisor remote, transport program or `ssh` command a config names is reached for an object
-the store has dropped. A filter a config names does run for an uncommitted diff, as it does at every look and in your own
-`git status`. Each object is read as it is stored: no replace ref stands in for a commit or for the HEAD an uncommitted diff is
-against, and a commit's patch is from the first parent its own object names, whatever a graft or a shallow list says, so nobody
-who writes a repository's refs and files can change which patch is recorded for a SHA.
+The runtime reads it where the workspace lives: a commit in the repository of the workspace whose look recorded it, or in yours
+once that workspace has gone, and an isolated workspace inside its isolation. Git reads the diff with no external diff,
+textconv, pager, hook or remote, though a filter your config names runs for an uncommitted diff, as in your own `git status`.
 
 `repo.diffed` on `repo/<name>` keeps it: the commit, or the workspace, the HEAD it was read against and `read_at`, when its
 reading began, `read_in`, the workspace whose repository it was read in, and the patch as its body, which `platoon-harness blob get <session> --ref repo/<name>@<version>` reads, a page at
@@ -361,7 +342,6 @@ gives it as no text and no message can cite its lines, which its gist says, as
 `3f9c2a1b2c3d patch, 6 lines, not UTF-8, so no line of it can be cited`. A diff that could not be read, as of a workspace gone
 from under its agent, records why. A diff keeps its session from settling until it is read, and one a crash cut off is read again
 when the session resumes. A look reads no patch, so a turn's end costs what it did.
-[RFC 0065](../rfcs/0065-a-diff-is-read-on-request-as-a-test-is-run.md) has why.
 
 A commit's patch never changes, so it is read once: asked for again while it is read, `repo diff` gives the same effect, and once
 it is kept, that effect and the ref of its record, reading nothing. What a workspace holds uncommitted is read at each ask. The

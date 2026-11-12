@@ -81,14 +81,14 @@ $ platoon-harness message send review --to @verifier --reply-to ASK --gist passe
 
 `session show` names the verifier's ask under needs you, with its ref, ASK here, which your answer replies to, and its
 words, which are the model's own and name the commit, SHA here, as in `needs you: mention inbox/you@1, Please test
-4dde84429173 ...` from a scripted run. `repo test` has the runtime run the team's test at that commit, as you, in a
-clean checkout of it, and record what it came to: the one step of the flow that no agent can take, which [Test a
-commit](../../docs/how-to/workspaces.md#test-a-commit) describes. It answers at once, and the test runs after. `view
-watch` gives the changes view, in which the commit's row says what the test came to as `tests`, null until it has run
-and `passed` here, and the ref of its record as `tested`, TESTED here, such as `repo/<name>@4`, `<name>` being your
-repository's folder: while `tests` is null, run `view watch` again. Your message answers the ask, says what the test came to and cites its record, so the verdict,
-which cites your answer, rests on your test. The run then settles, and ends with `settled, exit 0` and a line for each
-agent, the verifier's last words its verdict.
+4dde84429173 ...` from a scripted run. `repo test` has the runtime run the team's test at that commit, as you, in a clean
+checkout of it, and record what it came to: the one step of the flow that no agent can take, which
+[Test a commit](../../docs/how-to/workspaces.md#test-a-commit) describes. It answers at once, and the test runs after.
+`view watch` gives the changes view, in which the commit's row says what the test came to as `tests`, null until it has
+run and `passed` here, and the ref of its record as `tested`, TESTED here, such as `repo/<name>@4`, `<name>` being your
+repository's folder: while `tests` is null, run `view watch` again. Your message answers the ask, says what the test came
+to and cites its record, so the verdict, which cites your answer, rests on your test. The run then settles, and ends with
+`settled, exit 0` and a line for each agent, the verifier's last words its verdict.
 
 A real model chooses its own steps, so a run can go otherwise: the reviewer may ask `repo.commit` again more often, and
 the verifier may word its ask differently, so read the SHA from what it says. A live run on DeepSeek V4.1 Flash took 42

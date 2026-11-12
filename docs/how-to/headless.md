@@ -1,9 +1,7 @@
-# Headless quickstart
-
-From a terminal or CI, with harnesses you already use and their own logins. [cli.md](../reference/cli.md) is the full reference.
+# Run headless
 
 **Goal:** check that a machine can run sessions, write a team, run it from a terminal or CI on the harnesses you already use,
-watch and steer it from another shell, and stop and resume it.
+watch and steer it from another shell, and stop and resume it. [cli.md](../reference/cli.md) is the full reference.
 
 **Prerequisites:**
 
@@ -17,11 +15,9 @@ watch and steer it from another shell, and stop and resume it.
 $ platoon-harness doctor
 ```
 
-`doctor` says each harness's version and the kind of its login, never an account, and exits 0 when this machine can run
-sessions and 78 when it cannot: [Check the installation](../getting-started/install.md#check-the-installation) shows
-what it prints. `doctor --check` runs the checks of each harness it finds against a model of ours on loopback, on no
-account, and keeps what they found under the root, which the runtime reads at each launch and resume: an agent's levels
-come from it, and say `unverified` where no kept result speaks for its harness.
+[Check the installation](../getting-started/install.md#check-the-installation) shows what `doctor` says. What
+`doctor --check` finds it keeps under the root, which the runtime reads at each launch and resume: an agent's levels come
+from it, and say `unverified` where no kept result speaks for its harness.
 
 ## 2. Write a team
 
@@ -72,12 +68,8 @@ prompts. Without `--approvals`, an approval that would ask with nobody attached 
 role in a worktree or a snapshot is one such: its sandbox keeps `.git` read-only, so its first commit asks, and `team check` says so
 before any cost, with the three ways out; under `--approvals deny` it says each commit will be refused.
 
-The ending's `workspaces` names each agent's worktree or snapshot its end did not take, with its host, path, branch, size and why,
-such as `1 uncommitted path: notes.md` or `ignored: .venv/`, and a `release`, the commands that let it go, only where they lose nothing
-it was kept for but the ignored files it names: a worktree's unlock and remove, or a snapshot's fetch of its branch into your
-repository and the removal of its folder. Where `release` is empty, `why` says what to save first. Its `unobserved` names each agent
-whose last look never finished, as when a session is cancelled before its stops ran, so what that agent last changed was not
-recorded. See [workspaces.md](workspaces.md).
+The ending's `workspaces` names each agent's worktree or snapshot that was kept, with why and, where letting it go loses nothing
+it was kept for, the commands that do, as [When a workspace goes](workspaces.md#when-a-workspace-goes) says.
 
 ## 4. Watch and steer it from another shell
 
@@ -111,7 +103,7 @@ $ platoon-harness serve --team crew.toml --name nightly
 ```
 
 `session stop` is the owner's stop from another shell, and keeps the session resumable. `session resume` restarts its harnesses,
-which can spend money, and owns it as `run` does. A session started trainable, or whose agents a training system's authority
-admitted, is never resumed, as their keys went with that authority, and `session resume` refuses it with exit 64; it stays history, which `events` reads. `session refold` brings a stopped session's views up to its journal, as a runtime
-does as it opens, and writes no event, for when an upgrade changed a view and its history refuses to answer. `serve` keeps a session's runtime in the foreground with no client attached, for a
-supervisor, and stops on `SIGTERM`.
+which can spend money, and owns it as `run` does. `serve` keeps a session's runtime in the foreground with no client attached, for
+a supervisor, and stops on `SIGTERM`. `session refold` brings a stopped session's views up to its journal, for when an upgrade
+changed a view and the session refuses a query. A session stays under the root until you delete it, as
+[Retention](../security.md#retention) says.

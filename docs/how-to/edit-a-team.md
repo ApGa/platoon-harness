@@ -83,7 +83,7 @@ terminal itself: it says so, and you edit it in the file.
 
 From 100 columns the preview stands beside the fields, and below them on a narrower screen, where Tab goes to it and the
 arrows scroll it. After each change it shows the first line the diff changes, unless it has focus. The fields' panel says
-`checking your last change…` while a check is under way. [The terminal UI](tui.md#edit-the-projects-team) has its keys.
+`checking your last change…` while a check is under way. [The terminal UI](tui.md#the-team-editor) has its keys.
 
 ### In the browser
 
@@ -114,6 +114,3 @@ is on its record.
 
 - Changing a running session's settings, such as an agent's model: a session runs the team it started with.
 - Editing a team file other than the project's, as `--team` names one.
-
-[RFC 0079](../rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md) has the
-decisions behind this page.
