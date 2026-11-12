@@ -3,16 +3,9 @@
 **Goal:** run a team from a Python script on the SDK alone, on a model you name, in which two agents each fix an issue
 of the sample project on a branch of its own; wait for the session to settle, and read back what each reported.
 
-**Prerequisites:**
-
-- a checkout of this repository with its packages installed by `uv sync`, which brings the SDK's `openhands` extra, as
-  [Install](../../docs/getting-started/install.md#install-from-a-checkout) says, and its environment active, as
-  [your first session](../../docs/getting-started/first-session.md#1-run-a-team-on-your-model) has it. The script imports
-  only `platoon_harness`, the SDK, and OpenHands runs on the SDK's own interpreter, so it needs no harness on PATH;
-- a model at an endpoint that speaks OpenAI's Chat Completions, and a key for it, in `OPENAI_BASE_URL` and
-  `OPENAI_API_KEY`, as [the mixed team](../mixed-team/README.md#1-check-it) names them;
-- git that knows your name and email, as `git config user.name` and `git config user.email` say, since the agents
-  commit as you, and `python3` 3.9 or later on your PATH, which they run the sample project's tests on.
+**Prerequisites:** those of [every example](../README.md#prerequisites), with the environment active in the shell that
+runs the script. The script imports only `platoon_harness`, the SDK, and OpenHands runs on that environment's own
+interpreter, so it needs no harness on PATH. The agents commit as you.
 
 | File | What it is |
 |---|---|
@@ -37,26 +30,20 @@ and `comments`, with its report, in the model's own words. Each agent fixes its 
 checkout, and the branches stay in your repository. Its approvals allow, as nobody is there to answer one, so it runs
 commands as you, unasked, and a worktree is not a sandbox: what runs there can reach anything you can.
 
-The team's budget of 8 turns and 15 minutes is what stops a runaway: no budget counts model calls, and one turn can
-make many. `tests/live/test_examples.py` fails a live run of the script that took more than 50 model calls, counted once
-the run has ended, or 15 minutes, about one and a half times what live runs on DeepSeek V4.1 Flash took on 2026-11-08, 29 model calls:
-[docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the commands on
-this page as shown, with `fake-model` for MODEL, on OpenHands against FakeModel, a loopback model that replies from a
-script, so the harness, the tools and the team are real and only the model is scripted.
+A live run on DeepSeek V4.1 Flash took 29 model calls. The team's budget of 8 turns and 15 minutes stops a runaway: no
+budget counts model calls, and one turn can make many.
 
 ## 2. Read the script
 
 [`run.py`](run.py) has six parts:
 
 - **An auth profile.** `AuthProfile(env=(...))` names the variables your endpoint and key are in, which a role's harness
-  is handed. It holds names only: a value never enters a team. OpenHands reaches any endpoint that speaks Chat
-  Completions this way, and pi and Codex take the same two variables.
+  is handed. It holds names only: a value never enters a team.
 - **A team.** One role, `fixer`, on `harness="openhands"` with your `model`, in a `worktree` of its own, and with
-  `count=0`, so the session starts none of its agents: the script spawns each with a goal. `approvals="allow"` answers
-  each approval, as nobody is there to, and a `Budget` of turns and wall time stops a runaway.
-- **A session.** `Session.start(team)` starts the team where you run the script, and the script owns the session until
-  its `async with` block ends. The session lives under the root where every session does, so the command line finds it
-  too.
+  `count=0`, so the session starts none of its agents. `approvals="allow"` answers each approval, and a `Budget` of turns
+  and wall time stops a runaway.
+- **A session.** `Session.start(team)` starts the team where you run the script, which owns the session until its
+  `async with` block ends. The session lives under the root, where the command line finds it too.
 - **Agents.** `session.spawn(name, role, goal)` starts an agent in a role with a goal.
 - **Settling.** `session.settled(timeout="15m")` waits until the session is done and returns its `Ending`: how it ended,
   `settled` here, or `timed_out` past the timeout.
@@ -74,5 +61,5 @@ $ git log --oneline -1 platoon-harness/NAME/cents
 ```
 
 `events` prints every event of the session, each agent's commands and our tools among them, and `git log` the commit
-`cents` made on its branch. [The headless quickstart](../../docs/how-to/headless.md) runs teams from a shell, and
+`cents` made on its branch. [Run headless](../../docs/how-to/headless.md) runs teams from a shell, and
 [Topologies](../../docs/how-to/topologies.md) builds teams in Python.

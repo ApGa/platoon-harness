@@ -9,8 +9,9 @@ holds each vote, and a preset that pairs an author with the reviewer who votes o
 **Goal:** a package of your own that a team names, its op run from Python with no harness, checked against what a core
 primitive keeps to, and ready to publish.
 
-**Prerequisites:** a checkout of this repository with its packages installed, by `uv sync`, as
-[Install](../getting-started/install.md#install-from-a-checkout) says. Nothing here needs a harness, a key or a model.
+**Prerequisites:** a checkout of this repository, set up as
+[CONTRIBUTING](../../CONTRIBUTING.md#set-up-a-development-environment) says, where each command runs through `uv run`.
+Nothing here needs a harness, a key or a model.
 
 A test, `tests/unit/docs/test_extending.py`, runs this page: each file it shows is the sample's, and each command and
 script it shows prints what it says to expect, with the sample installed as its metadata and its source. It builds no
@@ -285,9 +286,19 @@ not_found: no agent @nobody
 its refusal, and never raises a refusal. The vote lies on the author's stream, `agent/author`, so a client that shows the
 author draws it by its gist.
 
-The same op runs from every other surface with no code of yours: from an agent, as the tool `ballot_cast` and as
-`ph ballot.cast`, from the command line, as `platoon-harness ballot cast SESSION`, and from the terminal's palette and the
-page's form. [The sample's README](../../examples/extension-package/README.md#4-cast-a-vote) casts it from each.
+The same op runs from every other surface with no code of yours:
+
+- **An agent** whose grants reach it is shown `ballot_cast` among platoon-harness's MCP tools, and its shell runs
+  `ph ballot.cast --agent @author --choice yes`.
+- **The command line.** `platoon-harness ballot cast SESSION --agent @author --choice yes` imports `ballot` and nothing
+  else installed, and is refused on a session whose team does not name it. `platoon-harness --help` lists `ballot` under
+  Installed extensions, from metadata.
+- **The terminal's palette** offers `ballot cast`, worded by the op's docstring, and runs it through a form made from its
+  schema, and the page's Commands offers the same form.
+
+Each vote is drawn by its gist, `a vote on @author's work: yes`, in the author's transcript in the terminal, and
+`platoon-harness events` reads it back with its ref, `agent/author@<version>`. The page draws it in no transcript: it
+shows the vote in that ref's Provenance pane, which opens where the page's address names it, `#provenance=<ref>`.
 
 An extension's op is never asked about. The terminal and the page ask once before an op that ends an agent or the session,
 erases a body, or runs a commit's code as you, and that list is the command line's own, to which no extension adds. So

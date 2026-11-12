@@ -7,8 +7,8 @@ which stay true as agents come and go.
 **Goal:** a team whose roles may reach whom you mean, from a preset, several presets, grants written out or a preset of your
 own, checked before it spends anything.
 
-**Prerequisites:** the SDK for the Python forms, from a checkout installed as [Install](../getting-started/install.md) says.
-The TOML forms go in a team file, whose every key [the team file reference](../reference/team-file.md) lists.
+**Prerequisites:** for the Python forms, the SDK, `pip install platoon-harness`. The TOML forms go in a team file, whose
+every key [the team file reference](../reference/team-file.md) lists.
 
 Pick a preset, name your roles, and give whoever spawns a `may_spawn`. Every example here is a team, as TOML and as Python, and a test
 checks that both forms build the same object and that `team.show()` prints what is shown. `team check` accepts each, and `run` runs

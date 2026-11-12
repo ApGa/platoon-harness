@@ -6,7 +6,7 @@ exit codes, which [the command line reference](../reference/cli.md#exit-codes) l
 ## First: ask doctor
 
 ```console
-$ uv run platoon-harness doctor
+$ platoon-harness doctor
 ```
 
 `doctor` says what this machine has and whether it can run a session: each harness with its version and the kind of its
@@ -32,13 +32,22 @@ named as one of the SDK's own, which every session holds, so that no session can
 ## doctor's `openhands` line names an interpreter
 
 ```text
-openhands  openhands-sdk is not installed for /path/to/platoon-harness/.venv/bin/python: install the SDK's `openhands` extra there, …
+openhands  openhands-sdk is not installed for ~/.local/share/uv/tools/platoon-harness/bin/python: install the SDK's `openhands` extra there, …
 ```
 
-OpenHands runs on the runtime's own interpreter, and the extra that loads it is not installed for that one. In a
-checkout the interpreter is the checkout's own: `uv sync` installs the extra with the dev group, and
-`UV_NO_DEV=1 uv sync --extra cli --extra openhands` installs it without the group. OpenHands keeps no login, so its
+OpenHands runs on the runtime's own interpreter, and the extra that loads it is not installed for that one: install it
+with the command line, as [Install](../getting-started/install.md#openhands) shows. OpenHands keeps no login, so its
 role also needs an auth profile that names its key.
+
+## The command line needs its extra
+
+```text
+platoon-harness: the command line needs its extra: uv tool install "platoon-harness[cli]", or pip install "platoon-harness[cli]"
+```
+
+It exits 78. The `platoon-harness` that ran belongs to an install of the library alone, without the `cli` extra. An
+active virtual environment that holds one comes first on your PATH, ahead of a `uv tool install`: install the extra
+there, or deactivate the environment.
 
 ## init says none is on PATH
 
@@ -157,5 +166,6 @@ than a few characters, which no id holds, and run again. That a short value is m
 
 ## Still stuck
 
-Open an issue with the command you ran, what it printed, what you expected, the commit you ran it on, and what
-`uv run platoon-harness doctor` prints.
+Open an issue from the [bug report template](https://github.com/ApGa/platoon-harness/issues/new?template=bug_report.md),
+which asks for what a maintainer needs to reproduce it. Report a security vulnerability privately, as
+[SECURITY.md](../../SECURITY.md) says.

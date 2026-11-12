@@ -11,7 +11,7 @@ reaches, write an estimate beside the journal, and ask whether an agent's work c
 
 - a session, live or closed, such as [the mixed team](../../examples/mixed-team/README.md)'s, whose writes cite what they
   rest on;
-- the SDK for the Python blocks, or `platoon-harness` on your PATH for the commands at the end, from a checkout installed as
+- for the Python blocks, the SDK, `pip install platoon-harness`, and for the commands at the end, the command line, as
   [Install](../getting-started/install.md) says.
 
 ## What an answer keeps apart

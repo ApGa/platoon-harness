@@ -7,8 +7,7 @@ of what an agent leaves behind.
 
 **Prerequisites:**
 
-- `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
-  environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
+- platoon-harness installed as [Install](../getting-started/install.md) says;
 - for `worktree`, `snapshot` and `isolated`, a session started in a git work tree of a repository with a commit, and git
   2.36 or later;
 - for `isolated`, which is experimental, Linux with [bubblewrap](https://github.com/containers/bubblewrap) and unprivileged

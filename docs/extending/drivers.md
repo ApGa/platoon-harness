@@ -390,7 +390,7 @@ interpreter, so nothing is looked up on `PATH` and nothing else is installed. It
 `PYTHONPATH`, `PYTHONUSERBASE` and the rest of what tells Python where they are pass by name, and `-P` keeps the workspace it
 runs in off its path. The worker alone loads OpenHands, which the SDK's `openhands` extra brings, pinning `openhands-sdk` and
 `openhands-tools` at 1.59.0 exactly. Install it beside the SDK, for the interpreter that runs the runtime, which is the command
-line's when it starts a session, as [Install](../getting-started/install.md#openhands) says for a checkout.
+line's when it starts a session, as [Install](../getting-started/install.md#openhands) says.
 
 `doctor` shows it with the version of the OpenHands SDK, from its metadata, and its login unknown, as OpenHands keeps none and
 only a role's auth profile gives it a key. Without the extra, `doctor` names the interpreter to install it for, and an agent's

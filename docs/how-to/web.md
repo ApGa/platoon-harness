@@ -15,8 +15,7 @@ only reads.
 
 **Prerequisites:**
 
-- `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
-  environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
+- platoon-harness installed as [Install](../getting-started/install.md) says;
 - a session: one a runtime holds, to act on, as `web SESSION` starts and resumes nothing, or one no runtime holds, to read
   its history; or none, as [your sessions](#your-sessions) start one;
 - a browser on this machine, or on another that can forward a port to it. The page's tests pass in Chromium, Firefox

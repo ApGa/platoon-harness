@@ -9,7 +9,7 @@ grows as it plays. Nothing in a replay acts on the session.
 
 **Prerequisites:**
 
-- `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says;
+- platoon-harness installed as [Install](../getting-started/install.md) says;
 - a session under the root, live or not: `platoon-harness session list` shows them;
 - a terminal, or a browser on this machine or on another that can reach it, as [The browser](web.md#open-it) says.
 

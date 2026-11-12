@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",
 ]
-# The library needs pydantic alone, so what is built on it, as Platoon's teams bridge is, brings nothing more.
+# The library needs pydantic alone, so what is built on it brings nothing more.
 dependencies = ["pydantic>=2.10,<3"]
 
 [project.optional-dependencies]
@@ -53,9 +53,11 @@ The library alone, which needs pydantic and nothing more: `uv add platoon-harnes
 [its documentation](https://github.com/ApGa/platoon-harness/tree/main/docs) the rest.
 
 Its `openhands` extra pins OpenHands' SDK and tools. `openhands-sdk` requires `lmnr`, which requires
-`lmnr-claude-code-proxy`, a binary under Laminar's own terms. A checkout's lock leaves it out, but installed from this
-package's wheel, the extra brings `lmnr-claude-code-proxy` unless you exclude it, as uv's `exclude-dependencies` setting
-or `uv pip install --excludes` does. Either way, platoon-harness itself stays under the MIT license.
+`lmnr-claude-code-proxy`, a binary under Laminar's own terms, which the OpenHands worker runs without. The extra brings
+`lmnr-claude-code-proxy` unless you exclude it: uv's `--excludes`, with a file that names it, does for
+`uv tool install` and `uv pip install` alike, as
+[the install guide](https://github.com/ApGa/platoon-harness/blob/main/docs/getting-started/install.md#openhands) shows.
+Either way, platoon-harness itself stays under the MIT license.
 """
 
 [project.urls]

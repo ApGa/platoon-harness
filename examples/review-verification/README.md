@@ -5,28 +5,14 @@ reviewer reads the commit, and a verifier that can run nothing checks it with yo
 what the verdict rests on.
 
 An OpenHands author in a worktree of its own, a pi reviewer in a snapshot of its own, and a pi verifier whose every
-command and edit is refused, in your copy of [the sample project](../sample-project/README.md): the pipeline
-[the topologies guide](../../docs/how-to/topologies.md#pipeline) writes out, with each role's instructions saying its
-part. The author fixes issue 2 of its `ISSUES.md` with a test, commits both on its branch, and hands the commit to the
-reviewer through the queue `to-reviewer`. The reviewer reads it with `git show` and through `repo.commit`, which gives
-the ref its review cites, and hands it on with its review through the queue `to-verifier`. No agent can have the runtime
-run a commit's code, as [RFC 0056](../../docs/rfcs/0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md)
-decided, so the verifier asks you to test the commit and waits for your answer. Its instructions have it finish with its
-verdict, citing the commit, its task and your answer, which cites the record of your test. A citation is its model's to
-make, and step 4 shows which it made.
+command and edit is refused: the pipeline [the topologies guide](../../docs/how-to/topologies.md#pipeline) writes out.
+The author fixes issue 2 of the sample project's `ISSUES.md` with a test, commits both, and hands the commit to the
+reviewer through the queue `to-reviewer`; the reviewer reads it and hands it on with its review through `to-verifier`.
+No agent can have the runtime run a commit's code, so the verifier asks you to test the commit, and finishes with its
+verdict, citing the commit, its task and your answer.
 
-**Prerequisites:**
-
-- a checkout of this repository with its packages installed by `uv sync`, as [the README](../../README.md#install) says,
-  which brings the SDK's `openhands` extra, and its environment active, as
-  [your first session](../../docs/getting-started/first-session.md#1-run-a-team-on-your-model) has it;
-- `pi` on your PATH, which needs no login here;
-- a model at an endpoint that speaks OpenAI's Chat Completions, and a key for it, in `OPENAI_BASE_URL` and
-  `OPENAI_API_KEY`, as [the mixed team](../mixed-team/README.md#1-check-it) names them;
-- git that knows your name and email, as `git config user.name` and `git config user.email` say, since the author
-  commits as you, and `python3` 3.9 or later on your PATH, which the author and the team's test run.
-
-The example has two files:
+**Prerequisites:** those of [every example](../README.md#prerequisites), pi among them. The author commits as you, and
+`python3` runs the team's test.
 
 | File | What it is |
 |---|---|
@@ -61,12 +47,10 @@ author (openhands, own worktree) may message no one. reviewer (pi, own snapshot)
 author adds to queue `to-reviewer`; reviewer claims from it. Each entry wakes its readers. reviewer adds to queue `to-verifier`; verifier claims from it. Each entry wakes its readers. Closes when verifier finishes.
 ```
 
-Nobody is there to answer an approval in a headless run. The author edits, runs the tests and commits, so its approvals
-allow: it runs commands as you, unasked, and a worktree is not a sandbox, as what runs there can reach anything you can.
-The reviewer reads the commit with git, so its approvals allow too, in a snapshot of its own: a repository of its own,
-which reads your objects, the author's commit among them, so git there writes only its own repository, while what runs
-there can still reach anything you can. The verifier only reads, so its approvals deny: pi's `read`, `grep`, `find` and
-`ls` ask nothing, and every command or edit it tries is refused, nobody asked.
+Nobody is there to answer an approval in a headless run. The author and the reviewer allow theirs, so they run commands
+as you, unasked, and neither a worktree nor a snapshot is a sandbox: what runs there can reach anything you can. The
+verifier's approvals deny, so every command or edit it tries is refused, and it reads with pi's `read`, `grep`, `find`
+and `ls`, which ask nothing.
 
 ## 2. Run it
 
@@ -97,27 +81,19 @@ $ platoon-harness message send review --to @verifier --reply-to ASK --gist passe
 
 `session show` names the verifier's ask under needs you, with its ref, ASK here, which your answer replies to, and its
 words, which are the model's own and name the commit, SHA here, as in `needs you: mention inbox/you@1, Please test
-4dde84429173 ...` from a run on FakeModel. `repo test` has the runtime run the team's test at that commit, as you, in a
+4dde84429173 ...` from a scripted run. `repo test` has the runtime run the team's test at that commit, as you, in a
 clean checkout of it, and record what it came to: the one step of the flow that no agent can take, which [Test a
-commit](../../docs/how-to/workspaces.md#test-a-commit) describes. It answers at once, with the `effect` it started, and
-the test runs after. `view watch` gives the changes view, in which the commit's row says what the test came to as
-`tests`, null until it has run and `passed` here, and the ref of its record as `tested`, TESTED here, such as
-`repo/<name>@4`, `<name>` being your repository's folder: while `tests` is null, run `view watch` again. Your message
-answers the ask, says what the test came to and cites its record, so the verdict, which cites your answer, rests on your
-test. The run then settles, and ends with `settled, exit 0` and a line for each agent, each finished with its last
-words, which are the model's own: the verifier's is its verdict.
+commit](../../docs/how-to/workspaces.md#test-a-commit) describes. It answers at once, and the test runs after. `view
+watch` gives the changes view, in which the commit's row says what the test came to as `tests`, null until it has run
+and `passed` here, and the ref of its record as `tested`, TESTED here, such as `repo/<name>@4`, `<name>` being your
+repository's folder: while `tests` is null, run `view watch` again. Your message answers the ask, says what the test came to and cites its record, so the verdict,
+which cites your answer, rests on your test. The run then settles, and ends with `settled, exit 0` and a line for each
+agent, the verifier's last words its verdict.
 
 A real model chooses its own steps, so a run can go otherwise: the reviewer may ask `repo.commit` again more often, and
-the verifier may word its ask differently, so read the SHA from what it says. The team's budget of 24 turns and 40
-minutes is what stops a runaway: no budget counts model calls, and one turn can make many.
-`tests/live/test_examples.py` fails a live run of this example that took more than 70 model calls, counted once the run
-has ended, or 40 minutes, your answer included, about one and a half times what live runs on DeepSeek V4.1 Flash took on 2026-11-08, 42 model calls:
-[docs/STATUS.md](../../docs/STATUS.md) says what has run live. `tests/integration/test_examples.py` runs the
-`platoon-harness` commands on this page as shown, with `fake-model` for MODEL, and the run with one more `--set` line,
-which hands pi its switch for no network, the run in one process and your steps beside it, on the real `pi` and
-OpenHands against FakeModel, a loopback model that replies from a script, so the harnesses, the tools, git, the
-approvals and the team file are real and only the model is scripted. A session's name is taken once, so a second run
-needs another `--name`.
+the verifier may word its ask differently, so read the SHA from what it says. A live run on DeepSeek V4.1 Flash took 42
+model calls. The team's budget of 24 turns and 40 minutes stops a runaway: no budget counts model calls, and one turn can
+make many. A session's name is taken once, so a second run needs another `--name`.
 
 ## 4. Read it back
 
@@ -127,9 +103,8 @@ $ platoon-harness contributors review --ref VERDICT
 ```
 
 `task list` prints the verifier's task with its verdict as its `result`, and the verdict's ref as its `result_ref`,
-VERDICT here, such as `task/to-verifier/1@3` when the task was added, claimed, then completed. `contributors` says whose
-work the record ties to the verdict, in the order reached, when each agent cites as its instructions ask: the verifier's
-own; the author, whose commit the look recorded as made in its worktree; the reviewer, who handed the commit on; you,
-whose answer the verdict cites; and the runtime, whose record of your test your answer cites. It is reachability in the
-record and never credit: it weighs and ranks nobody, and a citation is its agent's claim.
-[docs/how-to/provenance.md](../../docs/how-to/provenance.md) says how to read each answer.
+VERDICT here, such as `task/to-verifier/1@3`. `contributors` says whose work the record ties to the verdict, in the order
+reached, when each agent cites as its instructions ask: the verifier; the author, whose commit the look recorded as made
+in its worktree; the reviewer, who handed the commit on; you, whose answer the verdict cites; and the runtime, whose
+record of your test your answer cites. It is reachability in the record and never credit: it weighs and ranks nobody,
+and a citation is its agent's claim. [Provenance](../../docs/how-to/provenance.md) says how to read each answer.

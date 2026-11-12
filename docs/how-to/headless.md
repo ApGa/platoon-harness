@@ -7,35 +7,21 @@ watch and steer it from another shell, and stop and resume it.
 
 **Prerequisites:**
 
-- `platoon-harness` on your PATH, installed as [Install](../getting-started/install.md) says: by
-  `uv tool install "platoon-harness[cli]"`, or from a checkout, with its environment active as
-  [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
-- the harnesses you use on your PATH, signed in as you usually are: `claude`, `codex` or `pi`, or the SDK's `openhands`
-  extra, as [Install](../getting-started/install.md#openhands) says.
+- platoon-harness installed as [Install](../getting-started/install.md) says;
+- the harnesses you use on your PATH, signed in as you usually are, or the `openhands` extra, as
+  [Install](../getting-started/install.md#openhands) says.
 
 ## 1. Check the machine
 
 ```console
 $ platoon-harness doctor
-platoon-harness 0.1.0
-claude     2.1.319 (Claude Code), plan login, checked on 2.1.319: 26 passed, 4 skipped, none failed
-codex      codex-cli 0.167.0, plan login, checked on 0.167.0: 25 passed, 5 skipped, none failed
-openhands  1.59.0, login unknown, checked on 1.59.0: 26 passed, 4 skipped, none failed
-pi         not on PATH
-root       <home>/.local/state/platoon-harness, on <filesystem>
-sockets    /run/user/<uid>/platoon-harness
-...
-usable
 ```
 
-Its root and sockets lines are shown as they read for the default root, with `<home>`, `<filesystem>` and `<uid>` for your own,
-and `...` for a line per driver and extension. It says each harness's version and the kind of its login, from the harness's own
-status command, and never an account. It exits 0 when the machine can run sessions and 78 when it cannot. `doctor --check` runs
-every check of each harness it finds that a check ships for against a model of ours on loopback, on no account, and keeps what it
-found under the root, where the runtime reads it at each launch and resume: an agent's levels come from it, and say `unverified`
-for a harness, an SDK or a host no result was made on. `doctor` says whether a kept result speaks for the binary that runs, and
-what it found. `openhands` is there once the SDK's `openhands` extra is installed for the interpreter it names, as
-[Install](../getting-started/install.md#openhands) says.
+`doctor` says each harness's version and the kind of its login, never an account, and exits 0 when this machine can run
+sessions and 78 when it cannot: [Check the installation](../getting-started/install.md#check-the-installation) shows
+what it prints. `doctor --check` runs the checks of each harness it finds against a model of ours on loopback, on no
+account, and keeps what they found under the root, which the runtime reads at each launch and resume: an agent's levels
+come from it, and say `unverified` where no kept result speaks for its harness.
 
 ## 2. Write a team
 

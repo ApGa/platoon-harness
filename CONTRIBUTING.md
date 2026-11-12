@@ -9,6 +9,7 @@ RFC: see [When a change needs an RFC](#when-a-change-needs-an-rfc).
 
 - [Ways to contribute](#ways-to-contribute)
 - [Set up a development environment](#set-up-a-development-environment)
+- [Repository layout](#repository-layout)
 - [Run the tests](#run-the-tests)
 - [Design rules](#design-rules)
 - [Lint, format and type-check](#lint-format-and-type-check)
@@ -64,10 +65,8 @@ The fast and browser tests need no harness, login or model key.
 
    The `dev` group holds pytest and its plugins, hypothesis, pyte, Playwright, pre-commit, ruff, ty, and
    platoon-harness's `cli` and `openhands` extras. `--locked` refuses when `uv.lock` is out of date with
-   `pyproject.toml`: after changing a requirement, run `uv lock` and commit `uv.lock` with it. If you set `UV_NO_DEV=1`
-   to use platoon-harness alone, as
-   [Install](docs/getting-started/install.md#install-from-a-checkout) has it, unset it first: while it is set, `uv sync`
-   leaves the group out, and the hooks and the tests run from it.
+   `pyproject.toml`: after changing a requirement, run `uv lock` and commit `uv.lock` with it. Leave `UV_NO_DEV` unset:
+   while it is set, `uv sync` leaves the group out, and the hooks and the tests run from it.
 
 3. Install the git hooks. `.pre-commit-config.yaml` names both kinds, so this installs the `pre-commit` hook, which runs
    the checks of CI's `lint` job on what you commit, and the `commit-msg` hook, which checks each commit message:
@@ -92,6 +91,16 @@ The fast and browser tests need no harness, login or model key.
    ```
 
 **Next:** [run the tests](#run-the-tests).
+
+## Repository layout
+
+| Path | What it holds |
+|---|---|
+| `packages/sdk/` | The SDK, `platoon_harness`: the kernel, the primitives, the runtime, the topology, the tool plane, the drivers and the testing kit |
+| `packages/cli/` | The command line, `platoon_harness_cli`: the `platoon-harness` command, the terminal UI and the server of SwarmChat's page, whose dependencies the `cli` extra installs |
+| `examples/` | The runnable examples, the sample project they work on, and a sample extension package |
+| `tests/` | `unit/` and `integration/`, on a CPU, the slow ones marked; `e2e/`, the browser tests; `live/`, on real models and logins; `conformance/`, the suite run on every driver |
+| `docs/` | The documentation, which [docs/README.md](docs/README.md) lists |
 
 ## Run the tests
 

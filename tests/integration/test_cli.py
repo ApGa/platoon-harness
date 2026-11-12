@@ -796,11 +796,11 @@ def plan_logins(cli: Cli) -> None:
     cli.env["PATH"] = f"{folder}:/usr/bin:/bin"
 
 
-@pytest.mark.parametrize("page", ["how-to/headless.md", "getting-started/first-session.md"])
-async def test_a_guide_s_init_team_show_and_team_check_print_what_it_shows(cli: Cli, page: str):
-    """Each of the three commands prints the lines the guide's block shows below it, and nothing else, on the plan
-    logins of `claude` and `codex` that the guide's own `doctor` shows."""
-    blocks = re.findall(r"^```console\n(.*?)^```$", (ROOT / "docs" / page).read_text(), re.MULTILINE | re.DOTALL)
+async def test_a_guide_s_init_team_show_and_team_check_print_what_it_shows(cli: Cli):
+    """Each of the three commands prints the lines the headless guide's block shows below it, and nothing else, on the
+    plan logins of `claude` and `codex` that the install guide's `doctor` shows."""
+    page = ROOT / "docs" / "how-to" / "headless.md"
+    blocks = re.findall(r"^```console\n(.*?)^```$", page.read_text(), re.MULTILINE | re.DOTALL)
     block = next(block for block in blocks if "$ platoon-harness init\n" in block)
     printed = dict(part.partition("\n")[::2] for part in re.split(r"^\$ ", block, flags=re.MULTILINE)[1:])
     plan_logins(cli)

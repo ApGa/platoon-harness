@@ -12,7 +12,7 @@ what can train, and writes rewards and credit beside the journal.
 
 **Prerequisites:**
 
-- the SDK, from a checkout installed as [Install](../getting-started/install.md) says;
+- the SDK, `pip install platoon-harness`;
 - a gateway of yours that records each call on a bearer as one agent's, or `FakeModel` in its place, as
   [testing without a training system](#test-without-a-training-system) shows;
 - roles on harnesses whose drivers launch sealed: ScriptedDriver, pi, OpenHands or a wire program that declares it

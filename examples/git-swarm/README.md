@@ -4,30 +4,14 @@
 the session, on a feature the sample project asks for, and read back each worker's outcome and the nominations among
 which you choose.
 
-pi workers under the `git-swarm` preset, started by [`run.py`](run.py), a script that owns the session as `program:swarm`
-and runs `population`, from `platoon_harness.patterns`, on it, in your copy of
-[the sample project](../sample-project/README.md). The script starts four workers with one goal, the `--json` option
-that issue 4 of its `ISSUES.md` asks for, at most two at once. Each works on a branch of its own, in a worktree of its
-own, and comes to one outcome: it contributes commits, nominates one recorded commit in a message to `#nominations`, or
-abstains. Anything else is invalid, and an end other than finishing is failed. A worker builds on a peer's commit by
-checking out on its own branch the SHA that peer's outcome records. Once each worker has ended, the script records its
-outcome on board `outcomes`, and once every worker has one, it closes the session and prints them. It reads out no
-winner: choosing among the nominations is yours. This is the population that
-[the topologies guide](../../docs/how-to/topologies.md#git-swarm) describes, under
-[RFC 0070](../../docs/rfcs/0070-a-population-gives-each-worker-one-outcome-which-its-program-records.md), a draft.
+[`run.py`](run.py) owns the session as `program:swarm` and runs `population`, from `platoon_harness.patterns`, on it: four
+pi workers with one goal, the `--json` option that issue 4 of the sample project's `ISSUES.md` asks for, at most two at
+once, each on a branch and in a worktree of its own. Each comes to one outcome, recorded on the board `outcomes`: it
+contributes commits, nominates one recorded commit, or abstains. It reads out no winner: choosing among the nominations
+is yours. This is the population [the topologies guide](../../docs/how-to/topologies.md#git-swarm) describes.
 
-**Prerequisites:**
-
-- a checkout of this repository with its packages installed, as [the README](../../README.md#install) says, and its
-  environment active, as [your first session](../../docs/getting-started/first-session.md#1-run-a-team-on-your-model)
-  has it;
-- `pi` on your PATH, which needs no login here;
-- a model at an endpoint that speaks OpenAI's Chat Completions, and a key for it, in `OPENAI_BASE_URL` and
-  `OPENAI_API_KEY`, as [the mixed team](../mixed-team/README.md#1-check-it) names them;
-- git that knows your name and email, as `git config user.name` and `git config user.email` say, since the workers
-  commit as you, and `python3` 3.9 or later on your PATH, which they run the tests on.
-
-The example has two files:
+**Prerequisites:** those of [every example](../README.md#prerequisites), pi among them, with the environment active in
+the shell that runs the script. The workers commit as you.
 
 | File | What it is |
 |---|---|
@@ -36,11 +20,9 @@ The example has two files:
 
 ## 1. Check it
 
-In a new, empty folder, make a copy of the sample project, as a repository of its own, and work there, with the
-checkout's environment active:
+In a new, empty folder, make a copy of the sample project, as a repository of its own, and work there:
 
 ```console
-$ source path/to/platoon-harness/.venv/bin/activate
 $ cp -r path/to/platoon-harness/examples/sample-project tally
 $ cd tally
 $ git init -q && git add -A && git commit -qm "Start from the sample project"
@@ -64,9 +46,9 @@ Workers post to topic `nominations`; everyone reads it. Readers fetch it when th
 ```
 
 The session closes when its program closes it, so `platoon-harness run` and the terminal UI refuse this team, naming
-the script way: here the program is `run.py`. Each worker commits, and nobody is there to answer an approval, so the team
-file gives the workers `approvals = "allow"`: they run commands, git among them, as you, unasked. A worktree is not a
-sandbox: what runs there can reach anything you can.
+the script way: here the program is `run.py`. Nobody is there to answer an approval, so the team file gives the workers
+`approvals = "allow"`: they run commands, git among them, as you, unasked. A worktree is not a sandbox: what runs there
+can reach anything you can.
 
 ## 2. Run it
 
@@ -78,25 +60,18 @@ The session's runtime runs in the script's process. The script holds `program:sw
 credential: a client that attaches only reads. It ends with a line with the session's name and how it ended, as in
 `session 20261108-110931-468d3828: settled`, then a line for each worker with its outcome as `outcomes` records it: the
 outcome, then the commit's short SHA and subject for a contribution or a nomination, or the worker's own words for an
-abstention, such as `worker-1: contribute: 6faf7ad0b9f8 Add --json`. The session's name and each SHA differ from run to
-run, and each outcome is what that worker's model chose. Each worker works on the branch
+abstention, such as `worker-1: contribute: 6faf7ad0b9f8 Add --json`. Each worker works on the branch
 `platoon-harness/<session>/<worker>`, in a worktree in the session's folder, made at your HEAD: nothing of it is in your
 checkout, and the branches stay in your repository.
 
-If the script dies, its session stops with it, resumable: `population` keeps nothing, so a script that runs it again on
-the session, with `Session.resume` in place of `Session.start`, starts no worker and records no outcome twice, as
-[Run a program from Python](../../docs/how-to/topologies.md#run-a-program-from-python) says, and
+If the script dies, its session stops with it, resumable: run it again on the session, with `Session.resume` in place of
+`Session.start`, and it starts no worker and records no outcome twice, as
+[Run a program from Python](../../docs/how-to/topologies.md#run-a-program-from-python) says.
 `platoon-harness session resume`, a person's, refuses the session, naming this way.
 
-A real model chooses its own outcome: whether a worker builds on a peer's commit, nominates or abstains, how often one
-does something else, which is invalid, and how many turns each takes. The team's budget of 16 turns and 25 minutes is
-what stops a runaway: no budget counts model calls, and one turn can make many. `tests/live/test_examples.py` fails a
-live run of this example that took more than 120 model calls, counted once the run has ended, or 25 minutes, about one and a half times what live runs on DeepSeek V4.1 Flash took on 2026-11-08, 64 and 80 model calls in two runs: [docs/STATUS.md](../../docs/STATUS.md) says what has run live.
-`tests/integration/test_examples.py` runs the commands on this page as shown, with `fake-model` for MODEL, and the script
-with one more `--set` line, which hands pi its switch for no network, on the real `pi` against FakeModel, a loopback
-model that replies from a script, so the harness, the tools, git and the team file are real and only the model is
-scripted: there, one worker contributes `--json`, a second waits for that outcome and builds a test on it by the SHA it
-records, a third nominates that commit and the fourth abstains.
+A real model chooses its own outcome: whether a worker builds on a peer's commit, nominates or abstains, and how many
+turns each takes. Two live runs on DeepSeek V4.1 Flash took 64 and 80 model calls. The team's budget of 16 turns and 25
+minutes stops a runaway: no budget counts model calls, and one turn can make many.
 
 ## 3. Read it back, and choose
 
@@ -108,8 +83,8 @@ $ platoon-harness message read NAME --channel '#nominations'
 $ platoon-harness lineage NAME --ref channel/nominations@1
 ```
 
-`board query` prints each worker's entry on `outcomes`, which only the program writes, and of which the board takes no
-second, with the outcome and, for a contribution or a nomination, the commit's whole `sha` in its `fields`.
-`message read` prints each nomination, and `lineage` what the first cites: under `declared`, the commit, who made it, and
-whether the nominator was shown it, `seen` when it read the commit through `repo.commit`. Choosing among the nominations
-is yours. Each commit is in your repository, so `git show SHA` reads one, and `git merge SHA` takes it onto your branch.
+`board query` prints each worker's entry on `outcomes`, which only the program writes, with the outcome and, for a
+contribution or a nomination, the commit's whole `sha` in its `fields`. `message read` prints each nomination, and
+`lineage` what the first cites: under `declared`, the commit, who made it, and whether the nominator was shown it,
+`seen` when it read the commit through `repo.commit`. Each commit is in your repository, so `git show SHA` reads one,
+and `git merge SHA` takes it onto your branch.

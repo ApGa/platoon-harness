@@ -10,8 +10,7 @@ changes, then save it and start a session from it.
 
 **Prerequisites:**
 
-- `platoon-harness` on your PATH, from a checkout installed as [Install](../getting-started/install.md) says, with its
-  environment active as [your first session](../getting-started/first-session.md#5-set-up-your-own-team) has it;
+- platoon-harness installed as [Install](../getting-started/install.md) says;
 - a project folder to run it in, with or without a `platoon-harness.toml`: with none, the editor starts one;
 - a terminal, or a browser on this machine or on another that can forward a port to it, as
   [The browser](web.md#open-it) says.
