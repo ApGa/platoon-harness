@@ -372,7 +372,7 @@ writes them. It stays a type, since `model` is a column of every journal's `even
 A payload changes shape only with its `v`, and a fold that reads a field an older payload lacks fills it with what held when that
 payload was written, so a journal from before the change folds as it was meant.
 
-The session id is a constant of the file and is added only at export (planned: see [STATUS](STATUS.md#command-line-platoon_harness_cli)). An op cannot pass `seq`, `version`, `actor`,
+The session id is a constant of the file and is added only at export (deferred: see [STATUS](STATUS.md#command-line-platoon_harness_cli)). An op cannot pass `seq`, `version`, `actor`,
 `wall_time` or the stamps. Its one say in `actor` is `runtime=True`, for what the runtime posts inside someone else's command,
 such as the monitor; it can name nobody else. The kernel takes the rest from cheap state at `emit`:
 
@@ -1778,27 +1778,28 @@ while its sender takes one, until it ends; a dead task offers to add it again, c
 that keeps failing say in their gist what settles them; and a failure of no agent's says that nothing tries it again, and stands
 ([RFC 0064](rfcs/0064-an-act-is-one-form-and-a-read-one-route.md)).
 
-- **TUI.** Textual, in the command line's layer, which `platoon-harness` opens on a terminal and a headless command never
-  imports. It starts a session on a detached runtime and is its guest. One coalescer between the journal and widgets draws at most
-  15 frames a second, dropping frames and never events: a reader with a frame's worth waiting waits for the next, which is how a
-  slow screen is handled. Its timers decide nothing: one paces frames, one looks for a runtime to attach to while it shows history,
-  and one moves the logo's agents and the navigator's glyphs from the roster's state alone, never on history. The transcript is on
-  the Line API, a window of at most 10,000 lines read from the journal a page at a time as the person scrolls, either way, and drawn
-  through an LRU of strips keyed by width. What an agent did in a turn besides what it said is that turn's fold, one line that
-  counts it, failures and what ended unknown among it, and opens on each step. An agent's transcript reads its own streams and every
-  `approval/*`, so its children and its approvals are drawn with no name to look up, and a child's spawn is drawn under the call
-  that made it, by the join in `calls.py`, which the page's Tool activity shares, or where the journal has it, saying it joins no
-  known call. Its turns are drawn cut where `spans` says. Live text follows below, one tail for the agent in view, which goes with
-  the runtime that said it. Unread counts and read mentions come from the person's marks. Untrusted text crosses one `SafeText`
-  boundary, and a lint bans handing a label-like widget anything not visibly `Content`. Approvals never take focus: the dock gets
-  it only from the person's Tab, with no place chosen, and only the person moves its cursor, and an approval's whole ask opens from
-  it, read by its body's ref, before anyone answers it, as the page's card opens it. Every act also takes only keys every terminal
-  delivers, a typed command in the composer or a plain key where nothing is typed, so a chord is a shortcut and never the only way,
-  and no chord decides, stops or spends anything, since a terminal sends Alt and a letter as Esc then that letter. Provenance, who
-  reached whom, search, threads, copying, a channel's tasks, the team editor and replays each open from a typed command, each
-  reading the record and deciding nothing. The team editor's fields, checks and words are `team_editor.py`'s, which the page's
-  editor shares, and a field typed in whose value holds a control a terminal would act on is not changed there, saying why
-  ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md)). [tui.md](how-to/tui.md) is its guide.
+- **TUI.** Textual, in the command line's layer, which `platoon-harness` opens on a terminal and a headless command never imports.
+  It starts a session on a detached runtime and is its guest. One coalescer between the journal and widgets draws at most 15 frames
+  a second, dropping frames and never events: a reader with a frame's worth waiting waits for the next, which is how a slow screen
+  is handled. Its timers decide nothing: one paces frames, one looks for a runtime to attach to while it shows history, and one
+  moves the logo's agents and the navigator's glyphs from the roster's state alone, never on history. The transcript is on the Line
+  API, a window of at most 10,000 lines read from the journal a page at a time as the person scrolls, either way, and drawn through
+  an LRU of strips keyed by width. What an agent did in a turn besides what it said is that turn's fold, one line that counts it,
+  failures and what ended unknown among it, and opens on each step. An agent's transcript reads every `agent/*` stream and every
+  `approval/*`, so its children need no name to be drawn and its approvals and who answered them are, and a child's spawn is drawn
+  under the call that made it, by the join in `calls.py`, which the page's Tool activity shares, or where the journal has it, saying
+  it joins no known call. Its turns are drawn cut where `spans` says. Live text follows below, one tail for the agent in view, which
+  goes with the runtime that said it. Unread counts and read mentions come from the person's marks. Untrusted text crosses one
+  `SafeText` boundary, and a lint bans handing a label-like widget anything not visibly `Content`. Approvals never take focus: the
+  dock gets it only from the person's Tab, with no place chosen, and only the person moves its cursor, and an approval's whole ask
+  opens from it, read by its body's ref, before anyone answers it, as the page's card opens it. Every act also takes only keys every
+  terminal delivers, a typed command in the composer or a plain key where nothing is typed, so a chord is a shortcut and never the
+  only way, and no chord decides, stops or spends anything, since a terminal sends Alt and a letter as Esc then that letter. Its
+  other panels, provenance, who reached whom, search, threads, copying, a channel's tasks, the team editor and replays among them,
+  each open from a typed command or a plain key, as [tui.md](how-to/tui.md), its guide, lists. The team editor's fields, checks and
+  words are `team_editor.py`'s, which the page's editor shares, and a field typed in whose value holds a control a terminal would
+  act on is not changed there, saying why ([RFC
+  0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md)).
 - **Replays.** `Replay`, in the SDK, is a read-only copy of a session, whose journal is the original's through a playhead, made by
   `Kernel.copy` under the root in `replays/`, never in the session's folder, with what estimators had said and the manifest beside
   it; its `session` reads as the runtime does, every event and view, and refuses every write. A live session's replay replays its
@@ -2096,12 +2097,9 @@ class AgentOutcome(Model):
   passes its status on, and a walk cut short, or one that meets an edge to an event no older than its own, makes every row
   `invalid`. The reward is the agents' rows and what no row holds: what nobody's events kept, and what those of an agent that never
   started kept, as one whose launch failed has no start for a row to target. An agent's row is its spans' rows and what it kept in no
-  span, which no span's row holds. Its walk is version 3's, so its agent rows are version 3's on every journal, and where no
-  claimant's event of a claim is reached its rows are version 3's too; where no span took another principal's event those are
-  `propagate@2`'s, whose agent rows were `propagate@1`'s: one name, one function and a version for each, an earlier one reached
-  by pinning an earlier SDK. Citing, and taking, give away all but `retained` of what reaches the event; being cited or taken by
-  a credited span earns credit, broadcasting draws takes, reading in a last turn costs, and a program's task statement taken in a
-  span earns its share for nobody. See
+  span, which no span's row holds. Citing, and taking, give away all but `retained` of what reaches the event; being cited or
+  taken by a credited span earns credit, broadcasting draws takes, reading in a last turn costs, and a program's task statement
+  taken in a span earns its share for nobody. See
   [RFC 0054](rfcs/0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md),
   [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and
   [RFC 0078](rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md).
@@ -2252,8 +2250,7 @@ command line (TOML lines, such as `--set 'budget.usd = 5'`, and `--harness claud
 merge and lists replace. Every problem is reported at once, with did-you-mean. A client sets a team in the project file and
 keeps no layer of its own: the keys a person sets map one to one onto the schema, and are written into the file's own text by
 a format-preserving parser, which `tomllib` reads back, so a person's comments and layout survive and what is written means
-what was set ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md), a
-draft).
+what was set ([RFC 0079](rfcs/0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md)).
 The sanitized resolved form reloads alone, and is refused if it holds the value of a variable an auth profile names. The manifest records it with resolved
 component versions, and schema and protocol versions.
 

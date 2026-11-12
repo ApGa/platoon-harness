@@ -19,7 +19,8 @@ share. A design was reviewed twice, for taste and for safety; the safety review 
 
 - **A ladder of modes, each promising one thing more.** `shared` is the session's checkout. `worktree` is a linked git worktree, locked,
   on a branch of its own. `snapshot` is a repository of its own holding your tree as your git sees it, and `isolated` is a snapshot
-  whose harness an extension confines. This stage builds the first three. `isolated` is refused before any cost, naming why.
+  whose harness an extension confines. This RFC builds the first three, and `isolated` is refused before any cost, naming why,
+  where no extension confines it.
 - **Every name is a path part and a git branch part.** The one name grammar has no `..` and ends in neither `.` nor `.lock`, for every
   principal and session, so no rule depends on the mode. A tool's schema shows a name's letters, as before, and the op holds it to the
   whole grammar, since the exact pattern, which has no lookaround to say it shortly, would cost every request of every agent 3.7 KB.

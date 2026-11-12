@@ -81,4 +81,4 @@ has checked a call's arguments and before the tool runs, with the arguments muta
   reported behind such an input, which exposure then read as `kept`.
 - Pi's source, read and not copied: `AgentSession._handleAgentEvent` emits `message_end` and then appends the entry with no await
   between; `validateToolArguments` clones what a tool is handed; the MCP client's `callTool` sends `_meta` with `progressToken` alone.
-- [compatibility.md](../reference/compatibility.md), pi and Provenance per harness. [Architecture sections 6 and 9.5](../architecture.md).
+- [compatibility.md](../reference/compatibility.md), Provenance per harness. [Architecture sections 6 and 9.5](../architecture.md).
