@@ -116,7 +116,7 @@ def test_an_incompatible_requirement_is_caught_before_import(site):
         "platoon-harness",
         "platoon-harness>=0.1,<0.2",
         "platoon_harness>=0.1",
-        "Platoon.Harness.SDK==0.1.*",
+        "Platoon.Harness==0.1.*",
         "platoon-harness~=0.1.0",
         "platoon-harness!=0.2",
         "platoon-harness<1",
@@ -125,6 +125,7 @@ def test_an_incompatible_requirement_is_caught_before_import(site):
         "platoon-harness[cli]>=0.1",
         "platoon-harness>=9; extra == 'future'",
         "something-else>=9",
+        "platoon-harness-sdk>=9",
     ],
 )
 def test_requirements_this_sdk_meets(site, requirement):
@@ -143,6 +144,7 @@ def test_requirements_this_sdk_meets(site, requirement):
         "platoon-harness>0.1.0",
         "platoon-harness<=0.0.9",
         "platoon-harness>=9 ; python_version >= '3'",
+        "Platoon.Harness>=9",
     ],
 )
 def test_requirements_this_sdk_fails(site, requirement):
