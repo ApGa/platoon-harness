@@ -84,8 +84,8 @@ async def main(model: str) -> None:
 ## Status
 
 Alpha, on Linux alone: nothing has run on macOS. Below 1.0 a minor release may change the Python API, the team file or
-the command line, as [CHANGELOG](CHANGELOG.md) says. [STATUS](docs/STATUS.md) lists what is implemented, tested and
-experimental.
+the command line, as [CHANGELOG](CHANGELOG.md) says. [STATUS](docs/STATUS.md#known-limitations) lists the known
+limitations, and what is implemented, tested and experimental.
 
 ## Learn more
 

@@ -406,6 +406,7 @@ focus takes its own keys before the session's. `^` is Ctrl.
 ## Not built yet
 
 Disabled where a control for it would be, or absent from the palette: image input, harness slash commands, model and
-permission switching, taking over an agent's native terminal, notifications outside the terminal, such as its bell or
-the desktop's, and in provenance credit drawn beside who contributed. [STATUS.md](../STATUS.md) says what each is. A
-session does not fork, since native sessions, worktrees, leases and credentials do not, so no control will offer it.
+permission switching, taking over an agent's native terminal, and notifications outside the terminal, such as its bell
+or the desktop's. [STATUS](../STATUS.md#not-built-yet) says what each is. Provenance draws no credit beside who
+contributed, which STATUS defers, saying why. A session does not fork, since native sessions, worktrees, leases and
+credentials do not, so no control will offer it.

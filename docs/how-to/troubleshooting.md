@@ -142,7 +142,7 @@ filesystem is refused to a live session, with exit 78, as a live journal is not 
 ## A headless run ends at once with exit 4
 
 With no client attached to answer, an approval that would ask ends the run at once with exit 4. In a script or CI,
-answer approvals by a stated policy with `--approvals`, as [the headless quickstart](headless.md#3-run-it) shows.
+answer approvals by a stated policy with `--approvals`, as [Run headless](headless.md#3-run-it) shows.
 
 ## An agent is lost, its report refused, with `***` in it
 
@@ -153,7 +153,7 @@ lost: its input.delivered report was refused: not_found: no offer ***09
 Every value an auth profile hands a harness is masked as `***` wherever it is found in what the harness reports, and a
 value of a character or two, such as a dummy key `1`, is found inside the ids a report names too, so the agent is lost.
 Give each variable the profile names a value of more than a few characters, and run again; this is a known defect, which
-[STATUS](../STATUS.md) records.
+[STATUS](../STATUS.md#known-limitations) records.
 
 ## Still stuck
 
