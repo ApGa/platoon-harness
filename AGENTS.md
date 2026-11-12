@@ -46,7 +46,7 @@ enforces this.
   integration. Say which was run.
 - Public API changes update `tests/public_api.txt`. Generated docs are regenerated, not hand-edited.
 - Public docs, docstrings and fixtures carry no local paths, cluster names, account details or tokens, which a test scans for,
-  and no private notes or process records (rulings, milestones, run numbers, hosts).
+  and no private notes or process records (rulings, milestones, run numbers, hosts), which a test scans the docs for.
 - Every primitive promise in architecture §7 has a test named for it.
 
 ## Commits
