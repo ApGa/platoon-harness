@@ -2,7 +2,11 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-05 |
+| Status | Accepted, 2026-11-05; amended by [RFC 0083](0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md) (a draft) |
+
+**Amended by [RFC 0083](0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md)**, a
+draft. RFC 0083 proposes pinning a result made from an installation whose every path is read-only to that
+installation, in place of the host.
 
 ## Summary
 

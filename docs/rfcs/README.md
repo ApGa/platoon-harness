@@ -57,7 +57,7 @@ amended or extended an RFC.
 | [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) | A commit cites what informed it by its ref | Accepted |
 | [0042](0042-agents-are-asked-to-cite-by-their-template.md) | Agents are asked to cite by their template, on by default | Accepted |
 | [0043](0043-a-person-follows-provenance-from-where-they-read.md) | A person follows provenance from where they read | Accepted; amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
-| [0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) | A level is earned on the machine that runs it | Accepted |
+| [0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) | A level is earned on the machine that runs it | Accepted; amended by [RFC 0083](0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md) (a draft) |
 | [0045](0045-an-agent-s-process-is-not-its-identity.md) | An agent's process is not its identity | Accepted |
 | [0046](0046-a-daemon-that-keeps-failing-needs-a-person.md) | A daemon that keeps failing needs a person | Accepted |
 | [0047](0047-an-empty-read-names-what-was-already-handed-over.md) | An empty read names what was already handed over | Accepted |
@@ -96,6 +96,7 @@ amended or extended an RFC.
 | [0080](0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md) | A replay is a read-only copy of a session's record through its playhead | Accepted |
 | [0081](0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md) | platoon-harness is one distribution, with the command line as its cli extra | Accepted |
 | [0082](0082-a-launch-in-the-environment-keeps-the-harness-s-own-tools.md) | A launch in the environment keeps the harness's own tools | Draft |
+| [0083](0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md) | A result made from a read-only installation speaks for it wherever it is mounted | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.

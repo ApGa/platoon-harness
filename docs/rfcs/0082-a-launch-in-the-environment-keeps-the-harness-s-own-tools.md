@@ -13,19 +13,25 @@
 
 A training system that runs a whole session inside its environment's own sandbox says so on each agent's gateway,
 `Gateway.in_environment`, and that launch keeps the harness's own tools: OpenHands its terminal, file editor and task
-tracker, pi its `read`, `bash`, `edit` and `write`, and the scripted harness its `shell`. The rest of RFC 0053's sealed
-launch stands: the gateway's model on its bearer, nothing of the user's setup or the project's instructions, no
-retries, each compaction labelled as it is made, and no MCP server but ours and the environment's. Only an authority
-gives a gateway, so nothing a team, a role, a person or the command line names can keep a harness's own tools on one,
-and a session runs in one place, so the host refuses an admission whose gateway says otherwise than the first. A driver
-that has the launch declares `in_environment`, and the host refuses such a gateway to any other before that agent's
-harness launches; the start records the launch, and `trainable` stands on one more check,
+tracker, pi its `read`, `bash`, `edit` and `write`, and the scripted harness its `shell`. Where the gateway names the
+`PATH` the environment gives its own commands, the commands they run get it, behind the agent's folder that holds `ph`
+alone, so a task's `python3` or `node` is the image's and not that of the toolchain the harness runs from. The rest of
+RFC 0053's sealed launch stands: the gateway's model on its bearer, nothing of the user's setup or the project's
+instructions, no retries, each compaction labelled as it is made, and no MCP server but ours and the environment's.
+Only an authority gives a gateway, so nothing a team, a role, a person or the command line names can keep a harness's
+own tools on one, and a session runs in one place, so the host refuses an admission whose gateway says otherwise than
+the first. A driver that has the launch declares `in_environment`, and the host refuses such a gateway to any other
+before that agent's harness launches; the start records the launch, and `trainable` stands on one more check,
 `own_tools_in_first_request_in_the_environment`. What those tools do is in the record only as the harness reports it.
 The SDK cannot see where it runs, so the word is the authority's to keep true. Every harness, the runtime and whatever
 the model runs share one user there, as on any session whose agents have a shell, so a command can read any agent's
-bearer and write the journal. The host masks every credential the runtime has given a harness in every report, so a
-bearer a command prints stays out of the journal, though not out of a harness's own transcript, which the export holds;
-and a call no harness reported has no id in a record no command altered. A user for each harness is left open.
+bearer, write the journal and write into any harness's pipes, through which it can report as any agent. The host masks
+every credential the runtime has given a harness in every report, so a bearer a command prints stays out of the
+journal, though not out of a harness's own transcript, which the export holds; and a call no harness reported has no id
+in a session whose journal and harness pipes no command wrote. Nothing here detects a command that wrote them, so a
+session there is for agents of one policy only. One user per sandbox is the design, and `trainable` asks nothing more
+of it; a runtime outside the sandbox, a user for each harness and a sandbox for each agent are deferred, each until a
+need of its own (section 8).
 
 ## Motivation
 
@@ -88,6 +94,7 @@ class Gateway(Model):
     tools: str | None = None
     compaction_headers: Mapping[str, str] = {}
     in_environment: bool = False  # the session runs in the environment, on the machine its tools act on
+    environment_path: str | None = None  # there, the PATH the environment gives its own commands (section 2)
 ```
 
 **The rule: a gateway admission launches sealed, and keeps its harness's own tools only when its gateway says the
@@ -111,12 +118,12 @@ harness launches, and the agents admitted before it run on.
 **A wire frame names the word only where it is true.** Today a frame dumps the gateway with every field, defaults among
 them (`drivers/wire.py:54-55`), so every gateway frame would carry `"in_environment": false`, which a program built on
 an earlier SDK refuses, as a model refuses a field it does not declare (`schema.py:68`). So the frame leaves
-`in_environment` out where it is false and names every other field as now, and a program built on an earlier SDK, or
-one in another language that reads today's frame, takes every frame it took before, unchanged. It never meets a gateway
-in the environment: it cannot declare the launch, and the host refuses it such a gateway first (section 2). In the
-other direction nothing changes: a program describes itself with every field (`drivers/wire.py:231-233`), so a runtime
-of an earlier SDK refuses the description of a program built on this one, as it refuses any field added since, saying
-the program did not describe itself (`drivers/wire.py:115-124`).
+`in_environment` out where it is false, and `environment_path` where it is None, and names every other field as now, and
+a program built on an earlier SDK, or one in another language that reads today's frame, takes every frame it took
+before, unchanged. It never meets a gateway in the environment: it cannot declare the launch, and the host refuses it
+such a gateway first (section 2). In the other direction nothing changes: a program describes itself with every field
+(`drivers/wire.py:231-233`), so a runtime of an earlier SDK refuses the description of a program built on this one, as
+it refuses any field added since, saying the program did not describe itself (`drivers/wire.py:115-124`).
 
 The SDK cannot check the word. A gateway that says it of a session outside the environment gives that session's
 harnesses their own tools wherever it runs. Keeping it true is the authority's, as its tools' URL and its model are, and
@@ -145,9 +152,9 @@ role's driver declares in `describe`.
 | Driver | Its launch in the environment | What it needs there |
 |---|---|---|
 | OpenHands | Its coding tools, as on a key: the terminal, run as a subprocess (`drivers/openhands/agent.py:148`), the file editor and the task tracker, beside `finish`, `think`, ours and the environment's. Project skills stay off (`drivers/openhands/agent.py:165`) and its condenser sends the compaction headers, as sealed | The toolchain's Python with the `openhands` extra, as the worker is the runtime's own interpreter (`drivers/openhands/__init__.py:14`). `bash` on `PATH` and a pseudoterminal, which its terminal opens (`openhands-tools@1.59.0:openhands/tools/terminal/terminal/subprocess_terminal.py`). No tmux: the folder its driver gives tmux (`drivers/openhands/__init__.py:42-46`) is for the terminals of its own agents, which a gateway refuses (`drivers/openhands/worker.py:116-117`) |
-| pi | The sealed argv without `--no-builtin-tools`, so pi's default tools, `read`, `bash`, `edit` and `write` (`@earendil-works/pi-coding-agent@1.5.0:dist/core/settings-manager.js:35`), beside ours and the environment's, with its own agent directory, no context files, skills, templates, themes or project files, and `--offline` | Node and pi's `node_modules`, which `DriverInfo.installed` names (`drivers/pi.py:170-175`), so a toolchain must hold them. A shell: pi runs `/bin/bash`, else `bash` on `PATH` as `which` finds it, else `sh` (`dist/utils/shell.js:54-67`, `111-119`). `rg` and `fd` only for `grep` and `find`, which pi leaves off by default and, offline, never downloads (`dist/main.js:455-457`, `dist/utils/tools-manager.js:296-299`) |
+| pi | The sealed argv without `--no-builtin-tools`, so pi's default tools, `read`, `bash`, `edit` and `write` (`@earendil-works/pi-coding-agent@1.5.0:dist/core/settings-manager.js:35`), beside ours and the environment's, with its own agent directory, no context files, skills, templates, themes or project files, and `--offline` | Node and pi's `node_modules`, which `DriverInfo.installed` names (`drivers/pi.py:170-175`), so a toolchain must hold them, first on the runtime's `PATH`, where the driver finds `pi` and pi's `#!/usr/bin/env node` finds Node (`dist/bundle/cli.js:1`); and from the image, the libraries that Node loads ([RFC 0083](0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md)). A shell: pi runs `/bin/bash`, else `bash` on `PATH` as `which` finds it, else `sh` (`dist/utils/shell.js:54-67`, `111-119`). `rg` and `fd` only for `grep` and `find`, which pi leaves off by default and, offline, never downloads (`dist/main.js:455-457`, `dist/utils/tools-manager.js:296-299`) |
 | The scripted harness, and the conformance wire program that serves it | Its `shell`, shown in each request, asked about before each call and run in `spec.cwd` once allowed | Nothing |
-| A wire program | Its own, if it declares `in_environment` | What it says |
+| A wire program | Its own, if it declares `in_environment`, with its commands on `environment_path`, which no check proves (section 6) | What it says |
 | `claude`, `codex`, `exec`, `acp`, `opencode` | Refused, as every gateway is: none has a sealed launch | |
 
 OpenHands' launch needs only what a toolchain of the SDK and the image's `bash` give, so it comes first; pi's needs Node
@@ -169,6 +176,33 @@ that only read (`drivers/pi_extension.js:45-50`), so for `bash`, `edit` and `wri
 `shell`. A trainable session answers by its policy, `allow` or `deny`, as nobody answers `ask` in a rollout
 (`team.py:527-528`), and the record keeps each ask, masked, up to 64 KiB, with how much it cut
 (`primitives/approvals.py:14`, `113-116`), and its verdict.
+
+**The `PATH` a command gets.** A training system that runs a harness from its toolchain puts the toolchain's programs
+first on the runtime's `PATH`, where the SDK finds a harness and what it runs (`drivers/pi.py:170-175`). Each harness
+inherits that `PATH` behind the agent's `bin`, which holds `ph` alone (`drivers/env.py:42-63`,
+`runtime/host.py:598-605`), and hands it on to every command: pi's `bash` hands a command pi's own environment
+(`@earendil-works/pi-coding-agent@1.5.0:dist/utils/shell.js:147-158`), and OpenHands' terminal its worker's
+(`openhands-tools@1.59.0:openhands/tools/terminal/env.py:39-46`). A command would then run the toolchain's `node` or
+`python3` in place of the task's. So on a launch in the environment the model's commands run on the agent's `bin`
+followed by the `PATH` the environment gives its own commands, which only the training system knows and its gateway
+names as `environment_path`, while the harness keeps the runtime's, on which it found what it runs. `ph`, a script of
+the standard library alone, then runs on the image's `python3`, where the image has one. `command_path(spec)`, in
+`platoon_harness.drivers.env`, gives a driver that `PATH`, or None where a command gets its harness's own, and each
+driver here hands it on:
+
+- pi's sealed settings (`drivers/pi.py:112-113`, `320-328`) gain `shellCommandPrefix`, which pi puts on a line of its
+  own before every command its `bash` runs (`dist/core/agent-session.js:2983-2992`, `dist/core/tools/bash.js:173`):
+  an `export` of that `PATH`, the agent's `bin` and `environment_path`, quoted;
+- OpenHands' terminal takes the variables its shell starts with over the worker's
+  (`openhands-tools@1.59.0:openhands/tools/terminal/definition.py:286-316`), and the driver gives it that `PATH`
+  (`drivers/openhands/agent.py:147-153`). Its shell is an interactive `bash`, so its commands start on that `PATH`, and
+  the startup files of the image's `bash` may change it after
+  (`openhands-tools@1.59.0:openhands/tools/terminal/terminal/subprocess_terminal.py`);
+- the scripted harness runs its `shell` on that `PATH`.
+
+A gateway in the environment that names none leaves a command the harness's own `PATH`, as on a key. `environment_path`
+is refused empty, as it names no folder, and on a gateway that does not say it runs in the environment, as a setting
+nothing carries out ([RFC 0048](0048-a-setting-nothing-carries-out-is-refused.md)).
 
 ### 3. What the session records of the harness's own tools
 
@@ -261,7 +295,8 @@ It proves the launch keeps the harness's own shell, and keeps the project's inst
 of a sealed launch. That the shell runs, in the agent's workspace, is what the shell checks under `operational` prove of
 the same tool on a launch on a key (`runs_in_its_workspace`, `stop_ends_a_running_tool` and the approval checks). What
 else the launch keeps and keeps out is how its driver builds it, as for a sealed launch, which its slow tests read and
-no check proves.
+no check proves. So is the `PATH` its commands run on (section 2): the SDK's drivers' tests prove theirs, and a wire
+program that declares the launch answers for its own.
 
 `trainable` stands on it two ways. At a launch in the environment it must have passed, beside the five checks
 `trainable` stands on now. For any launch of a driver that declares `in_environment`, it must not have failed, as a
@@ -277,7 +312,9 @@ Each promise has a test named for it:
 | Nothing but a gateway keeps a harness's own tools on a sealed launch | `tests/unit/runtime/test_authority.py::test_only_a_gateway_keeps_a_harness_s_own_tools_on_a_sealed_launch` |
 | A session's gateways say one place, and an admission whose gateway says another is refused before its harness launches | `tests/unit/runtime/test_authority.py::test_an_admission_whose_gateway_says_another_place_than_the_first_is_refused` |
 | A gateway in the environment goes to no driver that does not declare a launch there, which is refused before its harness launches | `tests/unit/runtime/test_authority.py::test_a_driver_with_no_launch_in_the_environment_refuses_a_gateway_in_it` |
-| A wire frame names `in_environment` only where it is true | `tests/unit/drivers/test_wire.py::test_a_wire_frame_names_a_gateway_in_the_environment_only_where_it_is_one` |
+| A wire frame names `in_environment` only where it is true, and `environment_path` only where it is given | `tests/unit/drivers/test_wire.py::test_a_wire_frame_names_in_environment_and_environment_path_only_where_given` |
+| `environment_path` is refused empty, and on a gateway that does not say it runs in the environment | `tests/unit/runtime/test_authority.py::test_an_environment_path_outside_the_environment_is_refused` |
+| On a launch in the environment the model's commands run on the agent's `bin` and the gateway's `environment_path`, and the harness on the runtime's `PATH`, on each driver that has the launch | `tests/unit/drivers/test_sealed.py::test_in_the_environment_a_command_runs_on_the_environment_s_path` |
 | The start records the launch | `tests/unit/runtime/test_host.py::test_a_launch_in_the_environment_is_recorded_on_its_start` |
 | Every report is masked of every credential the runtime has given a harness, an ended agent's among them, whichever agent's harness said it | `tests/unit/runtime/test_host.py::test_every_report_is_masked_of_every_credential_the_runtime_has_given_a_harness` |
 | A value too short to be a credential is masked in the reports of the agent it was handed to alone | `tests/unit/runtime/test_host.py::test_a_value_too_short_to_be_a_credential_is_masked_in_its_own_agent_s_reports_alone` |
@@ -343,20 +380,33 @@ token there (`drivers/env.py:58-63`). So, on a launch in the environment:
 
 ### 8. What it does not do
 
-**One sandbox per agent.** Every agent of a session shares the one sandbox the session runs in, its files and its
-processes, as the SDK runs each harness as a process on its own machine
-([RFC 0031](0031-a-workspace-is-a-place-git-already-knows.md): "The core uses git and the filesystem alone"). A sandbox
-per agent needs a place an agent runs apart from the runtime's: a launch through the environment's own exec, the
-runtime's process tracking and git across that boundary, and a route from it to our tool server, which is on loopback
-([RFC 0034](0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md) rejected a network namespace for
-an agent: "It cuts the tool plane, which is on loopback"). That changes the driver contract, and nobody has asked for it
-yet.
+**Isolation within the sandbox.** One user per sandbox is the design: every agent of a session shares the one sandbox
+the session runs in, its files, its processes and its user, as the SDK runs each harness as a process of its own on its
+own machine ([RFC 0031](0031-a-workspace-is-a-place-git-already-knows.md): "The core uses git and the filesystem
+alone"). A start there says `cooperative`, every report is masked of every credential the runtime has given a harness
+(section 7), and `trainable` asks nothing more of the user an agent runs as: what trains on such a record is the
+training system's to decide, and a session there is for agents of one policy only (section 7). Three ways to keep more
+from the model's commands are deferred, each until its own need:
 
-**A user for each harness.** Running each harness as a user of its own would keep each agent's credentials from the
-others' commands, and would change how a harness launches, how the runtime stops and reaps processes of other users,
-who owns each agent's folder, and what assurance a start records. It needs a sandbox user that can switch users, which
-Docker's root can, Singularity's only under `fakeroot`, and Enroot's cannot, as Platoon's sandbox providers say
-(Evidence). Open question 2 asks whether to.
+- **A runtime outside the sandbox**, each harness launched into it, keeps the journal from the commands, but not the
+  bearers, which each harness holds in the sandbox, nor the harnesses' pipes, whose ends there each harness holds, so a
+  command could still report as any harness. It needs a place an agent runs apart from the runtime's: a launch through
+  the environment's own exec, the runtime's process tracking and git across that boundary, and a route from it to our
+  tool server, which is on loopback
+  ([RFC 0034](0034-isolation-is-an-extension-s-and-the-runtime-s-git-runs-inside-it.md) rejected a network namespace
+  for an agent: "It cuts the tool plane, which is on loopback"). That changes the driver contract. A record no command
+  can write would need a user for each harness too, which keeps each harness's pipes from the others' commands, though
+  not from its own, which run as it does. Revisit both together, with a way to keep a harness's pipes from its own
+  commands, when a training system must train on such a record.
+- **A user for each harness**, and another for the runtime, keeps each agent's credentials and its harness's pipes, and
+  the journal, from the others' commands, and changes how a harness launches, how the runtime stops and reaps processes
+  of other users, who owns each agent's folder, and what assurance a start records. It needs a sandbox user that can
+  switch users, which Docker's root can, Singularity's only under `fakeroot`, and Enroot's cannot, as Platoon's sandbox
+  providers say (Evidence). Revisit it when a training system must keep one agent's credentials and pipes from
+  another's commands, as one that trains several policies in one session must.
+- **A sandbox for each agent** keeps each agent's processes and credentials from the others', at a sandbox's start per
+  agent and a workspace that every agent's sandbox shares, and needs a runtime outside the sandbox first. Revisit it
+  when a session's agents outgrow one sandbox.
 
 **A task's own MCP servers.** A launch in the environment admits no MCP server but ours and the environment's, so a
 task's own servers, `stdio` ones among them, reach no agent. Handing a launch more would need a field through which an
@@ -376,6 +426,11 @@ authority gives them, with a check of its own, in an RFC of its own.
 - **The image holds the shell.** A toolchain holds the SDK and the harness, and the task's image holds the shell they
   run: OpenHands' terminal cannot start where the image has no `bash`, so its agent's start fails, and pi falls back to
   `sh` (section 2).
+- **A result that speaks in the sandbox.** `trainable` needs a kept result that speaks for the harness where it runs,
+  and a fresh root in the sandbox holds none.
+  [RFC 0083](0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md) pins a result
+  made from a read-only installation to that installation in place of its host, and has the training system make it
+  once for each build of its toolchain and place it in each fresh root.
 
 ## Alternatives
 
@@ -391,11 +446,13 @@ authority gives them, with a check of its own, in an RFC of its own.
 | Prove the session shares the environment's machine, as by a file one of the environment's tools writes and the runtime reads back | An environment's tools are its own, and no tool the SDK could count on to write a file is among every environment's |
 | Every sealed driver has a launch in the environment, with no capability | A sealed wire program built on an earlier SDK refuses the frame, so its check would fail and leave every trainable launch of it unmet; and drivers gain the launch one at a time |
 | A tool's name on `Item` | One more field every driver fills and every `item.recorded` carries, for the name the gist of every driver with this launch already starts with; a reader still tells ours from the environment's and the harness's own by the names each harness gives them |
-| Keep the bearer and our token out of what pi's `bash` hands a command | pi needs the bearer in its environment for its whole life, as our extension reads it there at each compaction (`drivers/pi_extension.js:82`), and its `bash` hands a command that environment (section 7), so it would take a `bash` of ours in place of pi's. The OpenHands worker drops them once read, which keeps them only from what its terminal is handed: at one user `/proc/<pid>/environ` holds them still in either |
+| Keep the bearer and our token out of what pi's `bash` hands a command | pi needs the bearer in its environment for its whole life, as our extension reads it there at each compaction (`drivers/pi_extension.js:82`), and its `bash` hands a command that environment (section 7). The prefix that sets a command's `PATH` (section 2) could unset them there, as the OpenHands worker drops them once read, which keeps them only from what a command is handed: at one user `/proc/<pid>/environ` holds them still in either |
+| The harness's own `PATH` for the model's commands | A training system puts its toolchain first on it, so that the SDK finds the harness, and a command would run the toolchain's `node` or `python3` in place of the task's |
+| The SDK works the environment's `PATH` out from the runtime's | Nothing tells a toolchain's folder from the image's: a harness the image holds read-only names folders, such as `/usr/bin`, that the image's own commands need |
+| A `pi` launcher that runs the toolchain's Node by its path, so that Node is on no `PATH` | The SDK would promise nothing of a command's `PATH`, which would still hold whatever else a training system puts first on the runtime's; and `DriverInfo.installed`, which finds Node on the `PATH` (`drivers/pi.py:170-175`), would have to find it through the launcher |
 | Mask only each agent's own credentials in its reports, as now | Another agent's bearer that a command prints would reach the journal in the clear |
 | `isolated` workspaces in the sandbox | An isolated workspace is a snapshot of its own, not the task's tree, which a verifier reads, and it rests on user namespaces a container can withhold |
-| One sandbox per agent | Section 8: a place an agent runs apart from the runtime's, which changes the driver contract, and nobody has asked for |
-| A user for each harness | Section 8: a sandbox user that can switch users, which not every sandbox has, and a launch, process control and an assurance of its own |
+| A runtime outside the sandbox, a user for each harness, or a sandbox for each agent | Deferred, each until the need section 8 names for it: one user per sandbox is the design |
 | Doing nothing | Agents act on the task only through the environment's server, and a harness runs one way alone and another in a team |
 
 ## Consequences
@@ -403,9 +460,14 @@ authority gives them, with a check of its own, in an RFC of its own.
 - A training system that runs a session in its environment's sandbox gets agents that use their harness's own tools on
   the task, beside ours and the environment's, trainable as a sealed launch is.
 - A gateway that does not say it launches sealed as before, and nothing a person runs changes.
-- `Gateway`, `Capabilities` and `Profile` each gain `in_environment`, which `tests/public_api.txt` lists through
-  `Gateway`'s signature, so the Python reference is made again, and conformance gains a check. The team file, the
-  command line and the journal's events stay as they are; a start's `verified` and `declared` carry one more field.
+- `Gateway` gains `in_environment` and `environment_path`, `Capabilities` and `Profile` gain `in_environment`, and
+  `platoon_harness.drivers.env` gains `command_path`, the `PATH` a driver gives the model's commands on a launch in the
+  environment (section 2); `tests/public_api.txt` lists `Gateway`'s through its signature, and `command_path`, so the
+  Python reference is made again, and conformance gains a check. The team file, the command line and the journal's
+  events stay as they are; a start's `verified` and `declared` carry one more field.
+- On a launch in the environment whose gateway names the `PATH` the environment gives its own commands, the model's
+  commands run on it, behind the agent's `bin`, so a task's `python3` or `node` is the image's, and a toolchain the
+  training system puts first on the runtime's `PATH` stays off theirs.
 - A session's gateways say one place, and an admission whose gateway says another is refused before its harness
   launches.
 - Each tool of a harness's own that asks costs an approval through the session's policy, whose ask the journal keeps,
@@ -424,9 +486,10 @@ authority gives them, with a check of its own, in an RFC of its own.
   command wrote.
 - The scripted harness shows its `shell` on a launch in the environment and reports it as pi and OpenHands report their
   own tools; on a key it stays as it is.
-- A wire frame names `in_environment` only where it is true, and every other field as now, so a wire program built on
-  an earlier SDK, or one in another language, takes every frame it took before, unchanged. A runtime of an earlier SDK
-  refuses the description of a program built on this one, as for any field added since.
+- A wire frame names `in_environment` only where it is true and `environment_path` only where it is given, and every
+  other field as now, so a wire program built on an earlier SDK, or one in another language, takes every frame it took
+  before, unchanged. A runtime of an earlier SDK refuses the description of a program built on this one, as for any
+  field added since.
 - Unknown: how training on a harness's own tools compares with training on the environment's tools alone, which nothing
   has measured.
 
@@ -434,24 +497,21 @@ authority gives them, with a check of its own, in an RFC of its own.
 
 | Milestone | Scope | Exit check | Pull requests |
 |---|---|---|---|
-| M1 the word | `Gateway.in_environment`, `Capabilities.in_environment` and `Profile.in_environment`; one place for a session; the host's refusal; the start's record; a wire frame that names `in_environment` only where it is true; every credential the runtime has given a harness masked in every report; architecture sections 9, 14 and 15, the training guide and the security guide's Redaction section | `test_only_a_gateway_keeps_a_harness_s_own_tools_on_a_sealed_launch`, `test_an_admission_whose_gateway_says_another_place_than_the_first_is_refused`, `test_a_driver_with_no_launch_in_the_environment_refuses_a_gateway_in_it`, `test_a_wire_frame_names_a_gateway_in_the_environment_only_where_it_is_one`, `test_a_launch_in_the_environment_is_recorded_on_its_start`, `test_every_report_is_masked_of_every_credential_the_runtime_has_given_a_harness` | |
+| M1 the word | `Gateway.in_environment`, `Capabilities.in_environment` and `Profile.in_environment`; `Gateway.environment_path`, refused empty and outside the environment; one place for a session; the host's refusal; the start's record; a wire frame that names `in_environment` and `environment_path` only where they are given; every credential the runtime has given a harness masked in every report; architecture sections 9, 14 and 15, the training guide and the security guide | `test_only_a_gateway_keeps_a_harness_s_own_tools_on_a_sealed_launch`, `test_an_admission_whose_gateway_says_another_place_than_the_first_is_refused`, `test_a_driver_with_no_launch_in_the_environment_refuses_a_gateway_in_it`, `test_a_wire_frame_names_in_environment_and_environment_path_only_where_given`, `test_an_environment_path_outside_the_environment_is_refused`, `test_a_launch_in_the_environment_is_recorded_on_its_start`, `test_every_report_is_masked_of_every_credential_the_runtime_has_given_a_harness` | |
 | M2 the check | `own_tools_in_first_request_in_the_environment`, and what `trainable` stands on | `test_trainable_in_the_environment_stands_on_its_own_tools_check`, `test_a_failed_launch_in_the_environment_leaves_trainable_unmet_everywhere`, `test_a_launch_in_the_environment_that_shows_no_shell_of_its_own_fails_its_check` | |
-| M3 the scripted harness | Its `shell` on a gateway in the environment, shown, asked about and reported as section 2 says; a tool of ours named `shell` refused there; the conformance wire program | `test_a_sealed_launch_keeps_the_harness_s_own_tools_only_on_a_gateway_in_the_environment` on the scripted harness, `test_in_the_environment_the_scripted_harness_shows_and_reports_its_shell`, `test_in_the_environment_a_tool_of_ours_named_shell_is_refused_at_start`, `test_a_harness_s_own_tool_is_recorded_as_reported_and_joined_to_no_call_it_did_not_name`, `test_a_call_a_command_makes_on_a_bearer_it_read_has_no_id_in_the_record`, and the fast pass of the contract test | |
-| M4 OpenHands | Its coding tools on a gateway in the environment | The slow `tests/integration/test_openhands.py`, its check passing the new one, and the contract test on OpenHands | |
-| M5 pi | Its default tools on a gateway in the environment | The slow `tests/integration/test_pi.py`, its check passing the new one, and the contract test on pi | |
+| M3 the scripted harness | Its `shell` on a gateway in the environment, shown, asked about, run on the environment's `PATH`, which `command_path` gives, and reported as section 2 says; a tool of ours named `shell` refused there; the conformance wire program | `test_a_sealed_launch_keeps_the_harness_s_own_tools_only_on_a_gateway_in_the_environment` and `test_in_the_environment_a_command_runs_on_the_environment_s_path` on the scripted harness, `test_in_the_environment_the_scripted_harness_shows_and_reports_its_shell`, `test_in_the_environment_a_tool_of_ours_named_shell_is_refused_at_start`, `test_a_harness_s_own_tool_is_recorded_as_reported_and_joined_to_no_call_it_did_not_name`, `test_a_call_a_command_makes_on_a_bearer_it_read_has_no_id_in_the_record`, and the fast pass of the contract test | |
+| M4 OpenHands | Its coding tools on a gateway in the environment, its terminal on the environment's `PATH` | The slow `tests/integration/test_openhands.py`, its check passing the new one, `test_in_the_environment_a_command_runs_on_the_environment_s_path` on OpenHands, and the contract test on OpenHands | |
+| M5 pi | Its default tools on a gateway in the environment, its commands on the environment's `PATH` through its settings' prefix while pi runs on Node and its packages first on the runtime's `PATH` | The slow `tests/integration/test_pi.py`, its check passing the new one, `test_in_the_environment_a_command_runs_on_the_environment_s_path` on pi, and the contract test on pi | |
 
 ## Open questions
 
 1. **The project's instructions in the environment.** Open. Today: kept out of the prompt, as on a sealed launch, so an
    `AGENTS.md` in the task's tree reaches no agent's prompt, though an agent can read it with its own tools. A training
-   system that wants them gives them in the task. The maintainers decide before M3.
-2. **A user for each harness, and what `trainable` asks of the user an agent runs as.** Open. Today: nothing more than
-   now. Every process in the sandbox runs as one user, the start says `cooperative`, every report is masked of every
-   credential the runtime has given a harness, and a training system decides what trains. A user for each harness
-   (section 8) would keep each agent's credentials from the others' commands where the sandbox's user can switch users,
-   and needs an RFC of its own. The maintainers decide before M2, which sets what `trainable` stands on.
-3. **pi's bearer in what its `bash` hands a command.** Open. Today: left there, as pi needs it in its environment
-   (Alternatives), and masked in every report. The maintainers decide before M5.
+   system that wants them gives them in the task. M3 to M5 were built with this default, and no decision is recorded.
+2. **pi's bearer in what its `bash` hands a command.** Open. Today: left there, as pi needs it in its environment
+   (Alternatives), and masked in every report. The prefix that sets a command's `PATH` (section 2) could unset it
+   there, as the OpenHands worker drops it, though `/proc/<pid>/environ` still holds it. M5 was built with this
+   default, and no decision is recorded.
 
 ## Evidence
 
@@ -472,17 +532,21 @@ authority gives them, with a check of its own, in an RFC of its own.
   `bash` on `PATH` with `shutil.which`, fails without one, and opens a pseudoterminal;
   `openhands-sdk@1.59.0:openhands/sdk/agent/agent.py`, which asks nothing of a lone `finish` or `think`;
   `openhands/sdk/agent/base.py`, which refuses two tools of one name; `openhands/sdk/conversation/event_store.py`, which
-  keeps each event of a conversation, a command's output among them, as a file of its own where it persists; and
+  keeps each event of a conversation, a command's output among them, as a file of its own where it persists;
   `openhands/sdk/subagent/registry.py`, which gives each tool of a built-in agent no parameters, so its terminal is of
   no set kind, which `openhands-tools@1.59.0:openhands/tools/terminal/terminal/factory.py` makes tmux where tmux is
-  installed.
-- pi 1.5.0's own modules, read in its published package and not run, whose `pi` command runs a bundle of the same
-  code, `dist/bundle/`: `@earendil-works/pi-coding-agent@1.5.0:dist/core/settings-manager.js:35`, whose default tools
-  are `read`, `bash`, `edit` and `write`; `dist/utils/shell.js:54-67` and `111-119`, which runs `/bin/bash`, else `bash`
-  on `PATH` as `which` finds it, else `sh`; `dist/core/tools/bash.js:135-161`, which by default hands a command pi's
-  environment with five `PI_*` variables set from its session; `dist/config.js:546-547`, which keeps its sessions in
-  its agent directory; and `dist/main.js:455-457` with `dist/utils/tools-manager.js:296-299`, by which `--offline`
-  downloads no `rg` or `fd`, which, in the RPC mode the driver runs, only its `grep` and `find` fetch
+  installed; and `openhands-tools@1.59.0:openhands/tools/terminal/definition.py:286-316`, whose terminal takes the
+  variables its shell starts with over the worker's environment, which `openhands/tools/terminal/env.py:39-46` copies.
+- pi 1.5.0's own modules, read in its published package and not run, whose `pi` command runs a bundle of the same code,
+  `dist/bundle/`: `@earendil-works/pi-coding-agent@1.5.0:dist/core/settings-manager.js:35`, whose default tools are
+  `read`, `bash`, `edit` and `write`; `dist/utils/shell.js:54-67` and `111-119`, which runs `/bin/bash`, else `bash` on
+  `PATH` as `which` finds it, else `sh`; `dist/core/tools/bash.js:135-161`, which by default hands a command pi's
+  environment with five `PI_*` variables set from its session, and `dist/utils/shell.js:147-158`, which puts pi's agent
+  folder's `bin` first on that `PATH`; `dist/core/agent-session.js:2983-2992` with `dist/core/tools/bash.js:173`, by
+  which the setting `shellCommandPrefix` goes on a line of its own before every command its `bash` runs;
+  `dist/bundle/cli.js:1`, `#!/usr/bin/env node`, so pi runs on the Node `PATH` finds; `dist/config.js:546-547`, which
+  keeps its sessions in its agent directory; and `dist/main.js:455-457` with `dist/utils/tools-manager.js:296-299`, by
+  which `--offline` downloads no `rg` or `fd`, which, in the RPC mode the driver runs, only its `grep` and `find` fetch
   (`dist/core/tools/grep.js:52`, `dist/core/tools/find.js:119`).
 - Platoon's own code at `411cfe55ea45`: `platoon@411cfe55ea45:platoon/harness/builtin/specs/openhands.toml` runs one
   OpenHands agent from a read-only toolchain inside the task sandbox, a toolchain whose lock,
