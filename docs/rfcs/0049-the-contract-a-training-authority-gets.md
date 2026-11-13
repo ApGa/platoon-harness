@@ -2,7 +2,11 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-05 |
+| Status | Accepted, 2026-11-05; extended by [RFC 0082](0082-a-launch-in-the-environment-keeps-the-harness-s-own-tools.md) (a draft) |
+
+**Extended by [RFC 0082](0082-a-launch-in-the-environment-keeps-the-harness-s-own-tools.md)**, a draft. RFC 0082
+proposes a `Gateway` field, `in_environment`, by which an authority says its session runs in the environment, so that
+its launch keeps the harness's own tools.
 
 ## Summary
 
