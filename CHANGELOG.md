@@ -23,6 +23,29 @@ without a leading underscore that a class it lists defines; nothing else is, and
   to run lies on a read-only mount, its conformance result names those paths, and speaks for an agent whose harness runs
   from them, read-only, on any host, as in a training system's sandbox; a level earned from one made on another host
   says where it was made, and so does `doctor` ([Training on sessions](docs/extending/training.md#start-each-rollouts-session)).
+- **Every report is masked of every credential the runtime has given a harness,** an ended agent's among them, whichever
+  agent's harness says it, as a command one agent runs can read another's; before, a harness's words were masked of its
+  own alone ([Security](docs/security.md#redaction)). So each value of eight characters or more that an auth profile
+  hands a harness is masked in every agent's words and in the ids they name, one that is no secret, such as a base URL,
+  among them. A shorter value is too short to be any provider's key, and is masked in its own agent's words alone, as
+  before, so it loses no other agent
+  ([Troubleshooting](docs/how-to/troubleshooting.md#an-agent-is-lost-its-report-refused-with--in-it)).
+- **Two admissions under way at once can no longer share a gateway's bearer.** The second was checked while the first
+  waited for its agent's credential, before the first kept its bearer, so both could be admitted on one bearer, whose
+  calls then went to no one agent; the second is now refused, as one made after the first is.
+- **`DriverLink` takes the redactor of its agent's reports, `redact`, after `info`, and `in_environment` and
+  `installation` by keyword, each required,** so code that makes one passes them; `Redactor.add` masks more secrets
+  from then on.
+- **A wire program served by 0.2.0's `serve` describes `capabilities.in_environment`,** which a runtime of 0.1.0
+  refuses, as it refuses any field added since, saying the program did not describe itself: run such a program under a
+  runtime of 0.2.0 or later. A frame names `in_environment` and `environment_path` only where they are given, so a
+  program built on 0.1.0 takes every frame this release sends.
+- **A gateway can say its session runs in the environment,** `Gateway.in_environment`, where a driver that declares
+  `Capabilities.in_environment` keeps the harness's own tools, and name the `PATH` the environment gives its own commands,
+  `Gateway.environment_path`, for the model's commands there, which a gateway outside the environment is refused. A session
+  holds to the first gateway's word, a gateway that says so goes to no other driver, each start records it, and none of the
+  SDK's drivers declares it
+  ([Training on sessions](docs/extending/training.md#what-a-sealed-launch-is)).
 
 ## 0.1.0 (2026-11-12)
 

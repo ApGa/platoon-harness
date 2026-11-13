@@ -65,7 +65,7 @@ platoon_harness.drivers.exec.GOAL
 platoon_harness.drivers.Exited
 platoon_harness.drivers.GapReport
 platoon_harness.drivers.Gateway
-platoon_harness.drivers.Gateway(*,origin,bearer,model,tools,compaction_headers)
+platoon_harness.drivers.Gateway(*,origin,bearer,model,tools,compaction_headers,in_environment,environment_path)
 platoon_harness.drivers.InputDelivered
 platoon_harness.drivers.Item
 platoon_harness.drivers.keys_of

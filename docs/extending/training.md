@@ -52,7 +52,13 @@ class MyAuthority:
   the same bearer, and `compaction_headers` are what each call a harness makes to compact its context carries, so the gateway can
   tell such a call apart when it is made. No URL or header of it may hold the bearer in any form, and no header may authorize a
   call. A secret the SDK cannot know, such as another agent's key in a path, is yours to keep out of every URL. Only a driver that
-  declares the capability `sealed` is given a gateway, and its agent's login is `gateway`.
+  declares the capability `sealed` is given a gateway, and its agent's login is `gateway`. `in_environment` says the session runs
+  in your environment, on the machine its tools act on, where a driver that declares `in_environment` keeps the harness's own
+  tools and any other is refused before its harness launches: say it only where it is so, as the SDK cannot see where it runs,
+  and alike for every agent of a session, which runs in one place, as an admission whose gateway says otherwise than the first
+  is refused. `environment_path` names the `PATH` your environment gives its own commands, on which the model's commands run
+  there, behind the agent's folder that holds `ph`, while the harness keeps the runtime's, so a task's `python3` or `node` is
+  the image's and not your toolchain's; a gateway that does not say its session runs in your environment is refused one.
 - **A bearer is one agent's.** Your gateway records each call on a bearer as one agent's, so an admission on a bearer another agent
   of the session holds is refused, and the spawn fails, in words that name no key.
 - **`backend`** is your ids for the agent. The admit effect records them as its result, which is the one join between an agent of
@@ -145,7 +151,13 @@ cut short while an admit was under way. Read it as history.
 `session.eligibility(agent, episode)` answers from the record alone, alike after a rebuild and on a closed copy, whether an
 agent's calls in an episode can train: an agent is barred by `not_trainable`, `shared_key`, `forked` or `no_end`, and a call
 by `outside_episode`, `person` or `purpose`. A call your gateway recorded that no harness reported has no call id to join, so it
-never trains. [provenance.md](../how-to/provenance.md#what-can-train) says what each bar means; what trains is yours to decide.
+never trains, in a session whose journal and harness pipes no command wrote. In a session in your environment, a command the
+model runs can call your gateway on any agent's bearer and write the journal, and, without writing the journal, it can have such
+a call recorded as that agent's own, under the id your gateway gave it, by writing a report of it into that agent's harness's
+pipes. Nothing here detects either, nor can a check against your gateway's records for that agent's key, which did serve the
+call, so what trains there rests on what the agents' commands left of the record: put agents of one policy only in such a
+session, so that no policy's commands write what another trains on. [provenance.md](../how-to/provenance.md#what-can-train)
+says what each bar means; what trains is yours to decide.
 
 **Labels.** Give your team a vocabulary for its work, each label with the values it may take, and its agents label the tasks they
 add and the agents they spawn, from it alone, as their tools' schemas show them:
@@ -193,6 +205,11 @@ out. What a trainer can count on:
 - **It is earned, never declared.** `doctor --check`, or `check_driver` with `write_conformance`, proves on `FakeModel` acting
   as a gateway that the first request goes under the bearer, holds none of the project's instructions and shows only our
   tools, the environment's, and those of the harness's own that act on nothing.
+- **In your environment, a harness keeps its own tools.** A gateway that says its session runs in the environment keeps the
+  harness's own tools, such as its shell and its file tools, on a driver that declares `in_environment`, and each start records
+  that it did. There every harness, the runtime and whatever the model runs share one user, so a command can read any agent's
+  bearer: the runtime masks every credential it has given a harness in every report, but a harness's own transcript, which the
+  export holds, keeps what a command printed, so let each bearer die with its rollout. No driver here declares it.
 
 ## Write rewards and credit
 
@@ -268,7 +285,8 @@ on its row less its agent's baseline shared equally by that agent's scored spans
 ## The export
 
 The export is the session as it ended: its folder, closed, or stopped for a rollout cut short, with `annotations.sqlite` beside
-its journal. It holds no key, as bearers lived only in the harnesses' environments. Nor does it hold an agent's harness's
+its journal. It holds no key, as bearers lived only in the harnesses' environments, except in a session in your environment,
+where a harness's own transcript can keep a bearer a command printed. Nor does it hold an agent's harness's
 scratch or a file its driver names as where its harness kept a credential, once that agent has ended and its stop has run,
 which removes them before your `finish` hears of the end. So end every agent, as above, and wait until your `finish` has heard
 of each before you leave the session: a stop that has not begun when the session stops runs only at a resume, which a

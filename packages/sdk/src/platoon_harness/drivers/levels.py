@@ -138,7 +138,8 @@ class Conformance(Checks):
 
 class Profile(Model):
     """One agent as it runs: which driver, by name and class, at which harness version, under which SDK on which host,
-    from which read-only installation, if any, on which login, whether its tools were seen, and whether its role lets
+    from which read-only installation, if any, on which login, whether its gateway said its session runs in the
+    environment, so that its launch kept the harness's own tools, whether its tools were seen, and whether its role lets
     its harness start agents of its own."""
 
     driver: str
@@ -148,6 +149,7 @@ class Profile(Model):
     host: str = Field(default_factory=socket.gethostname)
     installation: tuple[str, ...] | None = None
     login: Login | None = None
+    in_environment: bool = False
     tools: Visibility = "unverified"
     allow_native_children: bool = False
 

@@ -17,7 +17,7 @@ from urllib.parse import quote
 import pytest
 
 from platoon_harness import Session, Team, __version__, told
-from platoon_harness.config import Secret
+from platoon_harness.config import Secret, forms
 from platoon_harness.drivers import (
     AgentSpec,
     ApprovalRequested,
@@ -29,6 +29,7 @@ from platoon_harness.drivers import (
     DriverInfo,
     Exited,
     GapReport,
+    Gateway,
     Item,
     Ready,
     Report,
@@ -51,7 +52,7 @@ from platoon_harness.runtime.paths import agent_folder, write_conformance
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
 
 from .support import SECONDS, harness, in_state, journal, of_type, offers, scripted, solo, until
-from .training import TRAINABLE, Gating, Sealed
+from .training import IN_ENVIRONMENT, ORIGIN, TRAINABLE, Gating, Sealed
 
 MAKING = "`check_driver` checks it, and `write_conformance` keeps what it found here"
 
@@ -512,6 +513,26 @@ async def test_capabilities_and_levels_reach_agent_started(tmp_path):
     assert started.data["verified"]["allow_native_children"] is False
     assert started.data["levels"]["operational"]["state"] == "unverified"
     assert f"no conformance result for scripted is kept: {MAKING}" in started.data["levels"]["operational"]["reasons"]
+
+
+@pytest.mark.parametrize("in_environment", [True, False])
+async def test_a_launch_in_the_environment_is_recorded_on_its_start(tmp_path, in_environment):
+    """Each start says whether its agent's gateway said the session runs in the environment, where its harness keeps
+    its own tools, as a resume's start does too, beside its driver's word that it has a launch there."""
+    turns = iter([[Exit("killed by signal 9")], [Say("back")]])
+    team = solo_with(lambda: Sealed(turns, IN_ENVIRONMENT))
+    async with Session.start(team, authority=Gating(team, in_environment=in_environment), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.lost"), session)
+        await session.send("@bob", "again")
+        starts = await until(
+            lambda: of_type(session, "agent.started", "agent.resumed"), session, lambda found: len(found) == 2
+        )
+
+    assert [start.type for start in starts] == ["agent.started", "agent.resumed"]
+    assert [start.data["verified"]["in_environment"] for start in starts] == [in_environment] * 2
+    assert [start.data["declared"]["in_environment"] for start in starts] == [True] * 2
 
 
 def passing(version: str | None, driver: str = "scripted", made_by: object = ScriptedDriver()) -> Conformance:
@@ -1685,6 +1706,103 @@ async def test_every_driver_s_reports_are_masked_on_the_way_to_the_journal(tmp_p
 
     assert items[0].gist == "my key is ***"
     assert body["text"] == "***\n"
+
+
+def credential(kind: str, agent: str) -> str:
+    """A credential the runtime hands one agent's harness, named for its kind and its agent."""
+    return f"{kind}-of-{agent}-" + "x" * 24
+
+
+class Handing(LocalAuthority):
+    """Admits each agent on credentials of its own: its token, and a gateway's bearer, or else an auth profile's
+    value."""
+
+    def __init__(self, team: Team, *, gateway: bool) -> None:
+        super().__init__(team)
+        self._gateway = gateway
+
+    async def admit(self, spawn: SpawnRequest) -> Admission:
+        token = Secret(credential("token", spawn.agent))
+        if not self._gateway:
+            return Admission(token=token, access={"KEY": Secret(credential("key", spawn.agent))})
+        gateway = Gateway(origin=ORIGIN, bearer=Secret(credential("bearer", spawn.agent)), model="m")
+        return Admission(token=token, access=gateway, backend={"agent_id": spawn.agent})
+
+
+FLAG = "yes"
+"""A value too short to be a credential, as an auth profile's `PI_OFFLINE` holds."""
+
+
+class Flagging(Handing):
+    """Admits each agent on an auth profile's value of its own, and bob on `FLAG` beside it."""
+
+    async def admit(self, spawn: SpawnRequest) -> Admission:
+        admission = await super().admit(spawn)
+        if spawn.agent != "bob":
+            return admission
+        return admission.model_copy(update={"access": {**admission.access, "FLAG": Secret(FLAG)}})
+
+
+async def test_a_value_too_short_to_be_a_credential_is_masked_in_its_own_agent_s_reports_alone(tmp_path):
+    """A value of fewer than eight characters is no provider's key, and is found in ordinary words and in the ids
+    reports name, so it is masked in the reports of the agent it was handed to alone, and no other agent loses it; each
+    credential beside it is masked in every agent's."""
+    bob, cy = credential("key", "bob"), credential("key", "cy")
+    said = saying(Item(kind="message", gist=f"{FLAG} {bob}", body=f"{FLAG} {bob}"))
+    roles = {"bob": {"harness": scripted([Say(f"{FLAG} {cy}")])}, "cy": {"harness": harness(said), "count": 0}}
+    team = Team.model_validate({"roles": {name: {**role, "model": "m"} for name, role in roles.items()}})
+
+    async with Session.start(team, authority=Flagging(team, gateway=False), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.spawn("cy", "cy")
+        await until(lambda: of_type(session, "item.recorded"), session)
+        await session.send("@bob", "go")
+        items = await until(lambda: of_type(session, "item.recorded"), session, lambda found: len(found) == 2)
+        await in_state(session, "bob", "idle")
+        bodies = [(await session.get_body(item.data["body"])).decode() for item in items]
+        states = [(await session.status(name))["state"] for name in ("bob", "cy")]
+
+    assert [item.agent for item in items] == ["cy", "bob"]
+    assert [item.gist for item in items] == bodies == [f"{FLAG} ***", "*** ***"]
+    assert states == ["idle", "idle"]
+
+
+@pytest.mark.parametrize("gateway", [True, False], ids=["a bearer", "an auth profile's value"])
+async def test_every_report_is_masked_of_every_credential_the_runtime_has_given_a_harness(tmp_path, gateway):
+    """A command one agent's harness runs can read another agent's credentials and print them, so each credential the
+    runtime has handed a harness, its bearer or its auth profile's values and its token, is masked from then on in
+    every report, live text among them, in each form a secret is masked in, whichever harness says it: one that
+    started before the credential was handed out, and one that started after its agent had ended, as a bearer works
+    until its rollout ends."""
+    kind = "bearer" if gateway else "key"
+    bob, ada = (
+        (credential(kind, "bob"), credential("token", "bob")),
+        (credential(kind, "ada"), credential("token", "ada")),
+    )
+    told = f"{ada[0]} {base64.b64encode(ada[1].encode()).decode()} {bob[0]}"
+    shown = f"{quote(bob[1], safe='')} {base64.urlsafe_b64encode(ada[0].encode()).decode()} {ada[1]}"
+    cy = saying(Delta(text=shown), Item(kind="tool", phase="started", gist=shown, body=shown))
+    roles = {"bob": {"harness": scripted([Say(told)])}, "cy": {"harness": harness(cy), "count": 0}}
+    team = Team.model_validate({"roles": {name: {**role, "model": "m"} for name, role in roles.items()}})
+
+    async with Session.start(team, authority=Handing(team, gateway=gateway), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.spawn("ada", "bob")
+        await in_state(session, "ada", "idle")
+        await session.retire("@ada")
+        await until(lambda: stops(session, "effect.finished"), session)
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "item.recorded"), session)
+        await session.spawn("cy", "cy")
+        items = await until(lambda: of_type(session, "item.recorded"), session, lambda found: len(found) == 2)
+        frame = await asyncio.wait_for(anext(session.deltas("@cy")), SECONDS)
+        bodies = [(await session.get_body(item.data["body"])).decode() for item in items]
+        text = json.dumps([event.model_dump(mode="json") for event in await journal(session)])
+
+    assert [item.agent for item in items] == ["bob", "cy"]
+    assert [item.gist for item in items] == bodies == ["*** *** ***"] * 2
+    assert frame.text == "*** *** ***"
+    assert not [form for given in (*bob, *ada) for form in forms(Secret(given)) if form.decode() in text]
 
 
 async def test_a_secret_in_an_approval_s_ask_is_masked_plain_and_encoded(tmp_path):

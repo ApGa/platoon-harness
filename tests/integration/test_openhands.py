@@ -618,7 +618,7 @@ async def test_the_worker_named_as_a_wire_command_runs_as_from_an_environment_of
             items = [(event.gist, event.data["outcome"]) for event in await of_type(session, "item.recorded")]
 
     assert [event.data["reason"] for event in ended] == ["stopped"]
-    verified = {"driver": "openhands", "version": PINNED, "login": "key", "tools": "visible"}
+    verified = {"driver": "openhands", "version": PINNED, "login": "key", "in_environment": False, "tools": "visible"}
     wire = "platoon_harness.drivers.wire:WireDriver"
     installed = installation(WireDriver(worker.command).describe().installed)
     pinned = {

@@ -40,7 +40,8 @@ method promises:
   for a delivery. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
   given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. That access is
   variables by name, which `keys_of(spec)` reads and `harness_env` puts in the harness's environment, or a `Gateway`, which only a
-  driver that declares `sealed` is given, with `spec.model` the model it serves. Any process on the machine can read a command line,
+  driver that declares `sealed` is given, and one whose `in_environment` is true only a driver that declares `in_environment` too,
+  with `spec.model` the model it serves. Any process on the machine can read a command line,
   so one may name a variable of that access and never hold its value. `spec.effort` goes to
   the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
   `sandboxes`, and None leaves it to the harness. Unless `spec.allow_native_children` says otherwise, the harness offers its model nothing of
@@ -147,6 +148,7 @@ out what they earned. A `ready` that tries to state a level is an unknown frame.
 | `measures` | Which of `tokens` and `usd` it reports |
 | `sandboxes` | The values a role's `sandbox` may take |
 | `sealed` | Whether it launches on a gateway's access with nothing of the user's: only a driver that says so is given a `Gateway` |
+| `in_environment` | Whether, on a gateway that says its session runs in the environment, its sealed launch keeps the harness's own tools: only a driver that says so is given such a gateway |
 
 A declaration earns nothing by itself. See [Conformance](#conformance).
 
@@ -184,6 +186,17 @@ Declaring `sealed` earns nothing either: two checks earn it, in the one result k
 home as a rollout runs, that the first request goes under the gateway's bearer, holds none of the project's instructions and shows
 only ours, the environment's and the tools `check_driver(kept=)` names. What else of the user's a launch keeps out is how it is
 built, as the table says, which no check proves.
+
+**A launch in the environment.** A training system that runs a whole session inside its environment's sandbox says so on each
+gateway, `Gateway.in_environment`, and there a sealed launch keeps the harness's own tools, its shell and its file tools,
+beside ours and the environment's, as they act on the environment's machine; the rest of the launch stands. A driver that has
+such a launch declares `in_environment`, and the host gives a gateway in the environment to no other, refusing it before that
+agent's harness launches. Its gateway can name `environment_path`, the `PATH` the environment gives its own commands, on which
+such a launch runs the model's commands, behind the agent's `bin`, while the harness keeps the runtime's; a wire frame names it
+only where it is given, and a wire program that declares the launch answers for its commands' `PATH`, which no check proves.
+Each tool of the harness's own that asks for an approval asks the runtime, as on any launch, and its
+calls are recorded only as the harness reports them, as they reach none of our servers. A wire frame names `in_environment` only
+where it is true, so a program built on an earlier SDK takes every frame it took before. No driver here declares it.
 
 ## A one-shot CLI: `exec`
 

@@ -10,12 +10,14 @@ import pytest
 
 from platoon_harness.config import WIRE_PROTOCOL, Secret
 from platoon_harness.drivers import (
+    BEARER_VARIABLE,
     ApprovalRequested,
     Delivery,
     DriverError,
     DriverInfo,
     Exited,
     GapReport,
+    Gateway,
     Item,
     Native,
     Offered,
@@ -682,6 +684,52 @@ async def test_a_served_driver_gets_its_credentials_back_from_the_environment(tm
     await driver.stop(1)
 
     assert [item.gist for item in heard.of(Item)] == ["model-key", tools.token.reveal(), str(spec.folder / "wire")]
+
+
+async def test_a_wire_frame_names_in_environment_and_environment_path_only_where_given(tmp_path):
+    """A gateway that does not say its session runs in the environment goes in a frame with every field it went with
+    before and no other, so a program built on an earlier SDK, or one in another language that reads today's frame,
+    takes it as it took it then; one that says so names `in_environment`, and `environment_path` where it names the
+    `PATH` the environment gives its commands, which a served driver reads back."""
+    log = tmp_path / "frames.jsonl"
+    command = raw_program(
+        tmp_path,
+        f"""
+        for frame in frames():
+            with open({str(log)!r}, "a") as file:
+                file.write(json.dumps(frame["params"]["spec"]["access"]) + "\\n")
+            reply(frame, None)
+            break
+        sys.stdin.read()
+    """,
+    )
+    origin, tools, path = "http://127.0.0.1:9", "http://127.0.0.1:9/mcp", "/usr/local/bin:/usr/bin:/bin"
+    for given in ({}, {"in_environment": True}, {"in_environment": True, "environment_path": path}):
+        gateway = Gateway(origin=origin, bearer=Secret("the-bearer"), model="m", tools=tools, **given)
+        driver, _ = await started(tmp_path, command, model="m", access=gateway)
+        await driver.stop(1)
+    showing = program(
+        tmp_path,
+        SERVED,
+        """
+        class Showing(ScriptedDriver):
+            async def start(self, spec, report):
+                await report(Item(kind="message", gist=f"{spec.access.in_environment} {spec.access.environment_path}"))
+
+        serve(Showing())
+    """,
+    )
+    driver, heard = await started(tmp_path, showing, model="m", access=gateway)
+    said = await heard.until(Item)
+    await driver.stop(1)
+
+    named = {"origin": origin, "model": "m", "tools": tools, "compaction_headers": {}, "bearer": BEARER_VARIABLE}
+    assert [json.loads(line) for line in log.read_text().splitlines()] == [
+        named,
+        {**named, "in_environment": True},
+        {**named, "in_environment": True, "environment_path": path},
+    ]
+    assert said.gist == f"True {path}"
 
 
 async def test_stderr_is_the_program_s_log(tmp_path):

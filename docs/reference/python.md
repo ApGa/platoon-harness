@@ -465,10 +465,11 @@ One agent to start, or to resume from the native id in `resume`. `goal` is the f
 under the id of the offer that launched it, so its harness says it landed as it says any input did, and None when
 there is none, as on a resume. `folder` is the agent's own directory, for its record, log and native home. `access`
 is model access: variable names to values, URLs included, that reach only the harness's environment, or a gateway,
-which only a driver that declares `sealed` is given. `effort` goes to the harness as it stands, and `sandbox` is one
-of the values the driver declared. `allow_native_children` lets the harness start agents of its own. A `HOME` in
-`env` is the harness's home. `wrap` is the argv of the isolation it runs in, which `Process` puts before its
-command, so that all it starts is confined with it, and is empty for a harness that runs unconfined.
+which only a driver that declares `sealed` is given, and one in the environment only a driver that declares
+`in_environment` too. `effort` goes to the harness as it stands, and `sandbox` is one of the values the driver
+declared. `allow_native_children` lets the harness start agents of its own. A `HOME` in `env` is the harness's
+home. `wrap` is the argv of the isolation it runs in, which `Process` puts before its command, so that all it starts
+is confined with it, and is empty for a harness that runs unconfined.
 
 ### `platoon_harness.drivers.ApprovalRequested`
 
@@ -625,12 +626,19 @@ class Gateway(Model):
     model: str
     tools: str | None = None
     compaction_headers: Mapping[str, str] = {}
+    in_environment: bool = False
+    environment_path: str | None = None
 ```
 
 Model access through a training system's gateway: its models at `origin`, a scheme and a host with nothing more,
 under `bearer`, serving `model`. `tools` is the URL of the environment's own MCP server at the same origin under the
 same bearer, when there is one, and `compaction_headers` go with each call a harness makes to compact its context,
-so that the gateway tells that call apart as it is made.
+so that the gateway tells that call apart as it is made. `in_environment` says the session runs in the environment,
+on the machine its tools act on, where a launch keeps its harness's own tools: the SDK cannot see where it runs, so
+the word is the authority's to keep true. `environment_path` is the `PATH` the environment gives its own commands,
+which the model's commands on such a launch run on, behind the agent's folder that holds `ph`, while its harness
+keeps the runtime's; it is refused empty, as it names no folder, and on a gateway that does not say its session runs
+in the environment, as nothing else would carry it out.
 
 ### `platoon_harness.drivers.InputDelivered`
 
@@ -1128,8 +1136,17 @@ class Redactor:
     def __init__(self, secrets: Iterable[Secret]) -> None: ...
 ```
 
-Masks secrets, in their encoded forms too, wherever a harness's words go next. `reach` is one byte short of the
-longest form, so holding that much back keeps a secret from straddling two chunks, and `Held` does.
+Masks secrets, in their encoded forms too, wherever a harness's words go next, the longest form first. `reach`
+is one byte short of the longest form, so holding that much back keeps a secret from straddling two chunks, and
+`Held` does.
+
+**`add`**
+
+```python
+def add(self, secrets: Iterable[Secret]) -> None: ...
+```
+
+Mask these secrets too, from now on.
 
 **`masked`**
 
@@ -1351,12 +1368,14 @@ class Profile(Model):
     host: str = Field(default_factory=socket.gethostname)
     installation: tuple[str, ...] | None = None
     login: Login | None = None
+    in_environment: bool = False
     tools: Visibility = "unverified"
     allow_native_children: bool = False
 ```
 
 One agent as it runs: which driver, by name and class, at which harness version, under which SDK on which host,
-from which read-only installation, if any, on which login, whether its tools were seen, and whether its role lets
+from which read-only installation, if any, on which login, whether its gateway said its session runs in the
+environment, so that its launch kept the harness's own tools, whether its tools were seen, and whether its role lets
 its harness start agents of its own.
 
 ### `platoon_harness.drivers.levels.speaks_for`
@@ -1824,7 +1843,9 @@ WIRE = "wire"
 A driver in another process or language: line-delimited JSON-RPC 2.0 on stdio, its verbs equal to the Python methods.
 
 Credentials never travel in a frame. `start` names them, and the program finds their values in its own environment: a
-gateway's bearer under the variable its frame names, beside the gateway's origin, model, tools and compaction headers.
+gateway's bearer under the variable its frame names, beside the gateway's origin, model, tools and compaction headers,
+its word that the session runs in the environment where it says so, and the `PATH` the environment gives its commands
+where it names one.
 
 ### `platoon_harness.drivers.wire.DRIVER_ERROR`
 
@@ -4597,12 +4618,15 @@ class Capabilities(Model):
     measures: frozenset[Literal["tokens", "usd"]] = frozenset()
     sandboxes: frozenset[str] = frozenset()
     sealed: bool = False
+    in_environment: bool = False
 ```
 
 What a driver declares of a harness. Absence means unsupported, and `levels` believes only what was verified.
 `native_children_off` says it turns the harness's own agents off for a launch whose role does not allow them, so a
 role on a harness with agents of its own that its driver cannot turn off must allow them. `sealed` says it launches
-on a gateway's access with nothing of the user's, which is the one launch a gateway admission gets.
+on a gateway's access with nothing of the user's, which is the one launch a gateway admission gets, and
+`in_environment` that on a gateway that says its session runs in the environment, that launch keeps the harness's
+own tools, which is the one launch such a gateway gets.
 
 ### `platoon_harness.primitives.Changes`
 
@@ -7690,14 +7714,27 @@ The host: what the journal asks of the world, one task per effect, and each harn
 ```python
 class DriverLink:
     def __init__(
-        self, agent: str, role: str, driver: Driver, info: DriverInfo, *, pinned: str | None, login: Login | None
+        self,
+        agent: str,
+        role: str,
+        driver: Driver,
+        info: DriverInfo,
+        redact: Redactor,
+        *,
+        pinned: str | None,
+        login: Login | None,
+        in_environment: bool,
+        installation: tuple[str, ...] | None,
     ) -> None: ...
 ```
 
 One harness as the host holds it. Links live on the `Host` and not in the daemon, so a restarted daemon loses
-none. `pinned` is the model it must run and `login` what it runs on, as its access says. `leaving` means its end is
-our doing. `ready` is set once `agent.start` commits, or nobody needs it to, or `refused` says why it never will.
-`handing` is set to drop a handover under way.
+none. `pinned` is the model it must run, `login` what it runs on, and `in_environment` whether its gateway says its
+session runs in the environment, as its access says, and `installation` the read-only installation its harness
+runs from, if any, as its launch found it. `redact` masks its reports and its live text, of what its harness was
+handed and of every credential the runtime has handed any harness. `leaving` means its end is our doing. `ready` is
+set once `agent.start` commits, or nobody needs it to, or `refused` says why it never will. `handing` is set to drop
+a handover under way.
 
 **`refuse`**
 
@@ -7763,9 +7800,11 @@ async def admit(self, spawn: SpawnRequest) -> Admission: ...
 ```
 
 Admit an agent and give it its credential: the raw token stays in memory, and only its hash is journaled. The
-access it was admitted on is kept for this runtime's life, as a resume gives it back and no other agent shares a
-gateway's bearer. A resumed admission that would not hold its agent to what it was is refused, and the agent is
-lost, since its calls would go on an identity its record does not name.
+access it was admitted on is kept for this runtime's life, as a resume gives it back, no other agent shares a
+gateway's bearer and a session runs in one place. A resumed admission that would not hold its agent to what it
+was is refused, and the agent is lost, since its calls would go on an identity its record does not name. Several
+can be under way at once, so each keeps its access as soon as it is checked, before it waits on anything, and is
+checked against the access of every admission checked before it.
 
 **`workspace`**
 
@@ -7792,9 +7831,11 @@ async def connect(
 ```
 
 Bring a harness up on its own binding, with `goal`, a spawn's goal and body, as its first delivery, under
-the id of the offer that launched it. A gateway goes only to a driver that declares a sealed launch. An isolated
-harness runs in its isolation, on access it was given, as a login of its own would be in your home, which it
-never sees. A harness that never says it is ready is a failure, not a hang.
+the id of the offer that launched it. A gateway goes only to a driver that declares a sealed launch, and one in
+the environment only to a driver that declares a launch there. An isolated harness runs in its isolation, on
+access it was given, as a login of its own would be in your home, which it never sees. What it is handed is
+masked from then on in its reports, and each credential among it in every report, whichever harness makes it.
+A harness that never says it is ready is a failure, not a hang.
 
 **`resume`**
 

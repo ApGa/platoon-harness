@@ -1,7 +1,9 @@
 """The authority contract a training system's authority builds on: what it is asked, what it gives, and what the record
 keeps of it."""
 
+import asyncio
 import json
+from collections.abc import Callable
 from typing import Any
 from urllib.parse import quote
 
@@ -10,19 +12,30 @@ from pydantic import ValidationError
 
 from platoon_harness import Refused, Session, Team
 from platoon_harness.config import Secret
-from platoon_harness.drivers import AgentSpec, Gateway, Item, Ready, Reporter
+from platoon_harness.drivers import AgentSpec, Capabilities, Gateway, Item, Ready, Reporter
 from platoon_harness.kernel import is_held
-from platoon_harness.runtime import Admission, SpawnRequest
+from platoon_harness.runtime import Admission, LocalAuthority, SpawnRequest
 from platoon_harness.testing import Exit, Say, ScriptedDriver
 
-from .support import harness, in_state, journal, of_type, until
-from .training import ORIGIN, UNSEALED, Gating, Sealed
+from .support import harness, in_state, journal, of_type, state_of, until
+from .training import IN_ENVIRONMENT, ORIGIN, SEALED, UNSEALED, Gating, Sealed
 
 pytestmark = pytest.mark.timeout(30)
 
 
 def team_on(make: Any, **role: Any) -> Team:
     return Team.model_validate({"roles": {"bob": {"harness": harness(make), **role}}})
+
+
+def starting(specs: list[AgentSpec], capabilities: Capabilities = SEALED) -> Callable[[], Sealed]:
+    """A sealed harness of `capabilities` that keeps the spec of each harness it starts."""
+
+    class Starting(Sealed):
+        async def start(self, spec: AgentSpec, report: Reporter) -> None:
+            specs.append(spec)
+            await super().start(spec, report)
+
+    return lambda: Starting(capabilities=capabilities)
 
 
 async def admitted(session: Session) -> dict[str, Any]:
@@ -248,6 +261,164 @@ async def test_a_driver_without_a_sealed_launch_refuses_a_gateway(tmp_path):
 
     assert row["reason"] == "its spawn failed: `scripted` has no sealed launch, which a gateway admission needs"
     assert started == []
+
+
+async def test_only_a_gateway_keeps_a_harness_s_own_tools_on_a_sealed_launch(tmp_path, monkeypatch):
+    """The word that a session runs in the environment, where a sealed launch keeps its harness's own tools, reaches a
+    driver on its gateway alone, which only an authority gives: a team or a role that names it is refused,
+    `Session.start` takes no such word, and an agent on a key, as `LocalAuthority` admits each agent of a role with an
+    auth profile, or on a gateway that does not say it, is told nothing of it and starts so."""
+    specs: list[AgentSpec] = []
+    harnessed = harness(starting(specs, IN_ENVIRONMENT))
+    for named in (
+        {"roles": {"bob": {"harness": harnessed, "in_environment": True}}},
+        {"roles": {"bob": {"harness": harnessed}}, "in_environment": True},
+    ):
+        with pytest.raises(ValidationError, match="in_environment"):
+            Team.model_validate(named)
+    keyed = {"harness": harnessed, "auth": "keyed", "model": "m"}
+    team = Team.model_validate({"roles": {"bob": keyed}, "auth": {"keyed": {"env": ["KEY"]}}})
+    with pytest.raises(TypeError, match="in_environment"):
+        Session.start(team, in_environment=True)
+    monkeypatch.setenv("KEY", "a-key")
+    recorded = []
+    for authority in (LocalAuthority(team), Gating(team), Gating(team, in_environment=True)):
+        async with Session.start(team, authority=authority, root=tmp_path) as session:
+            await in_state(session, "bob", "idle")
+            recorded += [event.data["verified"]["in_environment"] for event in await of_type(session, "agent.started")]
+
+    assert [isinstance(spec.access, Gateway) and spec.access.in_environment for spec in specs] == [False, False, True]
+    assert recorded == [False, False, True]
+
+
+@pytest.mark.parametrize(
+    ("first", "why"),
+    [
+        (
+            True,
+            "ada's gateway does not say its session runs in the environment, and the first gateway this runtime "
+            "admitted says so",
+        ),
+        (
+            False,
+            "ada's gateway says its session runs in the environment, and the first gateway this runtime admitted does "
+            "not say so",
+        ),
+    ],
+)
+async def test_an_admission_whose_gateway_says_another_place_than_the_first_is_refused(tmp_path, first, why):
+    """A session runs in one place, so its gateways say one thing: the host keeps the word of the first gateway it
+    admits, and an admission whose gateway says otherwise fails its spawn, saying so, before its harness launches, and
+    the agents admitted before it run on."""
+
+    class Disagreeing(Gating):
+        async def admit(self, spawn: SpawnRequest) -> Admission:
+            admission = await super().admit(spawn)
+            assert isinstance(admission.access, Gateway)
+            gateway = admission.access.model_copy(update={"in_environment": first == (spawn.agent == "bob")})
+            return admission.model_copy(update={"access": gateway})
+
+    specs: list[AgentSpec] = []
+    team = team_on(starting(specs, IN_ENVIRONMENT))
+    async with Session.start(team, authority=Disagreeing(team), root=tmp_path) as session:
+        await in_state(session, "bob", "idle")
+        await session.spawn("ada", "bob")
+        await in_state(session, "ada", "ended")
+        row = next(row for row in (await session.ending()).agents if row["agent"] == "ada")
+        started = await of_type(session, "agent.started")
+        bob = await state_of(session, "bob")
+
+    assert (row["status"], row["reason"]) == ("failed", f"its spawn failed: {why}: a session runs in one place")
+    assert [spec.agent for spec in specs] == [event.agent for event in started] == ["bob"]
+    assert bob == "idle"
+
+
+SHARED = Secret("one-shared-bearer")
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "why"),
+    [
+        (
+            {"in_environment": True},
+            {},
+            "bob-2's gateway does not say its session runs in the environment, and the first gateway this runtime "
+            "admitted says so: a session runs in one place",
+        ),
+        (
+            {"bearer": SHARED},
+            {"bearer": SHARED},
+            "bob-2's gateway bearer is another agent's, so no call on it is tied to one agent",
+        ),
+    ],
+    ids=["places", "a bearer"],
+)
+async def test_admissions_under_way_at_once_are_held_to_one_place_and_a_bearer_each(tmp_path, first, second, why):
+    """Several admissions can be under way at once, as a role that starts two agents admits both together, and each is
+    held all the same to what was admitted before it: of two whose gateways say different places, or share a bearer,
+    the one checked second fails its spawn, saying why, and the first runs."""
+
+    class Together(Gating):
+        """Gives bob-1's gateway `first` and bob-2's `second`, and bob-2's only once bob-1's admission is under way, so
+        that bob-2's is checked while bob-1's is."""
+
+        def __init__(self, team: Team) -> None:
+            super().__init__(team)
+            self.under_way = asyncio.Event()
+
+        async def admit(self, spawn: SpawnRequest) -> Admission:
+            admission = await super().admit(spawn)
+            assert isinstance(admission.access, Gateway)
+            if spawn.agent == "bob-1":
+                self.under_way.set()
+            else:
+                await self.under_way.wait()
+            given = first if spawn.agent == "bob-1" else second
+            return admission.model_copy(update={"access": admission.access.model_copy(update=given)})
+
+    specs: list[AgentSpec] = []
+    team = team_on(starting(specs, IN_ENVIRONMENT), count=2)
+    # Its harness says it is signed in on a plan, which the check before the start counts, but both run on a gateway.
+    async with Session.start(team, authority=Together(team), root=tmp_path, plan_login=True) as session:
+        await in_state(session, "bob-1", "idle")
+        await in_state(session, "bob-2", "idle", "ended")
+        rows = {row["agent"]: row for row in (await session.ending()).agents}
+
+    assert (rows["bob-2"]["status"], rows["bob-2"]["reason"]) == ("failed", f"its spawn failed: {why}")
+    assert [spec.agent for spec in specs] == ["bob-1"]
+
+
+async def test_a_driver_with_no_launch_in_the_environment_refuses_a_gateway_in_it(tmp_path):
+    """A gateway that says its session runs in the environment goes only to a driver that declares a launch there: a
+    sealed driver that does not fails its spawn, saying so, before its harness launches."""
+    specs: list[AgentSpec] = []
+    team = team_on(starting(specs))
+    async with Session.start(team, authority=Gating(team, in_environment=True), root=tmp_path) as session:
+        await in_state(session, "bob", "ended")
+        row = (await session.ending()).agents[0]
+        started = await of_type(session, "agent.started")
+
+    assert row["reason"] == "its spawn failed: `scripted` has no launch in the environment, which its gateway asks for"
+    assert started == [] and specs == []
+
+
+def test_an_environment_path_outside_the_environment_is_refused(tmp_path):
+    """A gateway names the `PATH` the environment gives its own commands for the model's commands in the environment,
+    so one that does not say its session runs there is refused it, as nothing would carry it out, a copy made without
+    that check among them, which an agent's spec refuses before any driver is given it; an empty one is refused, as it
+    names no folder; one that does says it."""
+    path = "/usr/local/bin:/usr/bin:/bin"
+
+    with pytest.raises(ValidationError, match="nothing would carry it out"):
+        Gateway(origin=ORIGIN, bearer=Secret("b"), model="m", environment_path=path)
+    with pytest.raises(ValidationError, match="its own commands, and this one is empty"):
+        Gateway(origin=ORIGIN, bearer=Secret("b"), model="m", in_environment=True, environment_path="")
+
+    gateway = Gateway(origin=ORIGIN, bearer=Secret("b"), model="m", in_environment=True, environment_path=path)
+    copied = gateway.model_copy(update={"in_environment": False})
+    with pytest.raises(ValidationError, match="nothing would carry it out"):
+        AgentSpec(agent="bob", role="bob", cwd=tmp_path, folder=tmp_path, access=copied)
+    assert gateway.environment_path == path
 
 
 async def test_a_gateway_admission_is_a_gateway_login_and_no_plan_login(tmp_path):
