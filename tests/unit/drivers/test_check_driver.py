@@ -4,6 +4,7 @@ import asyncio
 import json
 import signal
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -13,6 +14,7 @@ from platoon_harness.drivers import (
     Capabilities,
     ChildSeen,
     DriverError,
+    DriverInfo,
     Exited,
     InputDelivered,
     Item,
@@ -22,6 +24,7 @@ from platoon_harness.drivers import (
     Reporter,
     TurnEnded,
     Usage,
+    levels,
 )
 from platoon_harness.drivers.exec import ExecDriver
 from platoon_harness.drivers.process import Process
@@ -729,6 +732,44 @@ async def test_the_pin_is_the_version_the_harness_reported(tmp_path):
     result = await check(lambda: Filtered(version="9.9"), tmp_path)
 
     assert (result.driver, result.version) == ("scripted", "9.9")
+
+
+class Installed(Filtered):
+    """A scripted harness that says it reads `paths` to run."""
+
+    def __init__(self, *paths: Path) -> None:
+        super().__init__()
+        self._paths = paths
+
+    def describe(self) -> DriverInfo:
+        return super().describe().model_copy(update={"installed": self._paths})
+
+
+@pytest.mark.parametrize(
+    ("reads", "named"),
+    [
+        (("on-path", "build"), ("build/bin/harness", "build")),
+        (("build", "scratch"), None),
+        (("build", "loop"), None),
+        ((), None),
+    ],
+    ids=["every path read-only", "one path writable", "one path whose mount cannot be read", "no path"],
+)
+async def test_a_result_names_its_installation_only_where_every_path_is_read_only(tmp_path, monkeypatch, reads, named):
+    """A result names the paths its harness reads to run, each resolved, in its driver's order, only where every one
+    lies on a read-only mount: one made from what could change vouches for no installation, and neither does one made
+    where the mount of a path cannot be read; and a harness that reads no path, as one in this process, names none."""
+    here = tmp_path.resolve()
+    (here / "build" / "bin").mkdir(parents=True)
+    (here / "build" / "bin" / "harness").touch()
+    (here / "on-path").symlink_to(here / "build" / "bin" / "harness")
+    (here / "scratch").mkdir()
+    (here / "loop").symlink_to(here / "loop")
+    monkeypatch.setattr(levels, "_read_only", lambda path: path.is_relative_to(here / "build"))
+
+    result = await check(lambda: Installed(*(here / name for name in reads)), tmp_path)
+
+    assert result.installation == (None if named is None else tuple(str(here / name) for name in named))
 
 
 async def test_a_program_that_is_no_driver_fails_its_checks_and_ends(tmp_path):

@@ -1280,11 +1280,13 @@ class Conformance(Checks):
     version: str | None
     sdk: str
     host: str
+    installation: tuple[str, ...] | None = None
 ```
 
 What `check_driver` found, pinned to one driver, by the name it gave and the class that implements it, at the
-harness version it said, under one SDK, on one host, since the checks prove the driver's code and the binary
-together, where they ran.
+harness version it said, under one SDK, and to where it ran, since the checks prove the driver's code and the binary
+together, where they ran: to `installation`, the read-only installation its harness ran from, as `installation`
+gives it, and where it names none, to `host`, which names where it was made either way.
 
 ### `platoon_harness.drivers.levels.implementation`
 
@@ -1296,6 +1298,19 @@ The class that implements a driver, by module and name, which a result is pinned
 own to give, and the release of each installed distribution outside the SDK whose driver entry points name the
 package of that class or of a class it is built on, which release apart from the SDK, so that an upgrade of any of
 them reads as one.
+
+### `platoon_harness.drivers.levels.installation`
+
+```python
+def installation(installed: Iterable[Path]) -> tuple[str, ...] | None: ...
+```
+
+The read-only installation a harness runs from, which a result is pinned to in place of its host: the paths
+`DriverInfo.installed` names, each resolved, in that order, where there is at least one and each lies on a mount
+that is read-only where this process looks, when it looks; else None, as a result made from what could change
+vouches for no installation. It names paths, not what they hold: that they hold what was checked is for whoever
+mounts them to keep. Where no path is writable and the mount of one cannot be read, whether there is one is
+unknown, and it raises `DriverError`, naming that path and why.
 
 ### `platoon_harness.drivers.levels.Level`
 
@@ -1334,13 +1349,15 @@ class Profile(Model):
     version: str | None = None
     sdk: str = __version__
     host: str = Field(default_factory=socket.gethostname)
+    installation: tuple[str, ...] | None = None
     login: Login | None = None
     tools: Visibility = "unverified"
     allow_native_children: bool = False
 ```
 
 One agent as it runs: which driver, by name and class, at which harness version, under which SDK on which host,
-on which login, whether its tools were seen, and whether its role lets its harness start agents of its own.
+from which read-only installation, if any, on which login, whether its tools were seen, and whether its role lets
+its harness start agents of its own.
 
 ### `platoon_harness.drivers.levels.speaks_for`
 
@@ -1348,8 +1365,9 @@ on which login, whether its tools were seen, and whether its role lets its harne
 def speaks_for(profile: Profile, conformance: Conformance | None) -> bool: ...
 ```
 
-Whether a result was made of the agent's driver, by name and class, at its harness version, under its SDK, on
-its host, as only such a result counts toward a level.
+Whether a result was made of the agent's driver, by name and class, at its harness version, under its SDK, from
+the read-only installation its harness runs from, on any host, or, where it names none, on its host, for a harness
+that runs from none, as only such a result counts toward a level.
 
 ### `platoon_harness.drivers.levels.Standing`
 
@@ -9792,7 +9810,9 @@ async def check_driver(
 ```
 
 Run every check on fresh instances of a driver, and report all failures at once, pinned to the driver, the
-harness version it reported, the class that implements it, this SDK and this host. `levels` reads the result.
+harness version it reported, the class that implements it, this SDK, this host, and the read-only installation its
+harness runs from where every path it reads to run is read-only, and none, which vouches for no installation, where
+it cannot tell. `levels` reads the result.
 
 `factory` makes one instance per check. `access` says how a harness reaches the model. `garble` makes the harness
 write a frame no parser knows, and with none that check is skipped. `gated` turns a command into a tool call this
@@ -9822,11 +9842,11 @@ async def check_harness(name: str, folder: Path) -> Conformance: ...
 ```
 
 Run every check on the harness `name` as it is installed here, against FakeModel, in `folder`, and say what it
-found, pinned to the driver, the harness version that answered, this SDK and this host: the SDK's own check of a
-harness `CHECKED` names, or else the check the installed driver of that name names in its `DriverInfo.check`. What
-that check found is refused if it names another harness, or another class than that driver's, as it would speak for
-a driver it did not check, and a check that breaks, or finds no `Conformance`, is refused, saying why. A harness no
-check ships for is refused.
+found, pinned to the driver, the harness version that answered, this SDK, this host and the read-only installation
+it runs from, if any: the SDK's own check of a harness `CHECKED` names, or else the check the installed driver of
+that name names in its `DriverInfo.check`. What that check found is refused if it names another harness, or another
+class than that driver's, as it would speak for a driver it did not check, and a check that breaks, or finds no
+`Conformance`, is refused, saying why. A harness no check ships for is refused.
 
 ### `platoon_harness.testing.Compact`
 

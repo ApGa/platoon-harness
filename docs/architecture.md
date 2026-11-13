@@ -1296,9 +1296,16 @@ Absence means unsupported, as in ACP.
   that logs each request exactly as it arrived. So "tool in the first model request" and "delivered text in the next prompt" are tested
   against ground truth, and "connected" counts for nothing. Unsupported is a skip with a reason, never a pass. Results pin to the
   driver, by the name it gives and the class that implements it, with the release of each distribution outside the SDK that
-  holds that class or a class it is built on and names a driver of its own, the harness version it said, the SDK and the host,
-  as a check proves the driver's code and the binary together where they ran, and a result pinned elsewhere, or to a version
-  nobody said, says nothing of this agent. A wire `describe` runs the program once and starts no harness.
+  holds that class or a class it is built on and names a driver of its own, the harness version it said, the SDK, and where it
+  ran, as a check proves the driver's code and the binary together where they ran: its read-only installation, the paths
+  `DriverInfo.installed` names, each resolved, where every one lies on a mount `statvfs` calls read-only, as they name what a
+  training system keeps unchanged wherever it mounts them, and otherwise the host. A result pinned elsewhere, or to a version
+  nobody said, says nothing of this agent: one that names an installation speaks for an agent whose harness runs from the same
+  paths, read-only, on any host, and one that names none only on its host, for an agent whose harness runs from no installation
+  either, as what it checked could have changed under it. Whether the paths still hold what was checked is for whoever mounts
+  them to keep. Where `statvfs` cannot read the mount of a path and no other path is writable, whether there is an installation
+  is unknown: a result made there names none, and an agent's launch there fails, naming that path and why, as `check` names it
+  too. A wire `describe` runs the program once and starts no harness.
 - **A driver says its version where it can.** `describe` gives the harness version it would run when it can tell without starting
   one, which a check before any cost holds a kept result to, and `ready` the one that runs, which the levels hold it to.
 - **A result is made where it runs.** `platoon-harness doctor --check` runs every check, through `check_harness`, on each harness the
@@ -1306,9 +1313,11 @@ Absence means unsupported, as in ACP.
   binary that runs, against `FakeModel` and on no account, and keeps what it found under
   the root, `conformance/<driver>.json`, one for each driver, beside the folder it ran in; a check that cannot run, or of a harness
   that says no version, keeps nothing and says why. The host reads it at every launch and resume, and records it where it speaks for
-  the harness, so an agent's levels come from proof made on its own machine, and an upgrade of the harness or the SDK the result did
-  not run on reads `unverified`, naming what makes one. No check proves a coverage surface, so a result proves none, and `exposure`
-  still answers no `NotSeen`. See [RFC 0044](rfcs/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
+  the harness, so an agent's levels come from proof made on its own machine, or from the read-only installation its harness runs
+  from, and an upgrade of the harness or the SDK the result did not run on reads `unverified`, naming what makes one. No check
+  proves a coverage surface, so a result proves none, and `exposure` still answers no `NotSeen`. See
+  [RFC 0044](rfcs/0044-a-level-is-earned-on-the-machine-that-runs-it.md) and
+  [RFC 0083](rfcs/0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md).
 - **A sealed launch is earned too.** On a driver that declares `sealed`, two checks run on `FakeModel` acting as a gateway, its
   models and an MCP server of the environment's tools each under a bearer it gave, two of them named `finish` and `think` as
   harnesses name tools of their own: `sealed_first_request_holds_only_ours`, that the first request goes under the gateway's bearer,

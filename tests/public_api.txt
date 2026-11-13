@@ -74,6 +74,7 @@ platoon_harness.drivers.levels.Check
 platoon_harness.drivers.levels.Checks
 platoon_harness.drivers.levels.Conformance
 platoon_harness.drivers.levels.implementation
+platoon_harness.drivers.levels.installation
 platoon_harness.drivers.levels.Level
 platoon_harness.drivers.levels.levels
 platoon_harness.drivers.levels.Levels

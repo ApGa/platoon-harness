@@ -564,19 +564,30 @@ own checks. What a driver leaves running, the suite reaps.
 | `kept` | None | The names of the tools of the harness's own that a sealed launch keeps, each of which acts on nothing, such as OpenHands' `finish` and `think` |
 | `timeout` | 10 s | How long one check may take |
 
-The result is pinned to the driver, by its name and the class that implements it, the harness version it reported, the SDK, the
-host it ran on and, for a class outside the SDK, the release of each distribution that holds it. So a program calling itself
-`claude` earns nothing from what was kept of the claude driver's checks, a result made elsewhere, or of a version nobody said,
-says nothing of this agent, and an upgrade reads `unverified` until it is checked again. The runtime reads a result kept under the
+The result is pinned to the driver, by its name and the class that implements it, the harness version it reported, the SDK, where
+it ran and, for a class outside the SDK, the release of each distribution that holds it. Where it ran is the read-only installation
+its harness ran from, the paths your `DriverInfo.installed` names, resolved, where every one lies on a read-only mount, and
+otherwise the host. So a program calling itself `claude` earns nothing from what was kept of the claude driver's checks, a result
+made elsewhere, or of a version nobody said, says nothing of this agent, and an upgrade reads `unverified` until it is checked
+again: a result made from a read-only installation speaks for an agent whose harness runs from the same paths, read-only, on any
+host, and one made from none only on its host, for an agent whose harness runs from none. The runtime reads a result kept under the
 root at every launch and resume, where `write_conformance(root, result)`, from `platoon_harness.runtime.paths`, keeps one, and
 `platoon-harness doctor --check` makes one for each harness `levels.CHECKED` names and for an installed driver whose
 `DriverInfo.check` names its check, as `module:function`, imported only to run it. A level with no result that speaks for the
-harness that runs says so, and names what makes one.
+harness that runs says so, and names what makes one. A `Profile` you build to read levels names the installation too, as the
+runtime's does, or a result made from a read-only one would say nothing of it:
 
 ```python
-from platoon_harness.drivers.levels import Profile, implementation, levels
+from platoon_harness.drivers.levels import Profile, implementation, installation, levels
 
-profile = Profile(driver="pi", implementation=implementation(driver), version="1.5.0", login="key", tools="unverified")
+profile = Profile(
+    driver="pi",
+    implementation=implementation(driver),
+    version="1.5.0",
+    installation=installation(driver.describe().installed),
+    login="key",
+    tools="unverified",
+)
 earned = levels(capabilities, profile, result)
 ```
 

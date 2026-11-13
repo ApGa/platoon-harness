@@ -41,7 +41,7 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
-from platoon_harness.drivers.levels import Check, Conformance, implementation
+from platoon_harness.drivers.levels import Check, Conformance, implementation, installation
 from platoon_harness.drivers.process import RECORD, Record, reap
 from platoon_harness.tools.mcp import HARNESS_ANCHORS
 from platoon_harness.version import __version__
@@ -781,7 +781,9 @@ async def check_driver(
     timeout: float = 10.0,  # noqa: ASYNC109  It bounds each check, not this call.
 ) -> Conformance:
     """Run every check on fresh instances of a driver, and report all failures at once, pinned to the driver, the
-    harness version it reported, the class that implements it, this SDK and this host. `levels` reads the result.
+    harness version it reported, the class that implements it, this SDK, this host, and the read-only installation its
+    harness runs from where every path it reads to run is read-only, and none, which vouches for no installation, where
+    it cannot tell. `levels` reads the result.
 
     `factory` makes one instance per check. `access` says how a harness reaches the model. `garble` makes the harness
     write a frame no parser knows, and with none that check is skipped. `gated` turns a command into a tool call this
@@ -793,12 +795,23 @@ async def check_driver(
     only its own checks.
     """
     made = factory()
-    name = made.describe().name
+    info = made.describe()
     options = _Options(model, garble, gated, shell, tool, child, tuple(kept), timeout)
     checks, version = [], None
     for definition in _CHECKS:
         check, seen = await _run(definition, factory, folder, access, options)
         checks.append(check)
         version = version or seen
-    pinned = {"implementation": implementation(made), "sdk": __version__, "host": socket.gethostname()}
-    return Conformance(driver=name, version=version, checks=tuple(checks), **pinned)
+    try:
+        installed = installation(info.installed)
+    except DriverError:
+        installed = None
+    return Conformance(
+        driver=info.name,
+        implementation=implementation(made),
+        version=version,
+        sdk=__version__,
+        host=socket.gethostname(),
+        installation=installed,
+        checks=tuple(checks),
+    )

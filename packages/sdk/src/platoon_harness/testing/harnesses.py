@@ -205,11 +205,11 @@ _HARNESSES: dict[str, tuple[Factory, Callable[[Path], dict[str, Any]]]] = {
 
 async def check_harness(name: str, folder: Path) -> Conformance:
     """Run every check on the harness `name` as it is installed here, against FakeModel, in `folder`, and say what it
-    found, pinned to the driver, the harness version that answered, this SDK and this host: the SDK's own check of a
-    harness `CHECKED` names, or else the check the installed driver of that name names in its `DriverInfo.check`. What
-    that check found is refused if it names another harness, or another class than that driver's, as it would speak for
-    a driver it did not check, and a check that breaks, or finds no `Conformance`, is refused, saying why. A harness no
-    check ships for is refused."""
+    found, pinned to the driver, the harness version that answered, this SDK, this host and the read-only installation
+    it runs from, if any: the SDK's own check of a harness `CHECKED` names, or else the check the installed driver of
+    that name names in its `DriverInfo.check`. What that check found is refused if it names another harness, or another
+    class than that driver's, as it would speak for a driver it did not check, and a check that breaks, or finds no
+    `Conformance`, is refused, saying why. A harness no check ships for is refused."""
     if name in CHECKED:
         factory, given = _HARNESSES[name]
         options: dict[str, Any] = given(folder)

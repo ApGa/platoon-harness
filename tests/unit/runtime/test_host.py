@@ -36,19 +36,22 @@ from platoon_harness.drivers import (
     TurnEnded,
     TurnStarted,
     Usage,
+    levels,
 )
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.env import tmpdir
-from platoon_harness.drivers.levels import Check, Conformance, implementation
+from platoon_harness.drivers.levels import Check, Conformance, implementation, installation
 from platoon_harness.drivers.process import RECORD, Record
 from platoon_harness.kernel import Kernel, ManualClock, Outcome, Refusal, Refused, hash_token, is_held
 from platoon_harness.primitives import Verdict
 from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, Runtime, SpawnRequest
+from platoon_harness.runtime.opening import check
 from platoon_harness.runtime.paths import agent_folder, write_conformance
 from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
 
 from .support import SECONDS, harness, in_state, journal, of_type, offers, scripted, solo, until
+from .training import TRAINABLE, Gating, Sealed
 
 MAKING = "`check_driver` checks it, and `write_conformance` keeps what it found here"
 
@@ -587,6 +590,68 @@ async def test_a_driver_that_calls_itself_claude_earns_nothing_from_what_was_kep
         "reasons": [f"conformance ran on {ran}, and this is platoon_harness.testing.scripted:ScriptedDriver: {MAKING}"],
     }
     assert started.data["conformance"] is None
+
+
+async def test_a_result_placed_in_a_fresh_root_speaks_for_the_installation_it_names(tmp_path, monkeypatch):
+    """A training system makes one result from each read-only build, on a host of its own, and places it in each fresh
+    root with `write_conformance` before the session starts: for an agent whose harness runs from that build, it earns
+    trainable before any harness launches, and at its launch, whose start records it."""
+    build = tmp_path.resolve() / "build"
+    build.mkdir()
+    monkeypatch.setattr(levels, "_read_only", lambda path: path.is_relative_to(build))
+
+    class Mounted(Sealed):
+        def describe(self) -> DriverInfo:
+            return super().describe().model_copy(update={"installed": (build,)})
+
+    made = Conformance(
+        driver="scripted",
+        implementation=implementation(Mounted()),
+        version="1",
+        sdk=__version__,
+        host="builder",
+        installation=installation([build]),
+        checks=tuple(Check(name=name, state="passed") for name in TRAINABLE),
+    )
+    root = tmp_path / "root"
+    write_conformance(root, made)
+    team = Team.model_validate({"roles": {"bob": {"harness": harness(Mounted), "approvals": "allow"}}})
+
+    problems = check(team, trainable=True, root=root, cwd=tmp_path)
+    start = {"principal": "program:trainer", "trainable": True, "authority": Gating(team), "root": root}
+    async with Session.start(team, **start) as session:
+        await in_state(session, "bob", "idle")
+        started = (await of_type(session, "agent.started"))[0]
+        kept = await session.get_body(started.data["conformance"].removeprefix("sha256:"))
+
+    assert [problem for problem in problems if problem.level == "error"] == []
+    assert started.data["levels"]["trainable"]["state"] == "met"
+    assert started.data["verified"]["installation"] == [str(build)]
+    assert Conformance.model_validate_json(kept) == made
+
+
+async def test_an_installation_whose_mount_cannot_be_read_is_refused_naming_why(tmp_path):
+    """Whether a harness runs from a read-only installation decides which result can speak for it, so where the mount
+    of a path it reads to run cannot be read, `check` names that path and why before any harness launches, and so does
+    the spawn of its agent, which fails before its harness starts rather than read the installation as none."""
+    loop = tmp_path.resolve() / "loop"
+    loop.symlink_to(loop)
+
+    class Unread(Sealed):
+        def describe(self) -> DriverInfo:
+            return super().describe().model_copy(update={"installed": (loop,)})
+
+    team = Team.model_validate({"roles": {"bob": {"harness": harness(Unread), "approvals": "allow"}}})
+    problems = check(team, trainable=True, root=tmp_path / "root", cwd=tmp_path)
+    async with Session.start(team, authority=Gating(team), root=tmp_path / "root") as session:
+        await in_state(session, "bob", "ended")
+        row = (await session.ending()).agents[0]
+        started = await of_type(session, "agent.started")
+
+    said = f"whether {loop} lies on a read-only mount is unknown: "
+    assert [problem.where for problem in problems if problem.what.startswith(said)] == ["roles.bob.harness"]
+    assert row["reason"].startswith(f"its spawn failed: {said}")
+    assert started == []
 
 
 async def test_a_role_that_lets_its_harness_start_agents_of_its_own_is_profiled_so(tmp_path):

@@ -41,7 +41,7 @@ from platoon_harness.drivers import (
     unknown_frame,
 )
 from platoon_harness.drivers.env import Held, Redactor, homedir, inherited, open_beneath, secrets_of, tmpdir
-from platoon_harness.drivers.levels import Profile, implementation, levels, speaks_for, tool_visibility
+from platoon_harness.drivers.levels import Profile, implementation, installation, levels, speaks_for, tool_visibility
 from platoon_harness.drivers.process import clean, exit_reason, reap, run
 from platoon_harness.kernel import Effect, Event, Kernel, Outcome, Refused, first, hash_token, tool_name
 from platoon_harness.primitives import CUT_OFF, OWNER_STOP, Repo, Workspace
@@ -142,6 +142,7 @@ class DriverLink:
         self.held: set[str] = set()
         self.order = asyncio.Lock()
         self.renewal = 0.0
+        self.installation: tuple[str, ...] | None = None
 
     def refuse(self, why: str) -> None:
         self.refused = why
@@ -431,9 +432,11 @@ class Host:
                 "give the role an auth profile"
             )
         await _to_thread(present, workspace, wrap)
+        installed = await _to_thread(installation, info.installed)
         driver = await _to_thread(make_driver, self._team.roles[role], self._cwd)
         link = DriverLink(agent, role, driver, info, pinned=pinned, login=login)
         spec = self._spec(link, admission, resume, Path(workspace.path), wrap)
+        link.installation = installed
         self._links[agent] = link
         link.redact = Redactor(secrets_of(spec))
         link.live = Held(link.redact)
@@ -1065,9 +1068,10 @@ class Host:
     async def _ready(self, link: DriverLink, ready: Ready) -> None:
         """Commit what was declared with what was verified, so no driver can claim a level: levels come from the
         conformance result kept under the root for the harness's driver, read at every launch and resume, which is
-        recorded only where it speaks for this harness, here. A model that is not the one pinned is refused here: the
-        effective model must equal the requested one, and an unknown one stays unknown. A harness for an agent that has
-        started before comes back to it, whether it reopened a session or began anew."""
+        recorded only where it speaks for this harness, made here or from the read-only installation it runs from. A
+        model that is not the one pinned is refused here: the effective model must equal the requested one, and an
+        unknown one stays unknown. A harness for an agent that has started before comes back to it, whether it reopened
+        a session or began anew."""
         pinned = link.pinned
         if pinned is not None and ready.effective_model not in (None, pinned):
             link.refuse(f"it runs {ready.effective_model}, and {pinned} is pinned")
@@ -1077,6 +1081,7 @@ class Host:
             driver=info.name,
             implementation=implementation(link.driver),
             version=ready.version,
+            installation=link.installation,
             login=link.login,
             tools=tool_visibility(ready.tools_visible, tuple(map(tool_name, link.held))),
             allow_native_children=role.allow_native_children,

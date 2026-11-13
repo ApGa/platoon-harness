@@ -5,7 +5,7 @@ import shutil
 
 import pytest
 
-from platoon_harness.drivers.levels import Profile, implementation, levels
+from platoon_harness.drivers.levels import Profile, implementation, installation, levels
 from platoon_harness.drivers.openhands import OpenHandsDriver
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.runtime.paths import read_conformance, write_conformance
@@ -26,7 +26,8 @@ async def test_sealed_conformance_earns_trainable(tmp_path, name):
     assert kept is not None
 
     driver = DRIVERS[name]()
-    on = {"driver": name, "implementation": implementation(driver), "version": kept.version}
+    installed = installation(driver.describe().installed)
+    on = {"driver": name, "implementation": implementation(driver), "version": kept.version, "installation": installed}
     profile = Profile(**on, login="gateway", tools="visible")
     earned = levels(driver.describe().capabilities, profile, kept)
 

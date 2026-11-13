@@ -52,8 +52,9 @@ Consequences:
   imports too, is not pinned: it floats in the range `openhands-sdk` asks, `litellm>=1.93.0,<1.106`, and every test here ran on
   1.105.7.
 - **Harness versions.** Exact, user-installed, shown by `doctor`, checked on your machine by `doctor --check`, which keeps what it
-  found for the version it ran on, under that SDK on that host, and recorded from `ready` on `agent.started` and `agent.resumed`, with
-  that result when it speaks for the harness that runs. Adapters seen:
+  found for the version it ran on, under that SDK, from the read-only installation it ran from where it names one, and otherwise on
+  that host, and recorded from `ready` on `agent.started` and `agent.resumed`, with that result when it speaks for the harness that
+  runs. Adapters seen:
   `claude-agent-acp@0.99.1`, `codex-acp@2.5.0`. Neither is bundled.
 
 ## 3. Capability matrix

@@ -33,7 +33,7 @@ from platoon_harness.drivers import (
 )
 from platoon_harness.drivers.codex import CodexDriver
 from platoon_harness.drivers.env import homedir, inherited
-from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
+from platoon_harness.drivers.levels import Conformance, Profile, implementation, installation, levels
 from platoon_harness.drivers.process import Record
 from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.team import AuthProfile
@@ -121,7 +121,10 @@ async def test_the_codex_driver_conforms(tmp_path, monkeypatch):
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     unsealed = {"sealed_first_request_holds_only_ours", "environment_tools_in_first_request"}
     assert skipped == {"call_ids_reported", "one_shot_exits", "declared_but_unproven", *unsealed}
-    profile = Profile(driver="codex", implementation=implementation(CodexDriver()), version=result.version)
+    installed = installation(CodexDriver().describe().installed)
+    profile = Profile(
+        driver="codex", implementation=implementation(CodexDriver()), version=result.version, installation=installed
+    )
     earned = levels(CodexDriver().describe().capabilities, profile, result)
     assert earned.operational.state == "met", earned.operational.reasons
     assert earned.observable.state == "met", earned.observable.reasons

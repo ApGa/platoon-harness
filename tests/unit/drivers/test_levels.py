@@ -1,18 +1,20 @@
 """Levels: computed from what was verified, each with reasons, and claimed by nobody."""
 
+import json
 import socket
 from pathlib import Path
 
 import pytest
 
 from platoon_harness import __version__
-from platoon_harness.drivers import Capabilities
+from platoon_harness.drivers import Capabilities, DriverError
 from platoon_harness.drivers.levels import (
     CHECKED,
     Check,
     Conformance,
     Profile,
     implementation,
+    installation,
     levels,
     speaks_for,
     tool_visibility,
@@ -51,12 +53,19 @@ NEEDED = (
 )
 
 
+INSTALLATION = ("/opt/toolchain/bin/pi", "/opt/toolchain/lib/node_modules", "/opt/toolchain/bin/node")
+"""A read-only build of pi, as a training system mounts one at the same paths in each sandbox."""
+MOUNTED = PROFILE.model_copy(update={"installation": INSTALLATION})
+"""An agent whose harness runs from that build."""
+BUILD = f"the read-only installation {', '.join(INSTALLATION)}"
+
+
 def conformance(
-    *checks: Check, driver="pi", implementation=PI, version="1.4.0", sdk=__version__, host=HOST
+    *checks: Check, driver="pi", implementation=PI, version="1.4.0", sdk=__version__, host=HOST, installation=None
 ) -> Conformance:
     named = {check.name for check in checks}
     passed = tuple(Check(name=name, state="passed") for name in NEEDED if name not in named)
-    pinned = {"implementation": implementation, "sdk": sdk, "host": host}
+    pinned = {"implementation": implementation, "sdk": sdk, "host": host, "installation": installation}
     return Conformance(driver=driver, version=version, checks=(*passed, *checks), **pinned)
 
 
@@ -91,6 +100,89 @@ def test_a_result_pinned_elsewhere_says_nothing_of_this_agent(pinned, said):
     assert earned.operational.state == "unverified"
     assert earned.operational.reasons == (f"{said}: {DOCTOR}",)
     assert not speaks_for(PROFILE, conformance(**pinned)) and speaks_for(PROFILE, conformance())
+
+
+@pytest.mark.parametrize("host", ["builder", HOST])
+def test_a_result_made_from_a_read_only_installation_speaks_for_it_on_any_host(host):
+    """It names the paths its harness read to run, which hold the same harness wherever they are mounted read-only, so
+    it speaks for an agent whose harness runs from those paths, read-only, on another host or its own."""
+    made = conformance(host=host, installation=INSTALLATION)
+
+    earned = levels(CAPABILITIES, MOUNTED, made)
+
+    assert speaks_for(MOUNTED, made)
+    assert (earned.operational.state, earned.observable.state, earned.trainable.state) == ("met", "met", "met")
+
+
+def test_a_result_made_from_a_writable_installation_speaks_for_its_host_alone(tmp_path):
+    """Where a path its harness reads to run could change, as one in a folder of the test's own can, a result names no
+    installation, so it speaks only on the host it was made on, as before results named one."""
+    pi = tmp_path / "bin" / "pi"
+    pi.parent.mkdir()
+    pi.touch()
+    made = installation([pi])
+
+    assert made is None
+    assert speaks_for(PROFILE, conformance(installation=made))
+    assert not speaks_for(PROFILE, conformance(host="builder", installation=made))
+
+
+def test_an_installation_whose_mount_cannot_be_read_is_unknown_and_never_none(tmp_path):
+    """Where the mount of a path its harness reads to run cannot be read, as a symlink loop's cannot, and no other path
+    is writable, whether a harness runs from a read-only installation is unknown, so it is refused, naming that path
+    and why, rather than read as none; a writable path beside it says there is none all the same."""
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+    pi = tmp_path / "pi"
+    pi.touch()
+
+    with pytest.raises(DriverError) as refused:
+        installation([loop])
+
+    assert str(refused.value).startswith(f"whether {loop} lies on a read-only mount is unknown: ")
+    assert installation([loop, pi]) is None
+
+
+def test_a_result_that_names_no_installation_says_nothing_of_an_agent_that_runs_from_one():
+    """What a result made from no read-only installation checked could have changed under it, so it vouches for no
+    installation, even on the host it was made on."""
+    earned = levels(CAPABILITIES, MOUNTED, conformance())
+
+    assert not speaks_for(MOUNTED, conformance())
+    assert earned.operational.reasons == (
+        f"conformance ran from no read-only installation, and this runs from {BUILD}: {DOCTOR}",
+    )
+
+
+@pytest.mark.parametrize(
+    ("runs", "said"),
+    [
+        (("/opt/other/bin/pi",), "the read-only installation /opt/other/bin/pi"),
+        (None, "no read-only installation"),
+    ],
+    ids=["other paths", "the same paths, writable now"],
+)
+def test_a_result_of_another_installation_says_nothing_of_this_agent(runs, said):
+    """One made from other paths was made from something else, and the same paths, where one is writable now, as an
+    agent's profile then names no installation, could hold anything since: on any host, its own among them."""
+    agent = PROFILE.model_copy(update={"installation": runs})
+    made = conformance(installation=INSTALLATION)
+
+    assert not speaks_for(agent, made)
+    assert levels(CAPABILITIES, agent, made).operational.reasons == (
+        f"conformance ran from {BUILD}, and this runs from {said}: {DOCTOR}",
+    )
+
+
+def test_a_result_kept_before_installations_parses_as_naming_none():
+    """A result kept before results named an installation has no such field: it reads as one made from none, which
+    speaks where it was made, for a harness that runs from none, as it did."""
+    kept = conformance().model_dump(mode="json", exclude={"installation"})
+
+    read = Conformance.model_validate_json(json.dumps(kept))
+
+    assert read.installation is None
+    assert speaks_for(PROFILE, read) and not speaks_for(MOUNTED, read)
 
 
 def test_a_result_of_an_unknown_version_vouches_for_nothing():

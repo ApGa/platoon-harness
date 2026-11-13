@@ -36,9 +36,10 @@ from platoon_harness.drivers import (
     TurnEnded,
     Usage,
 )
-from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
+from platoon_harness.drivers.levels import Conformance, Profile, implementation, installation, levels
 from platoon_harness.drivers.openhands import OpenHandsDriver
 from platoon_harness.drivers.process import Record
+from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.runtime.paths import write_conformance
 from platoon_harness.team import AuthProfile, Command
 from platoon_harness.testing import (
@@ -601,7 +602,8 @@ async def test_a_real_harness_calls_our_tools_parks_wakes_and_resumes_in_a_sessi
 async def test_the_worker_named_as_a_wire_command_runs_as_from_an_environment_of_its_own(tmp_path, monkeypatch):
     """The dev environment's interpreter stands in for one of its own, named as drivers.md names it. The worker is then
     a wire program like any other, and shows our tools by their own names all the same. It goes by `openhands` and
-    runs as the wire driver, so what was kept of the openhands driver's checks would say nothing of it."""
+    runs as the wire driver, so what was kept of the openhands driver's checks would say nothing of it, and from the
+    installation the paths its description names make, if they make one."""
     worker = Command(command=(sys.executable, "-P", "-m", "platoon_harness.drivers.openhands"), mode="wire")
 
     async with FakeModel(ToolCall("session_status", {}, id="call_status"), "fine") as model:
@@ -618,7 +620,13 @@ async def test_the_worker_named_as_a_wire_command_runs_as_from_an_environment_of
     assert [event.data["reason"] for event in ended] == ["stopped"]
     verified = {"driver": "openhands", "version": PINNED, "login": "key", "tools": "visible"}
     wire = "platoon_harness.drivers.wire:WireDriver"
-    pinned = {"implementation": wire, "sdk": __version__, "host": socket.gethostname()}
+    installed = installation(WireDriver(worker.command).describe().installed)
+    pinned = {
+        "implementation": wire,
+        "sdk": __version__,
+        "host": socket.gethostname(),
+        "installation": None if installed is None else list(installed),
+    }
     assert started.data["verified"] == {**verified, **pinned, "allow_native_children": False}
     assert ("session_status completed", "completed") in items
     assert model.calls[0].offers("session_status") and "mcp__ph__" not in model.calls[0].message.body.decode()

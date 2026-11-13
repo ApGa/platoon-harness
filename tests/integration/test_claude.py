@@ -29,7 +29,7 @@ from platoon_harness.drivers import (
 )
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.env import homedir
-from platoon_harness.drivers.levels import Conformance, Profile, implementation, levels
+from platoon_harness.drivers.levels import Conformance, Profile, implementation, installation, levels
 from platoon_harness.drivers.process import Record
 from platoon_harness.runtime.paths import read_running, write_conformance
 from platoon_harness.team import AuthProfile
@@ -114,7 +114,10 @@ async def test_the_claude_driver_conforms(tmp_path, monkeypatch):
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     unsealed = {"sealed_first_request_holds_only_ours", "environment_tools_in_first_request"}
     assert skipped == {"one_shot_exits", "declared_but_unproven", *unsealed}
-    profile = Profile(driver="claude", implementation=implementation(ClaudeDriver()), version=result.version)
+    installed = installation(ClaudeDriver().describe().installed)
+    profile = Profile(
+        driver="claude", implementation=implementation(ClaudeDriver()), version=result.version, installation=installed
+    )
     earned = levels(ClaudeDriver().describe().capabilities, profile, result)
     assert earned.operational.state == "met", earned.operational.reasons
     assert earned.observable.state == "met", earned.observable.reasons
