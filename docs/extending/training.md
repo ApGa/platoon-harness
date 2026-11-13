@@ -103,6 +103,19 @@ async with Session.start(
   team alone, as a load check can with no driver to ask, and then each role's driver, for a sealed launch and a result kept under
   the root that proves trainable for the harness it would run. `platoon-harness team check --trainable` runs the same check, so run
   it, and `platoon-harness doctor --check`, on each machine that runs rollouts before you spend anything.
+- **In a sandbox, place a result made from the build.** A session you run inside a sandbox, from a read-only build that holds the
+  SDK and the harness and need not hold the command line, starts in a fresh root, which holds no result. Make one result for each
+  build, with `check_harness(name, folder)` from `platoon_harness.testing`, or `check_driver` for a harness no check ships for,
+  from the build mounted read-only at the paths your sandboxes mount it at, in a sandbox like theirs. Keep it inside the build,
+  written before the build is finished, so that a build made again brings a result of its own. Then place it in each fresh root
+  before the session starts, as the user the session runs as, whose root it is: with `write_conformance(root, result)` from
+  `platoon_harness.runtime.paths`, or as a copy of the file, at `conformance/<driver>.json`. It names the build's paths, so it
+  speaks for an agent whose harness runs from them, read-only, on any host, and each level earned from it says the host it was
+  made on. That the paths still hold what was checked is yours to keep: change no build in place once it is mounted. Keep
+  `<root>/conformance` read-only in the sandbox too, as by binding a folder of the build's results there read-only: each start
+  and resume reads it again, and the model's commands run as the root's user, so one could otherwise remove it, which leaves
+  every later start of that driver short of `trainable` and its agent barred `not_trainable`, or write a result of its own
+  there for those starts to read.
 - **What `trainable_problems` refuses:** a model or an auth profile a role names, as your gateway gives both; approvals left to
   `ask`, which nobody answers, by the session's own `approvals` where it states one and else by each role's; a harness's own agents
   allowed, whose calls go on their parent's key; a workspace other than `shared` or `isolated`; and an `until` only a person

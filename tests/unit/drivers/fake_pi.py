@@ -52,6 +52,9 @@ def answer(id: str, command: str, frame: dict) -> None:
 
 
 if arguments[:1] == ["--version"]:
+    if "version_code" in script:
+        print(script.get("stderr", ""), file=sys.stderr)
+        sys.exit(script["version_code"])
     say(script.get("version", "9.9.9"))
     sys.exit(0)
 if arguments[:2] == ["auth", "check"]:

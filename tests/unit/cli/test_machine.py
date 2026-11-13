@@ -1,6 +1,7 @@
 """`doctor`: what each harness's kept result says of the binary that runs, a check going on past one that fails, and
 with `extension list`, each installed extension the command line gives no command."""
 
+import json
 import socket
 import sys
 from pathlib import Path
@@ -8,10 +9,11 @@ from pathlib import Path
 import pytest
 
 from platoon_harness import __version__
-from platoon_harness.drivers import DriverError
+from platoon_harness.drivers import DriverError, DriverInfo, levels
 from platoon_harness.drivers.claude import ClaudeDriver
 from platoon_harness.drivers.codex import CodexDriver
 from platoon_harness.drivers.levels import CHECKED, Check, Conformance
+from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.extensions import DRIVERS, EXTENSIONS, load
 from platoon_harness.runtime.paths import read_conformance, write_conformance
 from platoon_harness_cli import machine
@@ -24,13 +26,20 @@ class Foo(ClaudeDriver):
     """An installed driver no check ships for."""
 
 
-def result(driver: str, version: str | None, *failed: str, sdk: str = __version__) -> Conformance:
+def result(
+    driver: str,
+    version: str | None,
+    *failed: str,
+    sdk: str = __version__,
+    host: str = socket.gethostname(),
+    installation: tuple[str, ...] | None = None,
+) -> Conformance:
     checks = (
         Check(name="turn_end_reported", state="passed"),
         Check(name="one_shot_exits", state="skipped", reason="it declares a persistent session"),
         *(Check(name=name, state="failed", reason="no") for name in failed),
     )
-    pinned = {"implementation": CHECKED[driver], "sdk": sdk, "host": socket.gethostname()}
+    pinned = {"implementation": CHECKED[driver], "sdk": sdk, "host": host, "installation": installation}
     return Conformance(driver=driver, version=version, checks=checks, **pinned)
 
 
@@ -131,6 +140,81 @@ def test_doctor_says_unknown_where_the_binary_says_no_version(home, monkeypatch,
 
     said = lines(capsys.readouterr().out)["claude"]
     assert said.endswith("and this binary said no version, so whether that speaks for it is unknown")
+
+
+def test_doctor_names_where_a_result_was_made_and_holds_it_to_the_installation_it_names(
+    home, tmp_path, monkeypatch, capsys
+):
+    """By the runtime's rule, a result made from the read-only installation a binary runs from speaks for it, on another
+    host as on this one, and doctor names the host it was made on, from this installation; one made from another
+    installation says nothing of the binary, and doctor names that installation."""
+    stand_ins = (tmp_path / "bin").resolve()
+    monkeypatch.setattr(levels, "_read_only", lambda path: path.is_relative_to(stand_ins))
+    write_conformance(home, result("claude", "2.1.316", host="builder", installation=(str(stand_ins / "claude"),)))
+    write_conformance(home, result("codex", "0.164.0", host="builder", installation=("/opt/toolchain/bin/codex",)))
+
+    machine.doctor()
+    said = lines(capsys.readouterr().out)
+    machine.doctor(json=True)
+    shown = {harness["name"]: harness["checked"] for harness in json.loads(capsys.readouterr().out)["harnesses"]}
+
+    assert said["claude"] == (
+        "2.1.316 (Claude Code), login unknown, checked on 2.1.316 on builder, from this installation: 1 passed, 1 "
+        "skipped, none failed"
+    )
+    assert said["codex"] == (
+        f"codex-cli 0.164.0, login unknown, checked on 0.164.0 under SDK {__version__} on builder, from "
+        "/opt/toolchain/bin/codex, which says nothing of this one: --check checks it"
+    )
+    assert (shown["claude"]["installation"], shown["claude"]["current"]) == ([str(stand_ins / "claude")], True)
+    assert (shown["codex"]["installation"], shown["codex"]["current"]) == (["/opt/toolchain/bin/codex"], False)
+
+
+def test_doctor_names_what_a_pi_that_cannot_start_printed(home, tmp_path, monkeypatch, capsys):
+    """A harness its driver cannot describe runs no session, as a pi whose Node cannot load libatomic runs none, so
+    doctor says why on its line, in the driver's words, which end with what pi printed, and in its JSON, though a result
+    is kept for it, rather than read it as a pi that said no version."""
+    loader = "node: error while loading shared libraries: libatomic.so.1: cannot open shared object file"
+    (tmp_path / "bin" / "pi").write_text(f"#!/bin/sh\necho '{loader}' >&2\nexit 127\n")
+    (tmp_path / "bin" / "pi").chmod(0o755)
+    monkeypatch.setattr(machine, "harnesses", lambda: [("pi", PiDriver())])
+    write_conformance(home, result("pi", "1.5.0"))
+
+    machine.doctor()
+    said = lines(capsys.readouterr().out)
+    machine.doctor(json=True)
+    [shown] = json.loads(capsys.readouterr().out)["harnesses"]
+
+    why = f"pi cannot start: `pi --version` failed: {loader}"
+    assert said["pi"] == why
+    assert shown == {"name": "pi", "found": False, "reason": why}
+
+
+def test_doctor_says_unknown_where_the_mount_of_a_path_the_binary_runs_from_cannot_be_read(
+    home, tmp_path, monkeypatch, capsys
+):
+    """Whether a binary runs from a read-only installation decides which kept result speaks for it, so where the mount
+    of a path its driver names cannot be read, whether one does is unknown, and doctor says so, naming that path and
+    why, in its words and in its JSON."""
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+
+    class Unread(ClaudeDriver):
+        def describe(self) -> DriverInfo:
+            return super().describe().model_copy(update={"installed": (loop,)})
+
+    monkeypatch.setattr(machine, "harnesses", lambda: [("claude", Unread())])
+    write_conformance(home, result("claude", "2.1.316"))
+
+    machine.doctor()
+    said = lines(capsys.readouterr().out)["claude"]
+    machine.doctor(json=True)
+    [shown] = [harness["checked"] for harness in json.loads(capsys.readouterr().out)["harnesses"]]
+
+    why = f"whether {loop} lies on a read-only mount is unknown: "
+    assert said.startswith(f"2.1.316 (Claude Code), login unknown, checked on 2.1.316 under SDK {__version__} on ")
+    assert f", and {why}" in said and said.endswith(", so whether that speaks for it is unknown")
+    assert shown["current"] is None and shown["unknown"].startswith(why)
 
 
 def test_extension_list_and_doctor_say_why_an_installed_extension_has_no_command(home, site: Site, capsys):

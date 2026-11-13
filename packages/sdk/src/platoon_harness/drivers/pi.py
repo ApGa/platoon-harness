@@ -78,6 +78,7 @@ _KEY = "OPENAI_API_KEY"
 _PROVIDER = "platoon-harness"
 _LOGINS: Mapping[str, Login] = {"oauth": "plan", "api_key": "key"}
 _TOOL_TIMEOUT_S = 600.0
+_STDERR_TAIL = 2048
 _NO_PRICE = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}
 _UNREACHED = 2**53 - 1
 """The context window a sealed launch states, which no context reaches. A gateway names none, and pi takes one unstated
@@ -176,9 +177,15 @@ def _installed() -> tuple[Path, ...]:
 
 
 def _version(env: Mapping[str, str]) -> str | None:
-    """What pi says of itself, since no record does."""
+    """What pi says of itself, since no record does, or None where it says nothing in time or is not there. A pi that
+    cannot start, as where the image lacks a library its Node loads, is refused with the end of what it printed."""
     done = status((_PI, "--version"), env)
-    return None if done is None else done.stdout.decode(errors="replace").strip() or None
+    if done is None:
+        return None
+    if done.returncode != 0:
+        said = done.stderr.decode(errors="replace").strip()[-_STDERR_TAIL:] or f"exit {done.returncode}"
+        raise DriverError(f"{_PI} cannot start: `{_PI} --version` failed: {said}")
+    return done.stdout.decode(errors="replace").strip() or None
 
 
 def _extension_config(spec: AgentSpec) -> str:

@@ -12,6 +12,7 @@ from platoon_harness.drivers.levels import (
     CHECKED,
     Check,
     Conformance,
+    Level,
     Profile,
     implementation,
     installation,
@@ -29,6 +30,10 @@ PI = "platoon_harness.drivers.pi:PiDriver"
 PROFILE = Profile(driver="pi", implementation=PI, version="1.4.0", login="gateway", tools="visible")
 HOST = socket.gethostname()
 DOCTOR = "`platoon-harness doctor --check` checks it here and keeps what it found"
+THERE = (
+    "`platoon-harness doctor --check` checks it from this installation and keeps what it found, or, without the "
+    "command line, `check_harness` checks it and `write_conformance` keeps what it found under the root"
+)
 CAPABILITIES = Capabilities(
     sealed=True,
     tool_paths={"mcp-http", "shell"},
@@ -150,19 +155,19 @@ def test_a_result_that_names_no_installation_says_nothing_of_an_agent_that_runs_
 
     assert not speaks_for(MOUNTED, conformance())
     assert earned.operational.reasons == (
-        f"conformance ran from no read-only installation, and this runs from {BUILD}: {DOCTOR}",
+        f"conformance ran from no read-only installation, and this runs from {BUILD}: {THERE}",
     )
 
 
 @pytest.mark.parametrize(
-    ("runs", "said"),
+    ("runs", "said", "making"),
     [
-        (("/opt/other/bin/pi",), "the read-only installation /opt/other/bin/pi"),
-        (None, "no read-only installation"),
+        (("/opt/other/bin/pi",), "the read-only installation /opt/other/bin/pi", THERE),
+        (None, "no read-only installation", DOCTOR),
     ],
     ids=["other paths", "the same paths, writable now"],
 )
-def test_a_result_of_another_installation_says_nothing_of_this_agent(runs, said):
+def test_a_result_of_another_installation_says_nothing_of_this_agent(runs, said, making):
     """One made from other paths was made from something else, and the same paths, where one is writable now, as an
     agent's profile then names no installation, could hold anything since: on any host, its own among them."""
     agent = PROFILE.model_copy(update={"installation": runs})
@@ -170,7 +175,36 @@ def test_a_result_of_another_installation_says_nothing_of_this_agent(runs, said)
 
     assert not speaks_for(agent, made)
     assert levels(CAPABILITIES, agent, made).operational.reasons == (
-        f"conformance ran from {BUILD}, and this runs from {said}: {DOCTOR}",
+        f"conformance ran from {BUILD}, and this runs from {said}: {making}",
+    )
+
+
+def test_a_level_earned_from_another_host_says_where_its_result_was_made():
+    """What its checks proved of the machine around the installation, such as the shell a harness runs, they proved
+    where they ran, so each level earned from a result made on another host says so, beside its other reasons, and one
+    made on this host says nothing more. It is no reason a level is unearned."""
+    made = conformance(host="builder", installation=INSTALLATION)
+    here = levels(CAPABILITIES, MOUNTED, conformance(installation=INSTALLATION))
+
+    earned = levels(CAPABILITIES, MOUNTED, made)
+
+    said = "its result was made on builder, from this installation"
+    assert earned.operational == earned.trainable == Level(state="met", reasons=(said,))
+    assert earned.observable == Level(state="met", reasons=(said, *here.observable.reasons))
+    assert here.operational == here.trainable == Level(state="met")
+    assert unearned(MOUNTED, made, "trainable") == ()
+
+
+def test_an_agent_that_runs_from_an_installation_is_told_to_make_its_result_there():
+    """An agent whose harness runs from a read-only installation, with no result that speaks for it, is told to make
+    one from it with doctor, or, as a build made for a sandbox need not hold the command line, with `check_harness`, or
+    `check_driver` for a harness no check ships for, and to keep it under the root with `write_conformance`."""
+    scripted = MOUNTED.model_copy(update={"driver": "scripted"})
+
+    assert levels(CAPABILITIES, MOUNTED, None).trainable.reasons == (f"no conformance result for pi is kept: {THERE}",)
+    assert unearned(scripted, conformance(driver="scripted", version="1.5.0"), "trainable") == (
+        "conformance ran on scripted 1.5.0, and this is scripted 1.4.0: `check_driver` checks it from this "
+        "installation, and `write_conformance` keeps what it found under the root",
     )
 
 

@@ -4,7 +4,6 @@ import asyncio
 import os
 import re
 import shutil
-import socket
 from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,7 +14,15 @@ from cyclopts import App
 from platoon_harness import ConfigError
 from platoon_harness.config import PROJECT_FILE
 from platoon_harness.drivers import Driver, DriverError
-from platoon_harness.drivers.levels import CHECKED, Conformance, implementation, unmet_by
+from platoon_harness.drivers.levels import (
+    CHECKED,
+    Conformance,
+    Profile,
+    implementation,
+    installation,
+    speaks_for,
+    unmet_by,
+)
 from platoon_harness.drivers.opencode import OpenCodeDriver
 from platoon_harness.drivers.openhands import OpenHandsDriver, worker
 from platoon_harness.drivers.process import status
@@ -63,8 +70,8 @@ def _first_line(command: list[str]) -> str | None:
 
 def _harness(name: str, driver: Driver, root: Path) -> dict[str, Any]:
     """What a harness says of itself: its version from `--version`, and the kind of its login from its own status
-    command, which is all of what it said that is kept, or why it is not here; whether a check of it ships; and what its
-    checks found, as kept."""
+    command, which is all of what it said that is kept, or why it is not here or its driver cannot describe it, as of a
+    pi that cannot start, which no session can run; whether a check of it ships; and what its checks found, as kept."""
     found: dict[str, Any]
     if isinstance(driver, OpenHandsDriver):
         found = _openhands(name)
@@ -74,8 +81,26 @@ def _harness(name: str, driver: Driver, root: Path) -> dict[str, Any]:
         found = {"name": name, "found": True, "version": _first_line([name, "--version"]), "login": _login(driver)}
     if not found["found"]:
         return found
-    kept = _checked(read_conformance(root, name), found["version"], implementation(driver))
+    try:
+        driver.describe()
+    except DriverError as error:
+        return {"name": name, "found": False, "reason": str(error)}
+    kept = _checked(read_conformance(root, name), found["version"], _running(name, driver))
     return {**found, "checkable": _checkable(name, driver), "checked": kept}
+
+
+def _running(name: str, driver: Driver) -> Profile | str:
+    """The harness that runs here, as a kept result is held to it: its driver, by name and class, under this SDK on
+    this host, from the read-only installation the paths its driver names make, if they make one; or why that is
+    unknown, where its driver cannot describe it or the mount of such a path cannot be read."""
+    try:
+        installed = driver.describe().installed
+    except DriverError as error:
+        return f"its driver could not describe it: {error}"
+    try:
+        return Profile(driver=name, implementation=implementation(driver), installation=installation(installed))
+    except DriverError as error:
+        return str(error)
 
 
 def _checkable(name: str, driver: Driver) -> bool:
@@ -88,20 +113,28 @@ def _checkable(name: str, driver: Driver) -> bool:
         return False
 
 
-def _checked(result: Conformance | None, version: str | None, made_by: str) -> dict[str, Any] | None:
-    """What a kept result says, by what it was made on, and whether that is what runs here, `current`: the driver's
-    class, this SDK, this host and a harness version among the words the binary's version says, or None when the binary
-    said none. None when none is kept."""
+def _checked(result: Conformance | None, version: str | None, running: Profile | str) -> dict[str, Any] | None:
+    """What a kept result says, by what it was made on and where, and whether it speaks for the binary that runs,
+    `current`, by the rule the runtime holds it to, a harness version among the words the binary's version says standing
+    for the one it reports: None, with why in `unknown`, where the binary said no version or what runs is unknown. None
+    when none is kept."""
     if result is None:
         return None
     states = [check.state for check in result.checks]
-    pinned = (result.implementation, result.sdk, result.host)
-    here = result.version is not None and pinned == (made_by, __version__, socket.gethostname())
+    if version is None:
+        current, unknown = None, "this binary said no version"
+    elif isinstance(running, str):
+        current, unknown = None, running
+    else:
+        reported = running.model_copy(update={"version": result.version})
+        current, unknown = result.version in version.split() and speaks_for(reported, result), None
     return {
         "version": result.version,
         "sdk": result.sdk,
         "host": result.host,
-        "current": None if version is None else here and result.version in version.split(),
+        "installation": result.installation,
+        "current": current,
+        "unknown": unknown,
         "passed": states.count("passed"),
         "failed": [check.name for check in result.failed],
         "skipped": states.count("skipped"),
@@ -132,7 +165,7 @@ def _check(found: list[dict[str, Any]], drivers: dict[str, Driver], root: Path) 
             harness["unchecked"] = "it said no version, so what its checks found would speak for no binary"
             continue
         write_conformance(root, result)
-        harness["checked"] = _checked(result, harness["version"], implementation(drivers[name]))
+        harness["checked"] = _checked(result, harness["version"], _running(name, drivers[name]))
 
 
 def _openhands(name: str) -> dict[str, Any]:
@@ -204,8 +237,10 @@ def doctor(*, json: bool = False, check: bool = False) -> int:
     A harness's levels come from a result of its checks kept under the root, which `--check` makes for each harness it
     finds that a check ships for, the SDK's own or one its installed driver names, on the binary that runs, against a
     model of ours on loopback and on no account.
-    The runtime reads it at every launch and resume, and a result made of another version, under another SDK or on
-    another host says nothing of the one that runs. A check that cannot run keeps nothing, says why, and goes on.
+    The runtime reads it at every launch and resume, and a result made of another version or under another SDK says
+    nothing of the one that runs. One made from the read-only installation the binary runs from speaks for it, on any
+    host, and doctor names the host it was made on; one that names no installation speaks only on the host it was made
+    on, for a binary that runs from none. A check that cannot run keeps nothing, says why, and goes on.
 
     For example:
 
@@ -284,24 +319,29 @@ def _said(harness: dict[str, Any]) -> str:
     if not harness["found"]:
         return harness["reason"]
     login = f"{harness['login']} login" if harness["login"] else "login unknown"
-    checked = _said_checked(harness["checkable"], harness["checked"])
-    return f"{harness['version'] or 'version unknown'}, {login}, {checked}"
+    return f"{harness['version'] or 'version unknown'}, {login}, {_said_checked(harness)}"
 
 
-def _said_checked(checkable: bool, checked: dict[str, Any] | None) -> str:
-    """What a kept result says of the binary that runs, and what makes one where none speaks for it."""
+def _said_checked(harness: dict[str, Any]) -> str:
+    """What a harness's kept result says of the binary that runs, and where it was made: on which host and, where it
+    names one, from which read-only installation; and what makes one where none speaks for it."""
+    checked = harness["checked"]
     if checked is None:
-        return "not checked: --check checks it" if checkable else "no check of it ships: `check_driver` checks it"
+        ships = harness["checkable"]
+        return "not checked: --check checks it" if ships else "no check of it ships: `check_driver` checks it"
     made = f"{checked['version'] or 'no version'} under SDK {checked['sdk']} on {checked['host']}"
+    if (installed := checked["installation"]) is not None:
+        made += f", from {', '.join(installed)}"
     if checked["current"] is None:
-        return f"checked on {made}, and this binary said no version, so whether that speaks for it is unknown"
+        return f"checked on {made}, and {checked['unknown']}, so whether that speaks for it is unknown"
     if not checked["current"]:
         return f"checked on {made}, which says nothing of this one: --check checks it"
+    ran = checked["version"] + ("" if installed is None else f" on {checked['host']}, from this installation")
     counted = f"{checked['passed']} passed, {checked['skipped']} skipped"
     if not checked["failed"]:
-        return f"checked on {checked['version']}: {counted}, none failed"
+        return f"checked on {ran}: {counted}, none failed"
     unmet = f", which leaves {' and '.join(checked['unmet'])} unmet" if checked["unmet"] else ""
-    return f"checked on {checked['version']}: {counted}, and {', '.join(checked['failed'])} failed{unmet}"
+    return f"checked on {ran}: {counted}, and {', '.join(checked['failed'])} failed{unmet}"
 
 
 def _runs_as_written(driver: Driver) -> bool:

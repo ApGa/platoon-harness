@@ -184,8 +184,17 @@ def _level(findings: Iterable[_Finding]) -> Level:
 
 
 def _making(profile: Profile) -> str:
-    """What makes a result that speaks for an agent's driver here."""
-    if CHECKED.get(profile.driver) == profile.implementation:
+    """What makes a result that speaks for an agent's driver here, or, where its harness runs from a read-only
+    installation, from that installation, which need not hold the command line, as one made for a sandbox may not, so
+    the SDK's own functions are named beside it."""
+    shipped = CHECKED.get(profile.driver) == profile.implementation
+    if profile.installation is not None:
+        kept = "`write_conformance` keeps what it found under the root"
+        if not shipped:
+            return f"`check_driver` checks it from this installation, and {kept}"
+        doctor = "`platoon-harness doctor --check` checks it from this installation and keeps what it found"
+        return f"{doctor}, or, without the command line, `check_harness` checks it and {kept}"
+    if shipped:
         return "`platoon-harness doctor --check` checks it here and keeps what it found"
     return "`check_driver` checks it, and `write_conformance` keeps what it found here"
 
@@ -284,11 +293,15 @@ def speaks_for(profile: Profile, conformance: Conformance | None) -> bool:
 def _verified(
     profile: Profile, conformance: Conformance | None, needed: Iterable[str], declared: Iterable[str] = ()
 ) -> Iterator[_Finding]:
-    """`needed` checks must have passed. `declared` ones cover what a harness may leave out, so they must not fail."""
+    """`needed` checks must have passed. `declared` ones cover what a harness may leave out, so they must not fail. A
+    result that speaks from another host, by the installation it names, says where it was made, as what its checks
+    proved of the machine around that installation, such as its shell, they proved there."""
     if (unpinned := _pin(profile, conformance)) is not None:
         yield "unverified", unpinned
         return
     assert conformance is not None
+    if conformance.host != profile.host:
+        yield "met", f"its result was made on {conformance.host}, from this installation"
     for name in needed:
         check = conformance.get(name)
         if check is None or check.state == "skipped":
@@ -338,7 +351,8 @@ def unearned(
 ) -> tuple[str, ...]:
     """Why a result does not prove what `level` stands on for the harness a profile names, naming what makes one that
     does, or nothing when it proves it."""
-    return tuple(reason for _, reason in _verified(profile, conformance, *_STANDS_ON[level]))
+    found = _verified(profile, conformance, *_STANDS_ON[level])
+    return tuple(reason for standing, reason in found if standing != "met")
 
 
 def levels(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Levels:

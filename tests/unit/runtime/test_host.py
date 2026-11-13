@@ -595,7 +595,7 @@ async def test_a_driver_that_calls_itself_claude_earns_nothing_from_what_was_kep
 async def test_a_result_placed_in_a_fresh_root_speaks_for_the_installation_it_names(tmp_path, monkeypatch):
     """A training system makes one result from each read-only build, on a host of its own, and places it in each fresh
     root with `write_conformance` before the session starts: for an agent whose harness runs from that build, it earns
-    trainable before any harness launches, and at its launch, whose start records it."""
+    trainable before any harness launches, and at its launch, whose start records it and says where it was made."""
     build = tmp_path.resolve() / "build"
     build.mkdir()
     monkeypatch.setattr(levels, "_read_only", lambda path: path.is_relative_to(build))
@@ -625,7 +625,10 @@ async def test_a_result_placed_in_a_fresh_root_speaks_for_the_installation_it_na
         kept = await session.get_body(started.data["conformance"].removeprefix("sha256:"))
 
     assert [problem for problem in problems if problem.level == "error"] == []
-    assert started.data["levels"]["trainable"]["state"] == "met"
+    assert started.data["levels"]["trainable"] == {
+        "state": "met",
+        "reasons": ["its result was made on builder, from this installation"],
+    }
     assert started.data["verified"]["installation"] == [str(build)]
     assert Conformance.model_validate_json(kept) == made
 

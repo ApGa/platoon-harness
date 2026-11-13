@@ -21,10 +21,10 @@ problem    no harness is on PATH
 not usable
 ```
 
-It exits 78. No harness it drives is on PATH, and the `openhands` extra is not installed either: install `claude`, `codex`
-or `pi` and sign it in as you usually do, or install the extra, as [Install](../getting-started/install.md#openhands)
-says. Its other problems are a root it cannot use, below, or a conflict among installed drivers and extensions, which
-`platoon-harness extension list` names.
+It exits 78. No harness it drives that can start is on PATH, as each harness's own line says, and the `openhands` extra is
+not installed either: install `claude`, `codex` or `pi` and sign it in as you usually do, or install the extra, as
+[Install](../getting-started/install.md#openhands) says. Its other problems are a root it cannot use, below, or a conflict
+among installed drivers and extensions, which `platoon-harness extension list` names.
 
 ## doctor's `openhands` line names an interpreter
 
@@ -52,6 +52,17 @@ platoon-harness: the command line needs its cli extra, and ~/project/.venv/bin/p
 It exits 78. The `platoon-harness` that ran belongs to the interpreter the message names, which holds the library
 without the `cli` extra. An active virtual environment that holds one comes first on your PATH, ahead of a
 `uv tool install`: install the extra there, or deactivate the environment.
+
+## pi cannot start
+
+```text
+platoon-harness: roles.lead.harness: pi cannot start: `pi --version` failed: node: error while loading shared libraries: libatomic.so.1: cannot open shared object file: No such file or directory
+```
+
+It exits 78, before any cost, and `team check` says the same, as does `doctor`, on pi's line, in place of its version.
+pi runs on the Node that PATH finds, and that Node cannot load a library it needs, which the end of the line names.
+The official Linux builds of Node 26.13.0 load libatomic, which slim images such as `python:3.12-slim` lack: install it
+in the image, as `apt-get install libatomic1` does on Debian and Ubuntu.
 
 ## init says none is on PATH
 

@@ -1314,8 +1314,13 @@ Absence means unsupported, as in ACP.
   the root, `conformance/<driver>.json`, one for each driver, beside the folder it ran in; a check that cannot run, or of a harness
   that says no version, keeps nothing and says why. The host reads it at every launch and resume, and records it where it speaks for
   the harness, so an agent's levels come from proof made on its own machine, or from the read-only installation its harness runs
-  from, and an upgrade of the harness or the SDK the result did not run on reads `unverified`, naming what makes one. No check
-  proves a coverage surface, so a result proves none, and `exposure` still answers no `NotSeen`. See
+  from, and an upgrade of the harness or the SDK the result did not run on reads `unverified`, naming what makes one. A level
+  earned from a result made on another host says where it was made, as what the checks proved of the machine around an
+  installation, such as the shell a harness runs, they proved there. An agent whose harness runs from a read-only installation,
+  with no result that speaks for it, is told to make one from it with `doctor --check`, or, as a build made for a sandbox need
+  not hold the command line, with `check_harness`, or `check_driver` for a harness no check ships for, and to keep it under the
+  root with `write_conformance`; a training system makes one for each build and places it in each fresh root. No check proves a
+  coverage surface, so a result proves none, and `exposure` still answers no `NotSeen`. See
   [RFC 0044](rfcs/0044-a-level-is-earned-on-the-machine-that-runs-it.md) and
   [RFC 0083](rfcs/0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md).
 - **A sealed launch is earned too.** On a driver that declares `sealed`, two checks run on `FakeModel` acting as a gateway, its
@@ -2079,7 +2084,8 @@ class AgentOutcome(Model):
   allowed, a workspace other than `shared` or `isolated`, and an `until` only a person reaches, with approvals judged by the
   session's own `approvals` where it states one. `Session.start(trainable=True)`, which needs an authority, passes the flag to
   `check`, as `plan_login` passes, and `check(team, trainable=True)` adds those to each role's driver: a sealed launch, and a result
-  kept under the root that proves trainable for the harness it would run, naming `doctor --check` where it ships.
+  kept under the root that proves trainable for the harness it would run, naming `doctor --check` where it ships, and, where the
+  harness runs from a read-only installation, `check_harness` or `check_driver` there and `write_conformance` too (§9.3).
   `platoon-harness team check --trainable` runs the same check. Its agents run on the gateway, so no plan login is theirs.
 - **What trains is read from the record.** `eligibility(agent, episode)` answers attribution and every bar (§11): a call is
   eligible for its turn's purpose, which a call reported with none has, or for `compaction`, and for no other. What trains is the

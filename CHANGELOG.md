@@ -7,6 +7,23 @@ Python API, the team file or the command line, and a patch release only fixes bu
 without a leading underscore that a class it lists defines; nothing else is, and a name the
 [Python API reference](docs/reference/python.md) marks experimental is part of it too.
 
+## 0.2.0 (unreleased)
+
+- **A pi that cannot start is refused with what it printed,** as where an image lacks a library pi's Node loads, such as
+  `libatomic.so.1`: `team check`, a start and a check of pi say why, where before they said at most that pi said no
+  version, or that it was gone ([Troubleshooting](docs/how-to/troubleshooting.md#pi-cannot-start)).
+- **A `Profile` you build to read levels names the installation its harness runs from,** with
+  `platoon_harness.drivers.levels.installation`, new here, as the runtime's does: one that names none says nothing of
+  a result made from a read-only installation ([Drivers](docs/extending/drivers.md#conformance)).
+- **`doctor --json` names each kept result's `installation`, and says in `unknown` why `current` is null:** the binary
+  said no version, as before, or the mount of a path it runs from cannot be read. A harness whose driver cannot
+  describe it, as a pi that cannot start, is not `found`, and the driver's words are its `reason`, which its line says
+  ([Command line reference](docs/reference/cli.md#platoon-harness-doctor)).
+- **A result made from a read-only installation speaks for it wherever it is mounted.** Where every path a harness reads
+  to run lies on a read-only mount, its conformance result names those paths, and speaks for an agent whose harness runs
+  from them, read-only, on any host, as in a training system's sandbox; a level earned from one made on another host
+  says where it was made, and so does `doctor` ([Training on sessions](docs/extending/training.md#start-each-rollouts-session)).
+
 ## 0.1.0 (2026-11-12)
 
 The first release. platoon-harness runs the agent harnesses you already use, such as Claude Code, Codex, pi and
