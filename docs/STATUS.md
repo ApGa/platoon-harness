@@ -192,6 +192,7 @@ bare name is in `tests/unit/drivers/`.
 | The SDK's imports: the standard library and pydantic, and the `openhands` extra in its worker alone | tested | `test_boundaries.py` |
 | Sealed launches on a gateway: nothing of yours and none of the harness's own tools, the gateway's model under its bearer, compaction labelled at call time, and the two checks `trainable` stands on | tested | `test_sealed.py`, `test_pi.py`, `test_check_driver.py`, `test_levels.py`; `tests/integration/test_pi.py`, `test_openhands.py` and `test_sealed.py`. Only FakeModel has acted as a gateway |
 | A launch in the environment, `Capabilities.in_environment`: on a gateway that says its session runs in the environment, a sealed launch that keeps the harness's own tools, the scripted harness's `shell`, OpenHands' coding tools and pi's default tools | planned | No driver declares it, so the host gives such a gateway to none |
+| `own_tools_in_first_request_in_the_environment`: the check that earns a launch in the environment, which `trainable` needs passed at such a launch, and not failed at any launch of its driver | tested | `test_check_driver.py`, `test_levels.py` and `tests/unit/runtime/test_training.py`, on scripted harnesses that stand in for one with the launch. No driver here declares it, so it skips on every one |
 
 ### Runtime (`platoon_harness.runtime`, `platoon_harness.session`)
 

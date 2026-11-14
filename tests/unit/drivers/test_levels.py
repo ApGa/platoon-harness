@@ -58,6 +58,13 @@ NEEDED = (
 )
 
 
+IN_ENVIRONMENT_CHECK = "own_tools_in_first_request_in_the_environment"
+IN_ENVIRONMENT = CAPABILITIES.model_copy(update={"in_environment": True})
+"""A driver with a launch in the environment."""
+IN_ENVIRONMENT_PROFILE = PROFILE.model_copy(update={"in_environment": True})
+"""An agent whose gateway said its session runs in the environment."""
+
+
 INSTALLATION = ("/opt/toolchain/bin/pi", "/opt/toolchain/lib/node_modules", "/opt/toolchain/bin/node")
 """A read-only build of pi, as a training system mounts one at the same paths in each sandbox."""
 MOUNTED = PROFILE.model_copy(update={"installation": INSTALLATION})
@@ -369,6 +376,41 @@ def test_trainable_stands_on_the_sealed_checks(sealed):
     assert (failed.trainable.state, failed.trainable.reasons) == ("unmet", (f"`{sealed}` failed: no",))
     assert (skipped.trainable.state, skipped.trainable.reasons) == ("unverified", (f"`{sealed}` did not run: no",))
     assert failed.operational.state == skipped.operational.state == "met"
+
+
+def test_trainable_in_the_environment_stands_on_its_own_tools_check():
+    """At a launch in the environment, trainable needs the check that the launch keeps the harness's own tools passed,
+    beside the five it stands on everywhere: a result that skipped it, or was made before it, leaves trainable there
+    unverified, and costs nothing elsewhere."""
+    passed = conformance(Check(name=IN_ENVIRONMENT_CHECK, state="passed"))
+    skipped = conformance(Check(name=IN_ENVIRONMENT_CHECK, state="skipped", reason="no shell was named"))
+    before = conformance()
+
+    assert levels(IN_ENVIRONMENT, IN_ENVIRONMENT_PROFILE, passed).trainable == Level(state="met")
+    assert levels(IN_ENVIRONMENT, IN_ENVIRONMENT_PROFILE, skipped).trainable == Level(
+        state="unverified", reasons=(f"`{IN_ENVIRONMENT_CHECK}` did not run: no shell was named",)
+    )
+    assert unearned(IN_ENVIRONMENT_PROFILE, before, "trainable") == (f"`{IN_ENVIRONMENT_CHECK}` did not run",)
+    assert (
+        levels(IN_ENVIRONMENT, PROFILE, skipped).trainable
+        == levels(IN_ENVIRONMENT, PROFILE, before).trainable
+        == Level(state="met")
+    )
+
+
+def test_a_failed_launch_in_the_environment_leaves_trainable_unmet_everywhere():
+    """A capability a check shows false leaves a level unmet, so a driver whose launch in the environment failed its
+    check is trainable at no launch, in the environment or not, and `check(team, trainable=True)`, which sees no
+    gateway, says so before any harness launches; operational and observable stand as they were."""
+    failed = conformance(Check(name=IN_ENVIRONMENT_CHECK, state="failed", reason="it shows no bash"))
+    said = f"`{IN_ENVIRONMENT_CHECK}` failed: it shows no bash"
+
+    for profile in (PROFILE, IN_ENVIRONMENT_PROFILE):
+        earned = levels(IN_ENVIRONMENT, profile, failed)
+        assert earned.trainable == Level(state="unmet", reasons=(said,))
+        assert (earned.operational.state, earned.observable.state) == ("met", "met")
+    assert unearned(PROFILE, failed, "trainable") == (said,)
+    assert unmet_by(failed) == ("trainable",)
 
 
 def test_what_a_result_does_not_prove_of_a_level_is_said_with_what_makes_one():

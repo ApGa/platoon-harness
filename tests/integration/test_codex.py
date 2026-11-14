@@ -119,7 +119,11 @@ async def test_the_codex_driver_conforms(tmp_path, monkeypatch):
     assert result.get("approval_shows_its_ask").state == "passed"
     assert (result.driver, result.version) == ("codex", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
-    unsealed = {"sealed_first_request_holds_only_ours", "environment_tools_in_first_request"}
+    unsealed = {
+        "sealed_first_request_holds_only_ours",
+        "environment_tools_in_first_request",
+        "own_tools_in_first_request_in_the_environment",
+    }
     assert skipped == {"call_ids_reported", "one_shot_exits", "declared_but_unproven", *unsealed}
     installed = installation(CodexDriver().describe().installed)
     profile = Profile(

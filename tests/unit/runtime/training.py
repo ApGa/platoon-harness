@@ -72,8 +72,9 @@ TRAINABLE = (
 
 
 def kept(root: Path, *failed: str, version: str = "1") -> Path:
-    """Keep a result for the sealed harness under `root`, as `write_conformance` keeps one, whose checks that trainable
-    stands on passed but `failed`."""
-    checks = tuple(Check(name=name, state="failed" if name in failed else "passed", reason="") for name in TRAINABLE)
+    """Keep a result for the sealed harness under `root`, as `write_conformance` keeps one, in which each check that
+    `failed` names failed and every other check trainable needs passed."""
+    named = dict.fromkeys((*TRAINABLE, *failed))
+    checks = tuple(Check(name=name, state="failed" if name in failed else "passed", reason="") for name in named)
     pinned = {"implementation": implementation(Sealed()), "sdk": __version__, "host": socket.gethostname()}
     return write_conformance(root, Conformance(driver="scripted", version=version, checks=checks, **pinned))

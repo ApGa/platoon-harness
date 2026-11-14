@@ -1337,6 +1337,13 @@ Absence means unsupported, as in ACP.
   result per driver and version, never a second per mode. They run as a rollout would, on the machine's own home, so what else a
   sealed launch keeps out of the user's, settings, extensions and skills, is how its driver builds the launch (§9.5), which no check
   proves.
+- **A launch in the environment is earned too.** On a driver that declares `in_environment`, a third check runs on `FakeModel`
+  acting as a gateway that says its session runs in the environment: `own_tools_in_first_request_in_the_environment`, that the
+  first request goes under its bearer, holds none of the project's instructions, and shows the harness's own shell, by the name
+  `check_driver`'s `shell` gives it, beside ours and each of the environment's tools named by its server, and it skips, saying
+  why, with no `shell` given. It goes in the same one result. That the shell runs, in the agent's workspace, is what the shell
+  checks under `operational` prove of the same tool on a key, and what else such a launch keeps and keeps out is how its driver
+  builds it, which no check proves.
 - **Model pinning.** The effective model must equal the requested one, which is the gateway's when access is a gateway, and a role
   may name only that one, so an alias a harness resolves to another name fails. The host
   holds `ready` to this and fails a spawn or a resume that differs. An effective model a harness does not name stays unknown, and refuses
@@ -1354,7 +1361,9 @@ otherwise what the harness says it is signed in on; and its launch was in the en
 `operational` is unmet when a check it stands on fails, `approval_answered`, `denial_holds` and `approval_shows_its_ask` among
 them, so a driver whose approvals carry no ask is not `operational`. `trainable` needs a gateway login, a driver that declares
 `sealed`, our tools seen, and a kept result whose `ready_with_pinned_model`, `tool_in_first_request`, `call_ids_reported` and two
-sealed checks passed. No driver can claim a level: the host commits all of this through `agent.start`, and a report has no field
+sealed checks passed, and at a launch in the environment `own_tools_in_first_request_in_the_environment` too. Once that check has
+failed, no launch of its driver is trainable, so `check(team, trainable=True)`, which sees no gateway, refuses the driver before
+any harness launches. No driver can claim a level: the host commits all of this through `agent.start`, and a report has no field
 for it.
 
 ### 9.5 Mappings
@@ -2078,9 +2087,10 @@ class AgentOutcome(Model):
   the environment is refused one, as nothing would carry it out.
   Only an authority gives a gateway, so nothing a team, a role, a person or the command line names keeps a harness's own tools.
   The SDK cannot see where it runs, so the word is the authority's to keep true, and each start records it (§9.4). A driver that
-  has the launch declares `in_environment`, and no driver here does. There every harness, the runtime and whatever the model runs
-  share one user, as on any session whose agents have a shell: a command can read any agent's bearer and write the journal, and
-  what a harness's own tools do is recorded only as it reports them (§15).
+  has the launch declares `in_environment`, a third check in the one kept result earns it (§9.3), and no driver here declares
+  it. There every harness, the runtime and whatever the model runs share one user, as on any session whose agents have a shell:
+  a command can read any agent's bearer and write the journal, and what a harness's own tools do is recorded only as it reports
+  them (§15).
 - **Compaction is labelled at call time.** Every sealed driver sends the admission's `compaction_headers` on each call it makes to
   compact a context, and reports that call as `model.call` of purpose `compaction` with the id the model gave: ScriptedDriver's
   `Compact` step, a wire program from its launch spec, OpenHands' condenser, and pi through our extension, which runs pi's own

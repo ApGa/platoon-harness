@@ -113,8 +113,17 @@ async def test_the_openhands_driver_conforms(tmp_path, monkeypatch):
     assert result.get("approval_shows_its_ask").state == "passed"
     assert (result.driver, result.version) == ("openhands", PINNED)
     skipped = {check.name for check in result.checks if check.state == "skipped"}
-    assert skipped == {"tool_item_carries_its_anchor", "native_child_seen", "one_shot_exits", "declared_but_unproven"}
-    profile = Profile(driver="openhands", implementation=implementation(OpenHandsDriver()), version=PINNED)
+    assert skipped == {
+        "tool_item_carries_its_anchor",
+        "native_child_seen",
+        "one_shot_exits",
+        "declared_but_unproven",
+        "own_tools_in_first_request_in_the_environment",
+    }
+    installed = installation(OpenHandsDriver().describe().installed)
+    profile = Profile(
+        driver="openhands", implementation=implementation(OpenHandsDriver()), version=PINNED, installation=installed
+    )
     earned = levels(OpenHandsDriver().describe().capabilities, profile, result)
     assert earned.operational.state == "met", earned.operational.reasons
     assert earned.observable.state == "met", earned.observable.reasons

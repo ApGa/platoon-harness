@@ -33,6 +33,10 @@ Standing = Literal["met", "unmet", "unverified"]
 
 _Finding = tuple[Standing, str]
 
+_IN_ENVIRONMENT = "own_tools_in_first_request_in_the_environment"
+"""The check of a launch in the environment, which `trainable` needs passed at such a launch, and not failed at any
+launch of its driver, as a capability a check shows false leaves a level unmet."""
+
 _STANDS_ON: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "operational": (
         (
@@ -70,7 +74,7 @@ _STANDS_ON: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "sealed_first_request_holds_only_ours",
             "environment_tools_in_first_request",
         ),
-        (),
+        (_IN_ENVIRONMENT,),
     ),
 }
 """The checks each level stands on: those it needs passed, and those covering what a harness may leave out, which must
@@ -292,12 +296,14 @@ def speaks_for(profile: Profile, conformance: Conformance | None) -> bool:
     return _pin(profile, conformance) is None
 
 
-def _verified(
-    profile: Profile, conformance: Conformance | None, needed: Iterable[str], declared: Iterable[str] = ()
-) -> Iterator[_Finding]:
-    """`needed` checks must have passed. `declared` ones cover what a harness may leave out, so they must not fail. A
-    result that speaks from another host, by the installation it names, says where it was made, as what its checks
-    proved of the machine around that installation, such as its shell, they proved there."""
+def _verified(profile: Profile, conformance: Conformance | None, level: str) -> Iterator[_Finding]:
+    """What a result proves of the checks `level` stands on. Those it needs must have passed, and at a launch in the
+    environment, that launch's check too, where the level stands on it. Those covering what a harness may leave out
+    must not fail. A result that speaks from another host, by the installation it names, says where it was made, as
+    what its checks proved of the machine around that installation, such as its shell, they proved there."""
+    needed, declared = _STANDS_ON[level]
+    if profile.in_environment and _IN_ENVIRONMENT in declared:
+        needed = (*needed, _IN_ENVIRONMENT)
     if (unpinned := _pin(profile, conformance)) is not None:
         yield "unverified", unpinned
         return
@@ -314,7 +320,7 @@ def _verified(
 
 
 def _operational(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Iterator[_Finding]:
-    yield from _verified(profile, conformance, *_STANDS_ON["operational"])
+    yield from _verified(profile, conformance, "operational")
     if not capabilities.tool_paths:
         yield "unmet", "it has no path to our tools"
     elif profile.tools == "hidden" and "shell" not in capabilities.tool_paths:
@@ -324,7 +330,7 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
 
 
 def _observable(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Iterator[_Finding]:
-    yield from _verified(profile, conformance, *_STANDS_ON["observable"])
+    yield from _verified(profile, conformance, "observable")
     blind = [surface for surface in SURFACES if capabilities.coverage.get(surface, "none") == "none"]
     if len(blind) == len(SURFACES):
         yield "unmet", "it observes no surface"
@@ -345,7 +351,7 @@ def _trainable(capabilities: Capabilities, profile: Profile, conformance: Confor
         yield "unmet", "our tools never reach the policy"
     elif profile.tools == "unverified":
         yield "unverified", "tools unverified"
-    yield from _verified(profile, conformance, *_STANDS_ON["trainable"])
+    yield from _verified(profile, conformance, "trainable")
 
 
 def unearned(
@@ -353,7 +359,7 @@ def unearned(
 ) -> tuple[str, ...]:
     """Why a result does not prove what `level` stands on for the harness a profile names, naming what makes one that
     does, or nothing when it proves it."""
-    found = _verified(profile, conformance, *_STANDS_ON[level])
+    found = _verified(profile, conformance, level)
     return tuple(reason for standing, reason in found if standing != "met")
 
 

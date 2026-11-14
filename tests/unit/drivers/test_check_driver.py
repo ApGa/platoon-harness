@@ -16,6 +16,7 @@ from platoon_harness.drivers import (
     DriverError,
     DriverInfo,
     Exited,
+    Gateway,
     InputDelivered,
     Item,
     ModelCall,
@@ -91,6 +92,9 @@ def test_every_check_a_level_reads_exists():
         "approval_shows_its_ask",
         "effort_honored_or_refused",
         "reconcile_claims_nothing_unseen",
+        "sealed_first_request_holds_only_ours",
+        "environment_tools_in_first_request",
+        "own_tools_in_first_request_in_the_environment",
     } <= names
 
 
@@ -594,6 +598,7 @@ async def test_unsupported_is_a_skip_with_a_reason_never_a_pass(tmp_path):
         "measures_reported": "it declares no measures",
         "call_ids_reported": "it declares no id per model call",
         "dialects_spoken": "it declares no dialect",
+        "own_tools_in_first_request_in_the_environment": "it declares no launch in the environment",
     }.items():
         assert (result.get(name).state, result.get(name).reason) == ("skipped", reason)
 
@@ -852,6 +857,43 @@ async def test_a_sealed_launch_that_leaves_the_environment_s_tools_out_fails(tmp
     result = await check(Unconnected, tmp_path)
 
     assert result.get("environment_tools_in_first_request").state == "failed"
+
+
+IN_ENVIRONMENT = ScriptedDriver().describe().capabilities.model_copy(update={"in_environment": True})
+"""What a scripted harness with a launch in the environment would declare."""
+
+
+class ShowingItsShell(Filtered):
+    """A scripted harness that shows its shell on a gateway that says its session runs in the environment."""
+
+    async def _list_tools(self):
+        names = await super()._list_tools()
+        if isinstance(self._spec.access, Gateway) and self._spec.access.in_environment:
+            self._tools.append({"type": "function", "function": {"name": "shell", "parameters": {}}})
+        return names
+
+
+async def test_a_launch_in_the_environment_that_shows_no_shell_of_its_own_fails_its_check(tmp_path):
+    """A driver that declares a launch in the environment and shows the model no shell of its own there has a launch
+    that does not keep its harness's own tools."""
+    result = await check(lambda: Filtered(capabilities=IN_ENVIRONMENT), tmp_path, shell=shell)
+
+    assert result.get("own_tools_in_first_request_in_the_environment").reason == (
+        "the first request does not show shell, the harness's own shell"
+    )
+
+
+async def test_a_launch_in_the_environment_that_shows_its_shell_beside_ours_and_the_environment_s_passes(tmp_path):
+    """Its shell is shown only on a gateway in the environment, so its sealed launch still holds only ours; and with no
+    shell named the check has nothing to look for, so it skips, saying so."""
+    named = await check(lambda: ShowingItsShell(capabilities=IN_ENVIRONMENT), tmp_path / "named", shell=shell)
+    unnamed = await check(lambda: ShowingItsShell(capabilities=IN_ENVIRONMENT), tmp_path / "unnamed")
+
+    assert named.get("own_tools_in_first_request_in_the_environment").state == "passed"
+    assert named.get("sealed_first_request_holds_only_ours").state == "passed"
+    assert unnamed.get("own_tools_in_first_request_in_the_environment").reason == (
+        "nothing was given that names this harness's shell"
+    )
 
 
 async def test_a_harness_with_no_sealed_launch_skips_the_sealed_checks(tmp_path):

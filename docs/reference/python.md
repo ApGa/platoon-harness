@@ -9857,12 +9857,12 @@ it cannot tell. `levels` reads the result.
 
 `factory` makes one instance per check. `access` says how a harness reaches the model. `garble` makes the harness
 write a frame no parser knows, and with none that check is skipped. `gated` turns a command into a tool call this
-harness asks approval for, and `shell` into one that runs it, with none of which the check of a stop during a
-running tool is skipped. `tool` turns a note into a call of our tool, by the name this harness's model knows it by.
-`child` is a tool call that starts a native child, and with none that check is skipped. `kept` names each tool of
-the harness's own that a sealed launch keeps, which acts on nothing. `model` is what a role names FakeModel by on
-this harness, which asks FakeModel for it by its own name. `timeout` bounds each check, so one wedged harness costs
-only its own checks.
+harness asks approval for, and `shell` into a call of the harness's own shell that runs it: with no `shell`, the
+checks that run a command, and the one that a launch in the environment shows that shell, are skipped. `tool`
+turns a note into a call of our tool, by the name this harness's model knows it by. `child` is a tool call that
+starts a native child, and with none that check is skipped. `kept` names each tool of the harness's own that a
+sealed launch keeps, which acts on nothing. `model` is what a role names FakeModel by on this harness, which asks
+FakeModel for it by its own name. `timeout` bounds each check, so one wedged harness costs only its own checks.
 
 ### `platoon_harness.testing.check_extension`
 

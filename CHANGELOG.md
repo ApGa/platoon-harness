@@ -46,6 +46,13 @@ without a leading underscore that a class it lists defines; nothing else is, and
   holds to the first gateway's word, a gateway that says so goes to no other driver, each start records it, and none of the
   SDK's drivers declares it
   ([Training on sessions](docs/extending/training.md#what-a-sealed-launch-is)).
+- **Every result `check_driver` makes holds a 32nd check,** `own_tools_in_first_request_in_the_environment`, which
+  skips on each driver that declares no launch in the environment, so a test of a driver that asserts which checks
+  skipped names it too, as the conformance tests here now do ([Drivers](docs/extending/drivers.md#conformance)).
+- **A launch in the environment is earned, never declared.** A conformance check,
+  `own_tools_in_first_request_in_the_environment`, proves it shows the harness's own shell beside ours and the
+  environment's, and `trainable` stands on it there; a driver whose launch in the environment fails it is trainable at no
+  launch ([Drivers](docs/extending/drivers.md#a-sealed-launch)).
 
 ## 0.1.0 (2026-11-12)
 

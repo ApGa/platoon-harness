@@ -36,6 +36,7 @@ ONE_SHOT_SKIPS = {
     "runs_in_its_workspace",
     "sealed_first_request_holds_only_ours",
     "environment_tools_in_first_request",
+    "own_tools_in_first_request_in_the_environment",
     "unset_model_refused",
     "native_children_off_by_default",
     "native_child_seen",
@@ -49,6 +50,7 @@ SCRIPTED_SKIPS = {
     "declared_but_unproven",
     "native_children_off_by_default",
     "native_child_seen",
+    "own_tools_in_first_request_in_the_environment",
 }
 ACP_SKIPS = {
     *SCRIPTED_SKIPS,

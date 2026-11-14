@@ -30,6 +30,7 @@ from platoon_harness.drivers import (
     DriverError,
     Exited,
     GapReport,
+    Gateway,
     InputDelivered,
     Item,
     ModelCall,
@@ -687,20 +688,28 @@ def _sealing(capabilities: Capabilities) -> str | None:
     return None if capabilities.sealed else "it declares no sealed launch"
 
 
+async def _sealed_first_request(rig: _Rig, gateway: Gateway) -> Request:
+    """The first request of a launch on `gateway` in a folder whose `AGENTS.md` and `CLAUDE.md` give the project's
+    instructions, which, as on any sealed launch, must go under the gateway's bearer and hold none of them."""
+    work = rig.folder / "work"
+    work.mkdir(parents=True, exist_ok=True)
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        (work / name).write_text(f"{_USERS}\n")
+    await rig.start(access=gateway)
+    first = await rig.call(0)
+
+    _expect(first.bearer == _BEARER, "the first request went under another bearer than its gateway's")
+    _expect(not first.says(_USERS), "the first request holds the instructions of the project it works in")
+    return first
+
+
 @_check(_sealing)
 async def sealed_first_request_holds_only_ours(rig: _Rig) -> None:
     """On a gateway, the first request goes under its bearer and holds nothing of the user's: the instructions of the
     project it works in never reach it, and every tool it shows is ours, the environment's named by its server, or one
     the harness keeps that acts on nothing."""
-    work = rig.folder / "work"
-    work.mkdir(parents=True, exist_ok=True)
-    for name in ("AGENTS.md", "CLAUDE.md"):
-        (work / name).write_text(f"{_USERS}\n")
-    await rig.start(access=rig.model.gateway(_BEARER))
-    first = await rig.call(0)
+    first = await _sealed_first_request(rig, rig.model.gateway(_BEARER))
 
-    _expect(first.bearer == _BEARER, "the first request went under another bearer than its gateway's")
-    _expect(not first.says(_USERS), "the first request holds the instructions of the project it works in")
     environment = [name for name in first.tools if any(_by_its_server(name, tool) for tool in ENVIRONMENT_TOOLS)]
     theirs = [name for name in first.tools if not name.endswith(TOOL) and name not in (*environment, *rig.options.kept)]
     _expect(not theirs, f"the first request shows {', '.join(theirs)}, which are neither ours nor the environment's")
@@ -722,6 +731,27 @@ def _by_its_server(name: str, tool: str) -> bool:
     """Whether `name` shows the environment's `tool` named by the environment's server, never bare: the server's name
     and a separator before it, as `mcp__environment__<tool>` or `environment_<tool>`."""
     return re.fullmatch(rf"(.*_)?{ENVIRONMENT}_+{re.escape(tool)}", name) is not None
+
+
+def _in_environment(capabilities: Capabilities) -> str | None:
+    return None if capabilities.in_environment else "it declares no launch in the environment"
+
+
+@_check(_in_environment)
+async def own_tools_in_first_request_in_the_environment(rig: _Rig) -> None:
+    """On a gateway that says its session runs in the environment, the first request goes under its bearer, holds none
+    of the instructions of the project it works in, and shows the harness's own shell, by the name `shell` gives it,
+    beside ours and each of the environment's tools named by its server. That the shell runs, in its workspace, the
+    shell checks prove of the same tool on a launch on a key."""
+    if rig.options.shell is None:
+        raise _Skipped("nothing was given that names this harness's shell")
+    shell = rig.options.shell("true").name
+    first = await _sealed_first_request(rig, rig.model.gateway(_BEARER).model_copy(update={"in_environment": True}))
+
+    _expect(shell in first.tools, f"the first request does not show {shell}, the harness's own shell")
+    _expect(first.offers(TOOL), f"the first request does not show {TOOL}")
+    missing = [tool for tool in ENVIRONMENT_TOOLS if not any(_by_its_server(name, tool) for name in first.tools)]
+    _expect(not missing, f"the first request does not name {', '.join(missing)} by the environment's server")
 
 
 def _unproven(capabilities: Capabilities) -> str | None:
@@ -787,12 +817,12 @@ async def check_driver(
 
     `factory` makes one instance per check. `access` says how a harness reaches the model. `garble` makes the harness
     write a frame no parser knows, and with none that check is skipped. `gated` turns a command into a tool call this
-    harness asks approval for, and `shell` into one that runs it, with none of which the check of a stop during a
-    running tool is skipped. `tool` turns a note into a call of our tool, by the name this harness's model knows it by.
-    `child` is a tool call that starts a native child, and with none that check is skipped. `kept` names each tool of
-    the harness's own that a sealed launch keeps, which acts on nothing. `model` is what a role names FakeModel by on
-    this harness, which asks FakeModel for it by its own name. `timeout` bounds each check, so one wedged harness costs
-    only its own checks.
+    harness asks approval for, and `shell` into a call of the harness's own shell that runs it: with no `shell`, the
+    checks that run a command, and the one that a launch in the environment shows that shell, are skipped. `tool`
+    turns a note into a call of our tool, by the name this harness's model knows it by. `child` is a tool call that
+    starts a native child, and with none that check is skipped. `kept` names each tool of the harness's own that a
+    sealed launch keeps, which acts on nothing. `model` is what a role names FakeModel by on this harness, which asks
+    FakeModel for it by its own name. `timeout` bounds each check, so one wedged harness costs only its own checks.
     """
     made = factory()
     info = made.describe()

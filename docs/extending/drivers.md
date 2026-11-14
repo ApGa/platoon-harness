@@ -196,7 +196,11 @@ such a launch runs the model's commands, behind the agent's `bin`, while the har
 only where it is given, and a wire program that declares the launch answers for its commands' `PATH`, which no check proves.
 Each tool of the harness's own that asks for an approval asks the runtime, as on any launch, and its
 calls are recorded only as the harness reports them, as they reach none of our servers. A wire frame names `in_environment` only
-where it is true, so a program built on an earlier SDK takes every frame it took before. No driver here declares it.
+where it is true, so a program built on an earlier SDK takes every frame it took before. Declaring it earns nothing either:
+`own_tools_in_first_request_in_the_environment` proves, on FakeModel acting as a gateway in the environment, that the first
+request shows the harness's own shell, by the name `check_driver(shell=)` gives it, beside ours and the environment's, and
+`trainable` stands on it there; a driver whose launch in the environment failed it is trainable at no launch. That the shell
+runs, in the agent's workspace, is what the shell checks prove of it on a key. No driver here declares it.
 
 ## A one-shot CLI: `exec`
 
@@ -561,6 +565,7 @@ async def test_my_driver_conforms(tmp_path):
 | `one_shot_exits` | A harness that is not persistent exits after its turn |
 | `sealed_first_request_holds_only_ours` | On a gateway, the first request goes under its bearer, holds none of the instructions an `AGENTS.md` or `CLAUDE.md` in the folder it works in gives, and shows no tool but ours, the environment's named by its server, and those `kept` names. Needs `sealed` |
 | `environment_tools_in_first_request` | On a gateway, each of the environment's tools, at the URL the gateway names, is in the first model request named by the environment's server, never bare, so FakeModel's `finish` and `think` collide with no tool of the harness's own. Needs `sealed` |
+| `own_tools_in_first_request_in_the_environment` | On a gateway that says its session runs in the environment, the first request goes under its bearer, holds none of the instructions an `AGENTS.md` or `CLAUDE.md` in the folder it works in gives, and shows the harness's own shell, by the name `shell` gives it, beside ours and each of the environment's tools named by its server. Needs `in_environment`. Pass `shell`, or it is skipped |
 | `declared_but_unproven` | Always a skip: it names what you declared that no check can prove yet |
 
 Each check gets a fresh instance, a fresh model and a fresh folder, and `timeout` bounds each one, so a wedged harness costs only its
@@ -607,7 +612,8 @@ earned = levels(capabilities, profile, result)
 `levels` gives `operational`, `observable` and `trainable`, each `met`, `unmet` or `unverified`, with reasons. It is a pure function,
 and nothing a driver says reaches it except through a check that passed. Native and plan logins are never trainable: `trainable`
 needs a gateway login, a driver that declares `sealed`, our tools seen, and a kept result whose sealed checks passed beside
-`ready_with_pinned_model`, `tool_in_first_request` and `call_ids_reported`.
+`ready_with_pinned_model`, `tool_in_first_request` and `call_ids_reported`, and at a launch in the environment
+`own_tools_in_first_request_in_the_environment` too; once that check has failed, no launch of the driver is trainable.
 
 ### A real binary for free
 

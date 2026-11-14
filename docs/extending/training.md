@@ -209,7 +209,10 @@ out. What a trainer can count on:
   harness's own tools, such as its shell and its file tools, on a driver that declares `in_environment`, and each start records
   that it did. There every harness, the runtime and whatever the model runs share one user, so a command can read any agent's
   bearer: the runtime masks every credential it has given a harness in every report, but a harness's own transcript, which the
-  export holds, keeps what a command printed, so let each bearer die with its rollout. No driver here declares it.
+  export holds, keeps what a command printed, so let each bearer die with its rollout. It is earned too:
+  `own_tools_in_first_request_in_the_environment` proves on `FakeModel` acting as a gateway in the environment that the first
+  request shows the harness's own shell beside ours and the environment's, and `trainable` stands on it there, so a driver whose
+  launch in the environment failed it is refused before you spend anything. No driver here declares it.
 
 ## Write rewards and credit
 

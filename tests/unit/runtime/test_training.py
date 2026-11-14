@@ -39,12 +39,20 @@ def said(problems: Any) -> list[tuple[str, str]]:
         (True, ("call_ids_reported",), "1", "`call_ids_reported` failed: "),
         (True, ("sealed_first_request_holds_only_ours",), "1", "`sealed_first_request_holds_only_ours` failed: "),
         (True, ("environment_tools_in_first_request",), "1", "`environment_tools_in_first_request` failed: "),
+        (
+            True,
+            ("own_tools_in_first_request_in_the_environment",),
+            "1",
+            "`own_tools_in_first_request_in_the_environment` failed: ",
+        ),
         (True, (), "1", None),
     ],
 )
 def test_check_trainable_refuses_what_the_machine_decides(tmp_path, made, failed, version, what):
     """Each role's driver is asked for a sealed launch, and the result kept under the root for the harness it would run
-    must prove trainable, as the levels of its start will need, naming what makes one where none does."""
+    must prove trainable, as the levels of its start will need, naming what makes one where none does. A driver whose
+    launch in the environment failed its check is refused too, though `check` sees no gateway to say where the session
+    runs, as no launch of that driver is trainable."""
     if made:
         kept(tmp_path, *failed, version=version)
 
