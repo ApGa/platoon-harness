@@ -209,12 +209,17 @@ out. What a trainer can count on:
   harness's own tools, such as its shell and its file tools, on a driver that declares `in_environment`, and each start records
   that it did. There every harness, the runtime and whatever the model runs share one user, so a command can read any agent's
   bearer: the runtime masks every credential it has given a harness in every report, but a harness's own transcript, which the
-  export holds, keeps what a command printed, so let each bearer die with its rollout. It is earned too:
+  export holds, keeps what a command printed, so let each bearer die with its rollout. A command can also write the journal,
+  and into any harness's pipes, so as to report a call it made as any agent's, so put agents of one policy only in such a
+  session, as [What can train](#what-can-train) says. It is earned too:
   `own_tools_in_first_request_in_the_environment` proves on `FakeModel` acting as a gateway in the environment that the first
   request shows the harness's own shell beside ours and the environment's, and `trainable` stands on it there, so a driver whose
-  launch in the environment failed it is refused before you spend anything. Of the drivers here, ScriptedDriver and OpenHands
-  declare it: OpenHands keeps its terminal, file editor and task tracker there, its terminal's shell starting on the gateway's
-  `environment_path`, where it names one, behind the agent's `bin`.
+  launch in the environment failed it is refused before you spend anything. Of the drivers here, ScriptedDriver, OpenHands
+  and pi declare it: OpenHands keeps its terminal, file editor and task tracker there, and pi its `read`, `bash`, `edit` and
+  `write`, and the commands their shells run get the gateway's `environment_path`, where it names one, behind the agent's
+  `bin`. So put your toolchain first on the runtime's `PATH`, where the SDK finds each harness, and name the image's own as
+  `environment_path`, so a task's `python3` is the image's. `ph` then runs on the image's `python3` too, so it fails where the
+  image has none of 3.7 or later, and the model reaches our tools only as its harness shows them.
 
 ## Write rewards and credit
 
@@ -319,5 +324,5 @@ digest. The form a gist is shown in is the SDK's to change, so read it there.
 - **An example to read:** this repository's `tests/integration/test_contract.py`, whose
   `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use of the SDK with none
   behind it, on ScriptedDriver, pi and OpenHands, and whose
-  `test_a_session_in_the_environment_runs_as_a_training_authority_drives_it` runs it in your environment, on ScriptedDriver
-  and OpenHands.
+  `test_a_session_in_the_environment_runs_as_a_training_authority_drives_it` runs it in your environment, on ScriptedDriver,
+  pi and OpenHands.

@@ -178,7 +178,7 @@ How each harness here does it:
 |---|---|---|
 | ScriptedDriver | Its access is the gateway's, and it lists the environment's tools beside ours, as `mcp__environment__<tool>`; a call of its `shell`, or of any tool neither lists, is told there is no such tool and runs nothing. In the environment, its `shell` kept | A `Compact` step: one call, with the headers, reported with its id |
 | A wire program | It finds the gateway in its launch frame, and the bearer in the variable the frame names, and names the environment's tools by their server | It sends the headers from its frame, and reports each call with its id |
-| `pi` | An agent directory of its own in the agent's folder, settings that retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve`, `--offline`, and the environment's server registered by our extension, whose tools pi shows as `mcp__environment__<tool>` | Our extension takes `session_before_compact` and runs pi's own `compact` with the headers and a stream function that keeps each response's id, one call or two for a split turn; it says each call made, by its id or null for one that never answered, as a status the driver reads before pi says the compaction ended, so a compaction cut after its first call still reports both |
+| `pi` | An agent directory of its own in the agent's folder, settings that retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve`, `--offline`, and the environment's server registered by our extension, whose tools pi shows as `mcp__environment__<tool>`. In the environment, no `--no-builtin-tools`, so its default tools kept, and settings whose `shellCommandPrefix`, which pi puts before each command its `bash` runs, sets the `PATH` `command_path` gives | Our extension takes `session_before_compact` and runs pi's own `compact` with the headers and a stream function that keeps each response's id, one call or two for a split turn; it says each call made, by its id or null for one that never answered, as a status the driver reads before pi says the compaction ended, so a compaction cut after its first call still reports both |
 | `openhands` | None of its coding tools, so ours and the environment's, the latter through an MCP client of their own and named by it as the SDK's client of two servers names a server's tools, `environment_<tool>`, beside its `finish` and `think`; no project instructions. In the environment, its coding tools kept | Its condenser's LLM sends the headers as `extra_headers`, and its calls are reported as `compaction` |
 
 A driver with no sealed launch reads access through `keys_of(spec)`, which refuses a gateway, and the host refuses one before that.
@@ -203,9 +203,11 @@ earlier SDK takes every frame it took before. Declaring it earns nothing either:
 `own_tools_in_first_request_in_the_environment` proves, on FakeModel acting as a gateway in the environment, that the first
 request shows the harness's own shell, by the name `check_driver(shell=)` gives it, beside ours and the environment's, and
 `trainable` stands on it there; a driver whose launch in the environment failed it is trainable at no launch. That the shell
-runs, in the agent's workspace, is what the shell checks prove of it on a key. Of the drivers here, ScriptedDriver and
-OpenHands declare it, as [A scripted harness](#a-scripted-harness) and [OpenHands: a wire worker](#openhands-a-wire-worker)
-say.
+runs, in the agent's workspace, is what the shell checks prove of it on a key. Of the drivers here, ScriptedDriver,
+OpenHands and pi declare it, as the table above, [A scripted harness](#a-scripted-harness) and
+[OpenHands: a wire worker](#openhands-a-wire-worker) say: pi keeps `read`, `bash`, `edit` and `write`, all but `read` asking
+as on a key, and runs on Node and its packages as the runtime's `PATH` finds them, while its commands run on the one
+`command_path` gives.
 
 ## A one-shot CLI: `exec`
 

@@ -1528,7 +1528,9 @@ that extension asks, and every approval comes to the runtime. A role's budget is
 On a gateway the launch is sealed: an agent directory of the agent's own, holding settings that retry nothing and warm
 no cache, none of the user's extensions, skills, templates, themes or project instructions, no built-in tool, and the
 gateway's model, our tools and the environment's beside them. Pi still compacts, through our extension, which runs pi's
-own `compact` with the gateway's compaction headers and keeps the id the model gave each of its calls.
+own `compact` with the gateway's compaction headers and keeps the id the model gave each of its calls. On a gateway that
+says its session runs in the environment, the launch keeps pi's default tools, `read`, `bash`, `edit` and `write`, and
+its `bash` runs each command on the `PATH` `command_path` gives, where it gives one.
 
 ### `platoon_harness.drivers.pi.PiDriver`
 

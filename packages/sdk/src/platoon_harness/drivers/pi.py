@@ -7,12 +7,15 @@ that extension asks, and every approval comes to the runtime. A role's budget is
 On a gateway the launch is sealed: an agent directory of the agent's own, holding settings that retry nothing and warm
 no cache, none of the user's extensions, skills, templates, themes or project instructions, no built-in tool, and the
 gateway's model, our tools and the environment's beside them. Pi still compacts, through our extension, which runs pi's
-own `compact` with the gateway's compaction headers and keeps the id the model gave each of its calls.
+own `compact` with the gateway's compaction headers and keeps the id the model gave each of its calls. On a gateway that
+says its session runs in the environment, the launch keeps pi's default tools, `read`, `bash`, `edit` and `write`, and
+its `bash` runs each command on the `PATH` `command_path` gives, where it gives one.
 """
 
 import asyncio
 import contextlib
 import json
+import shlex
 import sys
 from collections import deque
 from collections.abc import Coroutine, Mapping, Sequence
@@ -54,7 +57,7 @@ from . import (
     text_of,
     unknown_frame,
 )
-from .env import PYTHON, harness_env, homedir, inherited, on_path, private
+from .env import PYTHON, command_path, harness_env, homedir, inherited, on_path, private
 from .process import LOG, Process, status
 
 _PI = "pi"
@@ -100,16 +103,10 @@ _CREDENTIALS = tuple(
 )
 """Where pi keeps credentials in an agent directory of the agent's own, a sealed launch's or an isolated home's: its
 providers' keys and logins in `auth.json`, and its MCP servers' logins in `mcp-auth.json`."""
-_SEALED = (
-    "--no-skills",
-    "--no-prompt-templates",
-    "--no-themes",
-    "--no-context-files",
-    "--no-approve",
-    "--no-builtin-tools",
-    "--offline",
-)
-"""What a sealed launch keeps out: whatever pi would find of the user's or the project's, and pi's own tools."""
+_SEALED = ("--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files", "--no-approve", "--offline")
+"""What a sealed launch keeps out: whatever pi would find of the user's or the project's."""
+_NO_TOOLS = "--no-builtin-tools"
+"""What keeps pi's own tools out of a sealed launch, but one in the environment, which keeps them."""
 _SEALED_SETTINGS = {"retry": {"enabled": False}, "cacheWarming": "off"}
 """A sealed agent's settings: a retry is a second call a gateway records, and a warmed cache one nobody asked for."""
 _DIALOGS = frozenset({"select", "input", "editor"})
@@ -150,6 +147,7 @@ _CAPABILITIES = Capabilities(
     coverage={"prompt": "partial", "tool_results": "observed", "compaction": "observed"},
     measures={"tokens", "usd"},
     sealed=True,
+    in_environment=True,
 )
 
 __all__ = ["PiDriver"]
@@ -326,12 +324,17 @@ class PiDriver:
 
     def _env(self, spec: AgentSpec) -> dict[str, str]:
         """The harness's environment: what signs it in as in the user's shell, or for a sealed launch nothing of the
-        user's, and an agent directory of its own, in the agent's folder, whose settings are a sealed agent's."""
+        user's, and an agent directory of its own, in the agent's folder, whose settings are a sealed agent's. Pi
+        hands a command the `PATH` it runs on, on which it found Node, so where `command_path` gives a command another,
+        the settings put a line that sets it before each command pi's `bash` runs."""
         if not isinstance(spec.access, Gateway):
             return harness_env(spec, *_SIGN_IN)
         home = spec.folder / _SEALED_DIR
         home.mkdir(mode=0o700, exist_ok=True)
-        private(spec.folder, home / "settings.json", json.dumps(_SEALED_SETTINGS))
+        settings: dict[str, Any] = dict(_SEALED_SETTINGS)
+        if (path := command_path(spec)) is not None:
+            settings["shellCommandPrefix"] = f"export PATH={shlex.quote(path)}"
+        private(spec.folder, home / "settings.json", json.dumps(settings))
         return {**harness_env(spec), _AGENT_DIR: str(home)}
 
     def _command(self, spec: AgentSpec) -> list[str]:
@@ -340,9 +343,11 @@ class PiDriver:
         turn cannot be found. A provider of the agent's own is named, or `--model` would pick among the user's."""
         command = [_PI, "--mode", "rpc", "--session" if spec.resume else "--session-id", self._native]
         command += ["-e", str(_EXTENSION)]
-        if isinstance(spec.access, Gateway):
+        if isinstance(access := spec.access, Gateway):
             command += [*_SEALED, "--provider", _PROVIDER]
-        elif _BASE_URL in spec.access:
+            if not access.in_environment:
+                command.append(_NO_TOOLS)
+        elif _BASE_URL in access:
             command += ["--provider", _PROVIDER]
         if spec.model is not None:
             command += ["--model", spec.model]

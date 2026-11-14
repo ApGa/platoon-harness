@@ -5,8 +5,8 @@ environment's tools and compaction headers. A program opens the session on a rep
 training before any harness launches, and drives it as a training system does. Then, with no runtime, the record says
 what can train, and rewards and credit go in beside it. ScriptedDriver runs it in the fast pass, and pi and OpenHands,
 each on its real binary or SDK, in the slow pass. The same session runs in the environment too, each gateway saying so,
-where each agent's harness keeps its own shell: ScriptedDriver's in the fast pass, and OpenHands' terminal in the slow
-pass.
+where each agent's harness keeps its own shell: ScriptedDriver's in the fast pass, and pi's `bash` and OpenHands'
+terminal in the slow pass.
 
 The same session with one agent isolated, confined by the `bwrap` extension, still reaches its gateway on loopback. A
 harness in the runtime's own process cannot be confined, so a scripted one on the wire runs it beside pi and OpenHands,
@@ -139,6 +139,12 @@ def _openhands() -> Harness:
         600.0,
         scratch=("tmp",),
     )
+
+
+def _pi_in_the_environment() -> Harness:
+    """pi, whose model calls its `bash` first, which a launch in the environment keeps, before the rest of its turn."""
+    made = _pi()
+    return replace(made, replies=(where("bash"), *made.replies))
 
 
 def _openhands_in_the_environment() -> Harness:
@@ -345,6 +351,7 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
     "made",
     [
         pytest.param(_scripted_in_the_environment, id="scripted"),
+        pytest.param(_pi_in_the_environment, id="pi", marks=pytest.mark.slow),
         pytest.param(_openhands_in_the_environment, id="openhands", marks=pytest.mark.slow),
     ],
 )

@@ -3,9 +3,12 @@ sent with the gateway's compaction headers and reported by the id the model gave
 session runs in the environment, the harness's own tools kept, its commands on the `PATH` the environment gives its
 own."""
 
+import asyncio
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import textwrap
 from collections.abc import Iterable
@@ -32,7 +35,7 @@ from platoon_harness.drivers import (
     TurnEnded,
 )
 from platoon_harness.drivers.openhands import OpenHandsDriver
-from platoon_harness.drivers.pi import PiDriver
+from platoon_harness.drivers.pi import _SEALED, _SEALED_SETTINGS, PiDriver
 from platoon_harness.drivers.process import Record
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.testing import (
@@ -59,9 +62,9 @@ ENVIRONMENT_PATH = os.pathsep.join(("/opt/task/bin", "/usr/bin", "/bin"))
 """The `PATH` an environment gives its own commands, which its gateway names."""
 SLOW = (pytest.mark.slow, pytest.mark.timeout(300))
 """A real harness's marks: the slow pass, and as long as one takes to come up and take a turn beside other tests."""
-HARNESSES = ["scripted", "wire", pytest.param("openhands", marks=SLOW)]
-"""Each harness with a launch in the environment: the scripted one, here or on the wire, and OpenHands on its real
-SDK."""
+HARNESSES = ["scripted", "wire", pytest.param("openhands", marks=SLOW), pytest.param("pi", marks=SLOW)]
+"""Each harness with a launch in the environment: the scripted one, here or on the wire, OpenHands on its real SDK, and
+pi on its real binary."""
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,7 @@ OWN = {
     "openhands": Own(
         frozenset({"terminal", "file_editor", "task_tracker"}), "terminal", kept=frozenset({"finish", "think"})
     ),
+    "pi": Own(frozenset({"read", "bash", "edit", "write"}), "bash"),
 }
 
 
@@ -110,6 +114,10 @@ def asking(kind: str, tmp_path: Path) -> Driver:
         return served(tmp_path, "every_turn_asks_the_model()")
     if kind == "openhands":
         return OpenHandsDriver()
+    if kind == "pi":
+        if shutil.which("pi") is None:
+            pytest.skip("pi is not installed, so this met no real harness here")
+        return PiDriver()
     return ScriptedDriver(every_turn_asks_the_model())
 
 
@@ -349,3 +357,28 @@ async def test_a_sealed_pi_has_an_agent_directory_of_its_own_and_nothing_of_the_
     assert config["provider"][1]["baseUrl"] == "http://127.0.0.1:9/v1"
     assert config["provider"][1]["models"][0]["contextWindow"] == 2**53 - 1
     assert "environment" not in config and "PI_CODING_AGENT_SESSION_DIR" not in launch["env"]
+
+
+async def test_pi_in_the_environment_keeps_its_default_tools_and_sets_each_command_s_path(tmp_path, monkeypatch):
+    """In the environment pi's sealed launch keeps its default tools, and the rest of it stands: every flag that keeps
+    out what pi would find of the user's or the project's, and the sealed settings, which gain only a line pi puts
+    before each command its `bash` runs, as pi runs one, that sets the `PATH` `command_path` gives, while pi runs on
+    the runtime's."""
+    script = _stand(tmp_path, monkeypatch)
+    placing = {"in_environment": True, "environment_path": ENVIRONMENT_PATH}
+    async with FakeModel() as model, FakeTools() as tools:
+        gateway = model.gateway(BEARER).model_copy(update=placing)
+        spec = make_spec(tmp_path, goal="", model=gateway.model, access=gateway, tools=tools.binding(tmp_path / "bin"))
+        driver, heard = PiDriver(), Heard()
+        await driver.start(spec, heard)
+        await heard.until(Ready)
+        await driver.stop(1)
+
+    launch: dict[str, Any] = json.loads(script.with_suffix(".launch").read_text())
+    settings = json.loads((Path(launch["env"]["PI_CODING_AGENT_DIR"]) / "settings.json").read_text())
+    command = f'{settings.pop("shellCommandPrefix")}\nprintf %s "$PATH"'
+    ran = await asyncio.to_thread(subprocess.run, ["bash", "-c", command], capture_output=True, text=True, check=True)
+    assert "--no-builtin-tools" not in launch["argv"]
+    assert set(_SEALED) <= set(launch["argv"]) and settings == _SEALED_SETTINGS
+    assert ran.stdout == os.pathsep.join((str(tmp_path / "bin"), ENVIRONMENT_PATH))
+    assert launch["env"]["PATH"] == os.pathsep.join((str(tmp_path / "bin"), os.environ["PATH"]))
