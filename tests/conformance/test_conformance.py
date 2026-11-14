@@ -50,7 +50,6 @@ SCRIPTED_SKIPS = {
     "declared_but_unproven",
     "native_children_off_by_default",
     "native_child_seen",
-    "own_tools_in_first_request_in_the_environment",
 }
 ACP_SKIPS = {
     *SCRIPTED_SKIPS,
@@ -62,9 +61,11 @@ ACP_SKIPS = {
     "unset_model_refused",
     "sealed_first_request_holds_only_ours",
     "environment_tools_in_first_request",
+    "own_tools_in_first_request_in_the_environment",
 }
 """What the ACP driver leaves to skip: what ACP does not say, a boundary inside a turn, spend, the id of a model call
-and its dialect, which the effort checks stand on too, and a sealed launch, with what a scripted harness skips."""
+and its dialect, which the effort checks stand on too, a sealed launch and a launch in the environment, with what a
+scripted harness skips."""
 
 
 def shell(command: str) -> ToolCall:
@@ -92,6 +93,8 @@ async def test_the_scripted_driver_conforms_in_this_process(tmp_path):
 
 @pytest.mark.timeout(240)  # Every check starts a program of its own, the shell's two among them.
 async def test_a_wire_driver_conforms_across_a_process(tmp_path):
+    """A scripted harness on the wire conforms as it does in this process, its launch in the environment among what
+    it proves, so an agent whose gateway says its session runs there is trainable."""
     command = [sys.executable, str(HERE / "wire_program.py")]
 
     async def garble(driver: WireDriver) -> None:
@@ -104,9 +107,13 @@ async def test_a_wire_driver_conforms_across_a_process(tmp_path):
     assert (result.driver, result.version) == ("wire-scripted", "1")
     skipped = {check.name for check in result.checks if check.state == "skipped"}
     assert skipped == SCRIPTED_SKIPS
+    capabilities = WireDriver(command).describe().capabilities
     profile = Profile(driver="wire-scripted", implementation=implementation(WireDriver(command)), version="1")
-    earned = levels(WireDriver(command).describe().capabilities, profile, result)
+    earned = levels(capabilities, profile, result)
     assert earned.operational.state == "met", earned.operational.reasons
+    placing = {"login": "gateway", "tools": "visible", "in_environment": True}
+    placed = levels(capabilities, profile.model_copy(update=placing), result)
+    assert placed.trainable.state == "met", placed.trainable.reasons
 
 
 @pytest.mark.timeout(240)  # Every check starts a program of its own, the shell's two among them.

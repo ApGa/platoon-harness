@@ -82,14 +82,16 @@ def solo(*turns: Any, **role: Any) -> Team:
 class Gateways:
     """An authority that admits each agent through FakeModel acting as its gateway, on a bearer and a backend id of its
     own, so a scripted harness's `AskModel` steps ask it: one model for every agent, or each agent's own by its name, so
-    each agent's replies come in its own order however the agents' turns interleave."""
+    each agent's replies come in its own order however the agents' turns interleave. Each gateway says the session runs
+    in the environment where `in_environment` does."""
 
-    def __init__(self, models: FakeModel | Mapping[str, FakeModel]) -> None:
+    def __init__(self, models: FakeModel | Mapping[str, FakeModel], *, in_environment: bool = False) -> None:
         self.models = models
+        self.in_environment = in_environment
 
     async def admit(self, spawn: SpawnRequest) -> Admission:
         model = self.models if isinstance(self.models, FakeModel) else self.models[spawn.agent]
-        access = model.gateway(f"bearer-of-{spawn.agent}")
+        access = model.gateway(f"bearer-of-{spawn.agent}").model_copy(update={"in_environment": self.in_environment})
         return Admission(token=Secret(f"token-of-{spawn.agent}"), access=access, backend={"agent_id": spawn.agent})
 
     async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:

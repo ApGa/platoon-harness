@@ -859,24 +859,20 @@ async def test_a_sealed_launch_that_leaves_the_environment_s_tools_out_fails(tmp
     assert result.get("environment_tools_in_first_request").state == "failed"
 
 
-IN_ENVIRONMENT = ScriptedDriver().describe().capabilities.model_copy(update={"in_environment": True})
-"""What a scripted harness with a launch in the environment would declare."""
+class Sealing(Filtered):
+    """A scripted harness that declares a launch in the environment and launches sealed on every gateway, as if its
+    gateway never said its session runs there."""
 
-
-class ShowingItsShell(Filtered):
-    """A scripted harness that shows its shell on a gateway that says its session runs in the environment."""
-
-    async def _list_tools(self):
-        names = await super()._list_tools()
-        if isinstance(self._spec.access, Gateway) and self._spec.access.in_environment:
-            self._tools.append({"type": "function", "function": {"name": "shell", "parameters": {}}})
-        return names
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        if isinstance(spec.access, Gateway):
+            spec = spec.model_copy(update={"access": spec.access.model_copy(update={"in_environment": False})})
+        return await super().start(spec, report)
 
 
 async def test_a_launch_in_the_environment_that_shows_no_shell_of_its_own_fails_its_check(tmp_path):
     """A driver that declares a launch in the environment and shows the model no shell of its own there has a launch
     that does not keep its harness's own tools."""
-    result = await check(lambda: Filtered(capabilities=IN_ENVIRONMENT), tmp_path, shell=shell)
+    result = await check(Sealing, tmp_path, shell=shell)
 
     assert result.get("own_tools_in_first_request_in_the_environment").reason == (
         "the first request does not show shell, the harness's own shell"
@@ -886,8 +882,8 @@ async def test_a_launch_in_the_environment_that_shows_no_shell_of_its_own_fails_
 async def test_a_launch_in_the_environment_that_shows_its_shell_beside_ours_and_the_environment_s_passes(tmp_path):
     """Its shell is shown only on a gateway in the environment, so its sealed launch still holds only ours; and with no
     shell named the check has nothing to look for, so it skips, saying so."""
-    named = await check(lambda: ShowingItsShell(capabilities=IN_ENVIRONMENT), tmp_path / "named", shell=shell)
-    unnamed = await check(lambda: ShowingItsShell(capabilities=IN_ENVIRONMENT), tmp_path / "unnamed")
+    named = await check(Filtered, tmp_path / "named", shell=shell)
+    unnamed = await check(Filtered, tmp_path / "unnamed")
 
     assert named.get("own_tools_in_first_request_in_the_environment").state == "passed"
     assert named.get("sealed_first_request_holds_only_ours").state == "passed"

@@ -48,6 +48,7 @@ platoon_harness.drivers.DriverInfo
 platoon_harness.drivers.DriverInfo.check
 platoon_harness.drivers.DriverInfo.credentials
 platoon_harness.drivers.DriverInfo.installed
+platoon_harness.drivers.env.command_path
 platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.Held
 platoon_harness.drivers.env.homedir

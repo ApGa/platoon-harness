@@ -7,7 +7,9 @@ and one under an id it has sent already fails its turn, as its op would join the
 step, which no model chose, sends none, and the code of a `Do` step sends an id of its own with each call. Given a
 gateway it launches sealed, which is the reference a training system's tests run on with no binary: the gateway's
 model under its bearer, the environment's tools beside ours, each named by the environment's server as
-`mcp__environment__<tool>`, and a `Compact` step that carries the gateway's compaction headers.
+`mcp__environment__<tool>`, and a `Compact` step that carries the gateway's compaction headers. On a gateway that says
+its session runs in the environment, that launch keeps its own `shell`, shown beside them, whose commands get the `PATH`
+`command_path` gives.
 """
 
 import asyncio
@@ -48,6 +50,7 @@ from platoon_harness.drivers import (
     keys_of,
     refuse_unset_model,
 )
+from platoon_harness.drivers.env import command_path, harness_env
 from platoon_harness.drivers.process import Process
 from platoon_harness.kernel import GIST_LIMIT
 from platoon_harness.primitives import Verdict
@@ -62,6 +65,19 @@ SUMMARIZE = "Summarize the conversation so far, so that it can go on from the su
 """What a `Compact` step asks the model."""
 
 _SHELL_GRACE = 1.0
+_SHOWN_SHELL = {
+    "type": "function",
+    "function": {
+        "name": SHELL,
+        "parameters": {
+            "type": "object",
+            "properties": {"command": {"type": "string"}},
+            "required": ["command"],
+            "additionalProperties": False,
+        },
+    },
+}
+"""Its shell as a launch in the environment shows the model it: a schema of one `command`."""
 _ANCHOR = "scripted/toolCallId"
 """The key a tool call's id goes under, which says whose id it is, and the tool server takes as a harness's."""
 
@@ -77,6 +93,7 @@ _DEFAULT = Capabilities(
     measures={"tokens"},
     coverage={"prompt": "observed", "tool_results": "observed"},
     sealed=True,
+    in_environment=True,
 )
 
 
@@ -154,7 +171,8 @@ class Hang:
 class AskModel:
     """Behave like a harness: ask the model at `spec.access`, run what it calls, and go on until it only talks. A tool
     that is neither ours nor the environment's is gated, as a harness gates its shell, and on a gateway is no tool at
-    all, as a sealed launch has none of its own."""
+    all, as a sealed launch has none of its own, but its `shell` on a gateway in the environment, which that launch
+    keeps."""
 
 
 @dataclass(frozen=True)
@@ -222,6 +240,8 @@ class ScriptedDriver:
             keys_of(spec)  # Which refuses a gateway.
         refuse_unset_model(spec)
         self._spec, self._report = spec, report
+        if self._in_environment and not self._capabilities.in_environment:
+            raise DriverError("this harness has no launch in the environment, which its gateway asks for")
         self._native = spec.resume or f"scripted-{spec.agent}"
         if spec.resume is not None and self._transcript.exists():
             self._messages = json.loads(self._transcript.read_text())
@@ -232,6 +252,11 @@ class ScriptedDriver:
     @property
     def _transcript(self) -> Path:
         return self._spec.folder / f"{self._native}.json"
+
+    @property
+    def _in_environment(self) -> bool:
+        """Whether its gateway says its session runs in the environment, where its launch keeps its own shell."""
+        return isinstance(access := self._spec.access, Gateway) and access.in_environment
 
     async def _run(self) -> None:
         try:
@@ -332,13 +357,19 @@ class ScriptedDriver:
         await self._report(Item(kind="message", gist=text[:GIST_LIMIT], body=text, call_id=call_id))
 
     async def _ask(self, gist: str, body: str | None = None) -> Verdict:
+        """Ask for an approval, and say its verdict as the item that answers it."""
+        id, verdict = await self._verdict(gist, body)
+        await self._report(Item(kind="tool", phase="completed", gist=gist[:GIST_LIMIT], approval=id, outcome=verdict))
+        return verdict
+
+    async def _verdict(self, gist: str, body: str | None) -> tuple[str, Verdict]:
+        """Ask for an approval, and hold until it is answered: its id, and its verdict. It reports no item, so its
+        caller reports the one that answers it."""
         id = f"approval-{uuid.uuid4().hex[:8]}"  # A resumed harness must not ask under an id it has used.
         answered: asyncio.Future[Verdict] = asyncio.get_running_loop().create_future()
         self._approvals[id] = answered
         await self._report(ApprovalRequested(id=id, gist=gist[:GIST_LIMIT], body=body))
-        verdict = await answered
-        await self._report(Item(kind="tool", phase="completed", gist=gist[:GIST_LIMIT], approval=id, outcome=verdict))
-        return verdict
+        return id, await answered
 
     def _servers_given(self) -> Iterator[tuple[str, tuple[str, Secret]]]:
         """Each server of its tools, by its URL and the bearer it takes, after what the model is shown before each of
@@ -361,12 +392,19 @@ class ScriptedDriver:
         return answer["result"]
 
     async def _list_tools(self) -> tuple[str, ...] | None:
-        """The tools the model is shown, ours and the environment's, or None with neither."""
+        """The tools the model is shown, ours and the environment's, and on a launch in the environment its `shell`, or
+        None with none of them. A call goes to a server's tool first, so there one of ours named `shell` is refused, as
+        it would take every call of the harness's own."""
         for prefix, server in self._servers_given():
             for tool in (await self._mcp(server, "tools/list", {}))["tools"]:
                 self._servers[prefix + tool["name"]] = server, tool["name"]
                 function = {"name": prefix + tool["name"], "parameters": tool["inputSchema"]}
                 self._tools.append({"type": "function", "function": function})
+        if self._in_environment:
+            if SHELL in self._servers:
+                raise DriverError(f"a tool of ours is named {SHELL}, and would take every call of this harness's own")
+            self._tools.append(_SHOWN_SHELL)
+            return (*self._servers, SHELL)
         return tuple(self._servers) if self._spec.tools is not None or self._servers else None
 
     async def _call(
@@ -374,11 +412,9 @@ class ScriptedDriver:
     ) -> Any:
         """Call a tool of ours, or of the environment's, by the name the model is shown. A call the model chose goes
         under the id it gave that call, `native_id`, sent as MCP's `_meta` as a harness sends its own, so its op joins
-        the model call that chose it. An id sent already is refused, since its op would join the call that sent it."""
+        the model call that chose it."""
         if native_id is not None:
-            if native_id in self._sent:
-                raise DriverError(f"the model gave tool call id {native_id} twice, and an op joins its call by its id")
-            self._sent.add(native_id)
+            self._claim(native_id)
         binding = self._spec.tools
         found = self._servers.get(tool) or (None if binding is None else ((binding.url, binding.token), tool))
         if found is None:
@@ -395,6 +431,15 @@ class ScriptedDriver:
         done = Item(kind="tool", phase="completed", gist=f"{tool} {outcome}"[:GIST_LIMIT], outcome=outcome)
         await self._report(done.model_copy(update={"native_id": native_id, "call_id": call_id}))
         return result
+
+    def _claim(self, native_id: str) -> None:
+        """Claim the id a call goes under, refusing one sent already, since what a call under it does would join the
+        model call that sent it first."""
+        if native_id in self._sent:
+            raise DriverError(
+                f"the model gave tool call id {native_id} twice, and a call joins its model call by its id"
+            )
+        self._sent.add(native_id)
 
     async def _call_anew(self, tool: str, arguments: Mapping[str, Any]) -> Any:
         """A call of a `Do` step's code, under an id of its own."""
@@ -428,6 +473,8 @@ class ScriptedDriver:
         if name in self._servers:
             result = await self._call(name, arguments, native_id=call["id"], call_id=call_id)
             output = json.dumps(result)
+        elif name == SHELL and self._in_environment:
+            output = await self._kept_shell(arguments, native_id=call["id"], call_id=call_id)
         elif isinstance(self._spec.access, Gateway):
             output = f"there is no tool {name}"
         else:
@@ -441,12 +488,49 @@ class ScriptedDriver:
             return f"{name} needs an approval this harness cannot ask for"
         verdict = await self._ask(f"run {name}?", f"{name} {json.dumps(arguments, ensure_ascii=False)}")
         if verdict == "allow" and name == SHELL and "command" in arguments:
-            return await self._shell(str(arguments["command"]))
+            return (await self._shell(str(arguments["command"])))[1]
         return f"{name} {verdict}"
 
-    async def _shell(self, command: str) -> str:
-        """Run a command as a harness runs its shell tool: in `spec.cwd`, on this harness's own environment, in a group
-        recorded before it can run, which `stop` ends with whatever it put in the background."""
+    async def _kept_shell(self, arguments: Mapping[str, Any], *, native_id: str, call_id: str) -> str:
+        """A call of the shell a launch in the environment keeps, reported as pi and OpenHands report a tool of their
+        own: begun under the id the model gave it, with its input as JSON and the model call that made it, and ended
+        with what came of it, `completed` or `failed` by how its command exited, which answers the approval it asked
+        before it ran, or `rejected` where that approval was denied. A call with no `command`, or one this harness
+        cannot ask about, fails."""
+        self._claim(native_id)
+        said = json.dumps(arguments, ensure_ascii=False)
+        gist = f"{SHELL} {said}"[:GIST_LIMIT]
+        begun = Item(kind="tool", phase="started", gist=gist, native_id=native_id, call_id=call_id, body=said)
+        await self._report(begun)
+        approval, outcome = None, "failed"
+        if "command" not in arguments:
+            output = f"{SHELL} takes a `command`"
+        elif self._capabilities.approvals == "none":
+            output = f"{SHELL} needs an approval this harness cannot ask for"
+        else:
+            approval, verdict = await self._verdict(f"run {SHELL}?", f"{SHELL} {said}")
+            if verdict == "allow":
+                code, output = await self._shell(str(arguments["command"]))
+                outcome = "completed" if code == 0 else "failed"
+            else:
+                outcome, output = "rejected", f"{SHELL} {verdict}"
+        ended = Item(
+            kind="tool",
+            phase="completed",
+            gist=f"{SHELL} {outcome}",
+            native_id=native_id,
+            body=output,
+            approval=approval,
+            outcome=outcome,
+        )
+        await self._report(ended)
+        return output
+
+    async def _shell(self, command: str) -> tuple[int | None, str]:
+        """Run a command as a harness runs its shell tool: in `spec.cwd`, on this harness's own environment but for the
+        `PATH` a command gets on a launch in the environment, in a group recorded before it can run, which `stop` ends
+        with whatever it put in the background. Its exit code, and what the model is told: that code and what it
+        printed."""
         said: list[bytes] = []
 
         async def read(process: Process) -> None:
@@ -456,14 +540,17 @@ class ScriptedDriver:
             if isinstance(report, GapReport):
                 await self._report(report)
 
-        process = await Process.launch(["/bin/sh", "-c", command], self._spec, heard, read=read)
+        env = harness_env(self._spec)
+        if (path := command_path(self._spec)) is not None:
+            env["PATH"] = path
+        process = await Process.launch(["/bin/sh", "-c", command], self._spec, heard, read=read, env=env)
         self._shells.add(process)
         try:
             await process.exited()
         finally:
             self._shells.discard(process)
             await process.stop(_SHELL_GRACE)
-        return f"exit {process.returncode}\n{b''.join(said).decode(errors='replace')}"
+        return process.returncode, f"exit {process.returncode}\n{b''.join(said).decode(errors='replace')}"
 
     async def _complete(
         self, messages: Sequence[Mapping[str, Any]], *, tools: Sequence[Any] = (), compacting: bool = False

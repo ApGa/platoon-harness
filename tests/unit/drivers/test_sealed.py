@@ -1,5 +1,7 @@
 """Sealed launches: a gateway's model under its bearer, the environment's tools beside ours, and each compaction call
-sent with the gateway's compaction headers and reported by the id the model gave it."""
+sent with the gateway's compaction headers and reported by the id the model gave it; and on a gateway that says its
+session runs in the environment, the harness's own tools kept, its commands on the `PATH` the environment gives its
+own."""
 
 import json
 import os
@@ -14,6 +16,7 @@ from pydantic import ValidationError
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     BEARER_VARIABLE,
+    AgentSpec,
     ApprovalRequested,
     Compacted,
     Driver,
@@ -21,9 +24,11 @@ from platoon_harness.drivers import (
     Gateway,
     ModelCall,
     Ready,
+    Report,
     TurnEnded,
 )
 from platoon_harness.drivers.pi import PiDriver
+from platoon_harness.drivers.process import Record
 from platoon_harness.drivers.wire import WireDriver
 from platoon_harness.testing import (
     ENVIRONMENT_TOOL,
@@ -36,6 +41,7 @@ from platoon_harness.testing import (
     FakeTools,
     ScriptedDriver,
     ToolCall,
+    every_turn_asks_the_model,
 )
 
 from .support import Heard, make_spec
@@ -44,6 +50,8 @@ pytestmark = pytest.mark.timeout(30)
 
 BEARER = "bearer-of-ada"
 FAKE_PI = Path(__file__).with_name("fake_pi.py")
+ENVIRONMENT_PATH = os.pathsep.join(("/opt/task/bin", "/usr/bin", "/bin"))
+"""The `PATH` an environment gives its own commands, which its gateway names."""
 
 
 def served(tmp_path: Path, script: str) -> WireDriver:
@@ -64,6 +72,36 @@ def compacting(kind: str, tmp_path: Path) -> Driver:
     if kind == "wire":
         return served(tmp_path, "[[AskModel(), Compact()]]")
     return ScriptedDriver([[AskModel(), Compact()]])
+
+
+def asking(kind: str, tmp_path: Path) -> Driver:
+    """A harness that runs what the model calls each turn, as a harness does, here or on the wire."""
+    if kind == "wire":
+        return served(tmp_path, "every_turn_asks_the_model()")
+    return ScriptedDriver(every_turn_asks_the_model())
+
+
+class Allowing(Heard):
+    """Hears a harness, and allows each approval it asks for."""
+
+    def __init__(self, driver: Driver) -> None:
+        super().__init__()
+        self._driver = driver
+
+    async def __call__(self, report: Report) -> None:
+        await super().__call__(report)
+        if isinstance(report, ApprovalRequested):
+            await self._driver.answer(report.id, "allow")
+
+
+def path_of(kind: str, spec: AgentSpec) -> str:
+    """The `PATH` a harness runs on: this process's for one in it, and else the one its process began with."""
+    if kind == "scripted":
+        return os.environ["PATH"]
+    record = Record.read(spec.folder)
+    assert record is not None
+    began = Path(f"/proc/{record.pid}/environ").read_bytes().split(b"\0")
+    return next(entry.removeprefix(b"PATH=").decode() for entry in began if entry.startswith(b"PATH="))
 
 
 @pytest.mark.parametrize("kind", ["scripted", "wire"])
@@ -107,8 +145,9 @@ async def test_a_sealed_scripted_harness_shows_the_environment_s_tools_named_by_
 
 
 async def test_a_sealed_scripted_harness_runs_no_tool_of_its_own(tmp_path):
-    """On a gateway its shell is no tool at all: a model that calls it is told so, nothing asks an approval and nothing
-    runs, so the bearer in its environment never reaches a file."""
+    """On a gateway that does not say its session runs in the environment its shell is no tool at all: a model that
+    calls it is told so, nothing asks an approval and nothing runs, so the bearer in its environment never reaches a
+    file."""
     shell = ToolCall(SHELL, {"command": f"printenv {BEARER_VARIABLE} > leaked"})
     async with FakeModel(shell, "done") as model:
         gateway = model.gateway(BEARER)
@@ -128,6 +167,60 @@ async def test_a_harness_with_no_sealed_launch_refuses_a_gateway(tmp_path):
 
     with pytest.raises(DriverError, match="no sealed launch"):
         await ScriptedDriver(capabilities=unsealed).start(make_spec(tmp_path, model="m", access=gateway), Heard())
+
+
+async def test_a_harness_with_no_launch_in_the_environment_refuses_a_gateway_in_it(tmp_path):
+    sealed = ScriptedDriver().describe().capabilities.model_copy(update={"in_environment": False})
+    gateway = Gateway(origin="http://127.0.0.1:9", bearer=Secret(BEARER), model="m", in_environment=True)
+
+    with pytest.raises(DriverError, match="no launch in the environment"):
+        await ScriptedDriver(capabilities=sealed).start(make_spec(tmp_path, model="m", access=gateway), Heard())
+
+
+@pytest.mark.parametrize("kind", ["scripted", "wire"])
+async def test_a_sealed_launch_keeps_the_harness_s_own_tools_only_on_a_gateway_in_the_environment(tmp_path, kind):
+    """On a gateway that does not say its session runs in the environment, a sealed launch shows the model no tool of
+    the harness's own, and a call of its shell asks nothing and runs nothing. On one that does, the launch keeps its
+    shell, shown beside ours and the environment's, and a call of it asks first and, once allowed, runs in the agent's
+    workspace."""
+    found = []
+    for in_environment in (False, True):
+        folder = tmp_path / str(in_environment)
+        folder.mkdir()
+        async with FakeModel(ToolCall(SHELL, {"command": "touch made"}), "done") as model, FakeTools() as tools:
+            gateway = model.gateway(BEARER).model_copy(update={"in_environment": in_environment})
+            spec = make_spec(folder, model=gateway.model, access=gateway, tools=tools.binding(folder))
+            driver = asking(kind, folder)
+            heard = Allowing(driver)
+            await driver.start(spec, heard)
+            await heard.until(TurnEnded)
+            await driver.stop(1)
+        theirs = set(model.calls[0].tools) - {TOOL, *(f"mcp__environment__{tool}" for tool in ENVIRONMENT_TOOLS)}
+        found.append((theirs, len(heard.of(ApprovalRequested)), (folder / "made").exists()))
+
+    assert found == [(set(), 0, False), ({SHELL}, 1, True)]
+
+
+@pytest.mark.parametrize("kind", ["scripted", "wire"])
+async def test_in_the_environment_a_command_runs_on_the_environment_s_path(tmp_path, kind):
+    """On a launch in the environment whose gateway names the `PATH` the environment gives its own commands, a command
+    the model runs gets that one behind the agent's `bin`, which holds `ph` alone, so a task's `python3` is the
+    environment's, while the harness keeps the runtime's, on which it found what it runs."""
+    runtime = os.environ["PATH"]
+    printing = ToolCall(SHELL, {"command": 'printf %s "$PATH" > path'})
+    async with FakeModel(printing, "done") as model, FakeTools() as tools:
+        placing = {"in_environment": True, "environment_path": ENVIRONMENT_PATH}
+        gateway = model.gateway(BEARER).model_copy(update=placing)
+        spec = make_spec(tmp_path, model=gateway.model, access=gateway, tools=tools.binding(tmp_path / "bin"))
+        driver = asking(kind, tmp_path)
+        heard = Allowing(driver)
+        await driver.start(spec, heard)
+        await heard.until(TurnEnded)
+        harness = path_of(kind, spec)
+        await driver.stop(1)
+
+    assert (tmp_path / "path").read_text() == os.pathsep.join((str(tmp_path / "bin"), ENVIRONMENT_PATH))
+    assert harness.endswith(runtime) and ENVIRONMENT_PATH not in harness
 
 
 @pytest.mark.parametrize(

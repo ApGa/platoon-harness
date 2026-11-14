@@ -26,7 +26,8 @@ ORIGIN = "http://127.0.0.1:9"
 class Sealed(ScriptedDriver):
     """A scripted harness that says it launches sealed, and has a launch in the environment where `capabilities` say
     so, and that its own login is a plan, and that runs what it is given: it reads nothing of its access until a step
-    asks the model. Each message it says comes from a model call it reports, by an id of the message's own."""
+    asks the model. Each message a step says comes from a model call it reports, by an id of the message's own, as one
+    the model says comes from the call that asked it."""
 
     def __init__(self, turns: Iterable[Sequence[Step]] = (), capabilities: Capabilities = SEALED) -> None:
         super().__init__(turns, capabilities=capabilities)
@@ -35,9 +36,10 @@ class Sealed(ScriptedDriver):
         return super().describe().model_copy(update={"login": "plan"})
 
     async def _say(self, text: str, call_id: str | None = None) -> None:
-        said = call_id or f"call-{text}"
-        await self._report(ModelCall(call_id=said, model=self._spec.model))
-        await super()._say(text, said)
+        if call_id is None:
+            call_id = f"call-{text}"
+            await self._report(ModelCall(call_id=call_id, model=self._spec.model))
+        await super()._say(text, call_id)
 
 
 class Gating(LocalAuthority):
@@ -68,7 +70,9 @@ TRAINABLE = (
     "call_ids_reported",
     "sealed_first_request_holds_only_ours",
     "environment_tools_in_first_request",
+    "own_tools_in_first_request_in_the_environment",
 )
+"""Every check `trainable` needs passed, at a launch in the environment too."""
 
 
 def kept(root: Path, *failed: str, version: str = "1") -> Path:

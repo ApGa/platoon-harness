@@ -31,6 +31,7 @@ from platoon_harness.drivers import (
     GapReport,
     Gateway,
     Item,
+    ModelCall,
     Ready,
     Report,
     Reporter,
@@ -49,9 +50,21 @@ from platoon_harness.primitives.approvals import ASK_LIMIT
 from platoon_harness.runtime import Admission, AgentOutcome, AgentRef, LocalAuthority, Runtime, SpawnRequest
 from platoon_harness.runtime.opening import check
 from platoon_harness.runtime.paths import agent_folder, write_conformance
-from platoon_harness.testing import Ask, Call, Exit, Hang, Say, ScriptedDriver, Think
+from platoon_harness.testing import (
+    SHELL,
+    Ask,
+    AskModel,
+    Call,
+    Exit,
+    FakeModel,
+    Hang,
+    Say,
+    ScriptedDriver,
+    Think,
+    ToolCall,
+)
 
-from .support import SECONDS, harness, in_state, journal, of_type, offers, scripted, solo, until
+from .support import SECONDS, Gateways, harness, in_state, journal, of_type, offers, scripted, solo, until
 from .training import IN_ENVIRONMENT, ORIGIN, TRAINABLE, Gating, Sealed
 
 MAKING = "`check_driver` checks it, and `write_conformance` keeps what it found here"
@@ -1803,6 +1816,55 @@ async def test_every_report_is_masked_of_every_credential_the_runtime_has_given_
     assert [item.gist for item in items] == bodies == ["*** *** ***"] * 2
     assert frame.text == "*** *** ***"
     assert not [form for given in (*bob, *ada) for form in forms(Secret(given)) if form.decode() in text]
+
+
+async def test_a_harness_s_own_tool_is_recorded_as_reported_and_joined_to_no_call_it_did_not_name(tmp_path):
+    """No server of ours sees a tool of the harness's own, so the record holds each call of it as its harness reported
+    it: begun, with its input and, where the harness names it, the model call that made it, then ended with what came
+    of it, which answers the approval it asked. It joins a model call only through the ids its harness gave, so a call
+    whose harness names no model call joins none, though one was reported just before it."""
+    listed = '{"command": "ls"}'
+    naming_none = saying(
+        ModelCall(call_id="call-of-cy", model="fake-model"),
+        Item(kind="tool", phase="started", gist=f"bash {listed}", native_id="bash-1", body=listed),
+        Item(kind="tool", phase="completed", gist="bash completed", native_id="bash-1", outcome="completed"),
+    )
+    roles = {"bob": {"harness": scripted([AskModel()]), "approvals": "allow"}, "cy": {"harness": harness(naming_none)}}
+    team = Team.model_validate({"roles": roles})
+    model = FakeModel(ToolCall(SHELL, {"command": "echo ran"}, id="call_shell"), "done")
+    async with model, Session.start(team, authority=Gateways(model, in_environment=True), root=tmp_path) as session:
+        await until(lambda: of_type(session, "item.recorded"), session, lambda found: len(found) == 2)
+        await in_state(session, "bob", "idle")
+        await session.send("@bob", "go")
+        await until(lambda: of_type(session, "turn.ended"), session)
+        items = [event for event in await of_type(session, "item.recorded") if event.data["kind"] == "tool"]
+        joined = [(await session.lineage(f"{item.stream}@{item.version}")).made.call for item in items]
+        bodies = [item.data["body"] and (await session.get_body(item.data["body"])).decode() for item in items]
+        calls = {
+            event.data["call_id"]: f"{event.stream}@{event.version}" for event in await of_type(session, "model.called")
+        }
+        [asked] = await of_type(session, "approval.requested")
+        [resolved] = await of_type(session, "approval.resolved")
+        ask = (await session.get_body(asked.data["body"])).decode()
+
+    first = model.calls[0].response_id
+    assert [(item.agent, item.data["phase"], item.data["native_id"], item.data["call_id"]) for item in items] == [
+        ("cy", "started", "bash-1", None),
+        ("cy", "completed", "bash-1", None),
+        ("bob", "started", "call_shell", first),
+        ("bob", "completed", "call_shell", None),
+    ]
+    assert [item.model and item.model.call_id for item in items] == [None, None, first, None]
+    assert joined == [None, None, calls[first], calls[first]]
+    assert [(item.data["approval"], item.data["outcome"]) for item in items] == [
+        (None, None),
+        (None, "completed"),
+        (None, None),
+        (asked.data["id"], "completed"),
+    ]
+    assert bodies == [listed, None, '{"command": "echo ran"}', "exit 0\nran\n"]
+    assert ask == 'shell {"command": "echo ran"}'
+    assert (resolved.data["verdict"], resolved.data["resolved_by"]) == ("allow", "policy")
 
 
 async def test_a_secret_in_an_approval_s_ask_is_masked_plain_and_encoded(tmp_path):

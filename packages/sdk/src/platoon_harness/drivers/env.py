@@ -28,6 +28,7 @@ __all__ = [
     "PYTHON",
     "Held",
     "Redactor",
+    "command_path",
     "harness_env",
     "homedir",
     "inherited",
@@ -61,6 +62,18 @@ def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.en
         env[TOKEN_VARIABLE] = spec.tools.token.reveal()
     access = {BEARER_VARIABLE: spec.access.bearer} if isinstance(spec.access, Gateway) else spec.access
     return {**env, **spec.env, **{name: secret.reveal() for name, secret in access.items()}}
+
+
+def command_path(spec: AgentSpec) -> str | None:
+    """The `PATH` a command the model runs gets on a launch in the environment whose gateway names the one the
+    environment gives its own commands, `Gateway.environment_path`: that one, behind the agent's `bin`, which holds `ph`
+    alone, so a task's `python3` is the environment's and not that of what its harness runs from. None elsewhere, where
+    a command gets its harness's own."""
+    access = spec.access
+    if not isinstance(access, Gateway) or not access.in_environment or access.environment_path is None:
+        return None
+    bin = None if spec.tools is None else str(spec.tools.bin)
+    return os.pathsep.join(filter(None, (bin, access.environment_path)))
 
 
 def on_path(*programs: str) -> tuple[Path, ...]:

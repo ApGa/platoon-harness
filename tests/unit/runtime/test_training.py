@@ -2,21 +2,24 @@
 what can train, from the record alone."""
 
 import asyncio
+import itertools
+import shlex
 import shutil
+import sys
 from typing import Any
 
 import pytest
 
 from platoon_harness import ConfigError, Refused, Session, Team
-from platoon_harness.drivers import levels
+from platoon_harness.drivers import BEARER_VARIABLE, levels
 from platoon_harness.drivers.levels import implementation
 from platoon_harness.runtime import Admission, SpawnRequest
 from platoon_harness.runtime.opening import check
 from platoon_harness.runtime.paths import CONFORMANCE
-from platoon_harness.testing import Say
+from platoon_harness.testing import SHELL, AskModel, FakeModel, Say, ToolCall
 
-from .support import SECONDS, harness, in_state, of_type, rebuilt_equals_live, scripted, until
-from .training import UNSEALED, Gating, Sealed, kept
+from .support import SECONDS, Gateways, harness, in_state, journal, of_type, rebuilt_equals_live, scripted, until
+from .training import IN_ENVIRONMENT, UNSEALED, Gating, Sealed, kept
 
 pytestmark = pytest.mark.timeout(30)
 
@@ -158,6 +161,53 @@ async def test_eligibility_answers_alike_after_rebuild_on_a_closed_copy_and_with
     assert (live.attribution, live.verdict, live.reasons) == ("exact", "eligible", ())
     assert [(call.call_id, call.verdict) for call in live.calls] == [("call-done", "eligible")]
     assert closed == without == rebuilt == live.model_copy(update={"head": closed.head})
+
+
+CALLING = (
+    "import json, os, sys, urllib.request\n"
+    "asked = {'model': 'fake-model', 'messages': [{'role': 'user', 'content': 'a call of my own'}]}\n"
+    f"headers = {{'authorization': 'Bearer ' + os.environ['{BEARER_VARIABLE}']}}\n"
+    "urllib.request.urlopen(urllib.request.Request(sys.argv[1], json.dumps(asked).encode(), headers)).read()\n"
+)
+"""A program that calls the gateway at the URL it is given, on the bearer its environment holds, and prints nothing."""
+
+
+async def test_a_call_a_command_makes_on_a_bearer_it_read_has_no_id_in_the_record(tmp_path):
+    """In the environment every harness, the runtime and whatever the model runs share one user, so a command the model
+    runs can read its agent's bearer and call the gateway on it. No harness reported that call, so in a session whose
+    journal and harness pipes no command wrote the record names no id of it, and of the agent's calls only those its
+    harness reported can train."""
+    kept(tmp_path)
+    asking = IN_ENVIRONMENT.model_copy(update={"approvals": "native"})
+    team = trainable(lambda: Sealed(itertools.repeat([AskModel()]), asking))
+    async with FakeModel() as model:
+        command = shlex.join([sys.executable, "-c", CALLING, f"{model.url}/v1/chat/completions"])
+        model.script([ToolCall(SHELL, {"command": command}), "the command's answer", "done"])
+        start: dict[str, Any] = {"principal": "program:trainer", "trainable": True, "root": tmp_path}
+        async with Session.start(team, authority=Gateways(model, in_environment=True), **start) as session:
+            await in_state(session, "bob", "idle")
+            await session.open_episode("e")
+            await session.send("@bob", "go")
+            items = await until(
+                lambda: of_type(session, "item.recorded"),
+                session,
+                lambda found: any(item.data["kind"] == "message" for item in found),
+            )
+            [said] = [item for item in items if item.data["kind"] == "message"]
+            await in_state(session, "bob", "idle")
+            await session.retire("@bob")
+            await session.close_episode(based_on=[f"{said.stream}@{said.version}"])
+            eligible = await session.eligibility("@bob", "e")
+            named = {event.model.call_id for event in await journal(session) if event.model is not None}
+
+    asked, commanded, answered = model.calls
+    assert commanded.bearer == "bearer-of-bob" and commanded.says("a call of my own")
+    assert named == {asked.response_id, answered.response_id}
+    assert (eligible.attribution, eligible.verdict, eligible.reasons) == ("exact", "eligible", ())
+    assert [(call.call_id, call.verdict) for call in eligible.calls] == [
+        (asked.response_id, "eligible"),
+        (answered.response_id, "eligible"),
+    ]
 
 
 async def test_a_trainable_session_is_never_resumed_even_when_a_stop_cut_its_admits_short(tmp_path):

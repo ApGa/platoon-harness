@@ -43,8 +43,7 @@ without a leading underscore that a class it lists defines; nothing else is, and
 - **A gateway can say its session runs in the environment,** `Gateway.in_environment`, where a driver that declares
   `Capabilities.in_environment` keeps the harness's own tools, and name the `PATH` the environment gives its own commands,
   `Gateway.environment_path`, for the model's commands there, which a gateway outside the environment is refused. A session
-  holds to the first gateway's word, a gateway that says so goes to no other driver, each start records it, and none of the
-  SDK's drivers declares it
+  holds to the first gateway's word, a gateway that says so goes to no other driver, and each start records it
   ([Training on sessions](docs/extending/training.md#what-a-sealed-launch-is)).
 - **Every result `check_driver` makes holds a 32nd check,** `own_tools_in_first_request_in_the_environment`, which
   skips on each driver that declares no launch in the environment, so a test of a driver that asserts which checks
@@ -53,6 +52,12 @@ without a leading underscore that a class it lists defines; nothing else is, and
   `own_tools_in_first_request_in_the_environment`, proves it shows the harness's own shell beside ours and the
   environment's, and `trainable` stands on it there; a driver whose launch in the environment fails it is trainable at no
   launch ([Drivers](docs/extending/drivers.md#a-sealed-launch)).
+- **ScriptedDriver keeps its `shell` in the environment.** It declares `Capabilities.in_environment`, and on a gateway
+  that says its session runs in the environment it shows the model its `shell`, asks before each call, runs it on the
+  `PATH` that `command_path` gives, the gateway's `environment_path` behind the agent's `bin` where it names one, and
+  reports each call as pi and OpenHands report a tool of their own; a tool of ours named `shell` is refused there, as it
+  would take every call of the harness's own. Elsewhere it is as it was, and of the SDK's drivers it alone has the launch
+  ([Drivers](docs/extending/drivers.md#a-scripted-harness)).
 
 ## 0.1.0 (2026-11-12)
 

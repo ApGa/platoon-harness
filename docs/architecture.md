@@ -2087,8 +2087,10 @@ class AgentOutcome(Model):
   the environment is refused one, as nothing would carry it out.
   Only an authority gives a gateway, so nothing a team, a role, a person or the command line names keeps a harness's own tools.
   The SDK cannot see where it runs, so the word is the authority's to keep true, and each start records it (§9.4). A driver that
-  has the launch declares `in_environment`, a third check in the one kept result earns it (§9.3), and no driver here declares
-  it. There every harness, the runtime and whatever the model runs share one user, as on any session whose agents have a shell:
+  has the launch declares `in_environment`, a third check in the one kept result earns it (§9.3), and of the drivers here
+  ScriptedDriver alone declares it: there it shows its `shell` and runs each command on the `PATH` `command_path` gives, and
+  refuses a tool of ours named `shell`, which would take every call of its own. There every harness, the runtime and whatever
+  the model runs share one user, as on any session whose agents have a shell:
   a command can read any agent's bearer and write the journal, and what a harness's own tools do is recorded only as it reports
   them (§15).
 - **Compaction is labelled at call time.** Every sealed driver sends the admission's `compaction_headers` on each call it makes to
@@ -2166,7 +2168,11 @@ class AgentOutcome(Model):
   of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority
   admitting each agent through `FakeModel` acting as a gateway, a program's trainable start, the episode, the prompt to
   `Team.recipients()`, a compaction, `settled`, a cancel and a retirement, the close on each `said`, eligibility `exact` from a kept
-  result, a reward of each status, and `propagate`'s rows, for each agent and for the span its last words lie in. Beside it,
+  result, a reward of each status, and `propagate`'s rows, for each agent and for the span its last words lie in.
+  `test_a_session_in_the_environment_runs_as_a_training_authority_drives_it` runs the same in the environment, on
+  ScriptedDriver in the fast pass: each gateway says so and names the environment's `PATH`, each start records it and is
+  trainable, and each agent's own shell runs, allowed by policy, in its workspace on that `PATH`, recorded as its harness
+  reported it. Beside them,
   `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback` runs one agent `isolated` under `bwrap` in the slow pass, as
   every confined session runs, on a scripted harness on the wire, as a harness in the runtime's own process cannot be confined,
   and on pi and OpenHands: confined, it calls the gateway on loopback with its own bearer, reports each compaction by its id, is

@@ -26,7 +26,10 @@ from platoon_harness.drivers import (
     TurnStarted,
     Usage,
 )
+from platoon_harness.kernel import Args, Extension, Txn, op
 from platoon_harness.testing import (
+    ENVIRONMENT_TOOLS,
+    SHELL,
     TOOL,
     Ask,
     AskModel,
@@ -46,7 +49,7 @@ from platoon_harness.testing import (
     chat_access,
 )
 
-from ..runtime.support import Gateways, in_state, of_type, scripted, until
+from ..runtime.support import Gateways, extension, in_state, of_type, scripted, until
 from .support import Heard, make_spec
 
 pytestmark = pytest.mark.timeout(30)
@@ -382,6 +385,85 @@ async def test_a_harness_with_no_approvals_says_so_to_the_model(tmp_path):
     assert heard.of(ApprovalRequested) == []
 
 
+async def test_in_the_environment_the_scripted_harness_shows_and_reports_its_shell(tmp_path):
+    """On a gateway that says its session runs in the environment it shows its `shell`, with a schema of one `command`,
+    in each request beside ours and the environment's, asks before each call, and reports each as pi and OpenHands
+    report a tool of their own: begun under the id the model gave it, with its input and the model call that made it,
+    then ended with what came of it, which answers its approval, `completed` or `failed` by how its command exited, or
+    `rejected` where it was denied. A name it does not show is no tool."""
+    calls = [
+        ToolCall(SHELL, {"command": "echo ran"}, id="call_ran"),
+        ToolCall(SHELL, {"command": "exit 3"}, id="call_failed"),
+        ToolCall(SHELL, {"command": "touch denied"}, id="call_denied"),
+    ]
+    replies = [*calls, ToolCall("bash", {"command": "touch bashed"})]
+    async with FakeModel(replies, "done") as model, FakeTools() as tools:
+        gateway = model.gateway("bearer-of-ada").model_copy(update={"in_environment": True})
+        driver, heard = await started(
+            tmp_path, [AskModel()], model=gateway.model, access=gateway, tools=tools.binding(tmp_path)
+        )
+        asked: list[str] = []
+        for verdict in ("allow", "allow", "deny"):
+            asked.append((await heard.until(ApprovalRequested, lambda ask: ask.id not in asked)).id)
+            await driver.answer(asked[-1], verdict)
+        await heard.until(TurnEnded)
+        await driver.stop(1)
+
+    shown = {TOOL, SHELL, *(f"mcp__environment__{tool}" for tool in ENVIRONMENT_TOOLS)}
+    functions = [tool["function"] for tool in model.calls[0].json["tools"]]
+    [schema] = [function["parameters"] for function in functions if function["name"] == SHELL]
+    steps = [
+        report.phase if isinstance(report, Item) else "asked"
+        for report in heard.reports
+        if isinstance(report, ApprovalRequested) or (isinstance(report, Item) and report.kind == "tool")
+    ]
+    began = [item for item in heard.of(Item) if item.phase == "started"]
+    ended = [item for item in heard.of(Item) if item.phase == "completed"]
+    assert [set(call.tools) for call in model.calls] == [shown, shown]
+    assert set(heard.of(Ready)[0].tools_visible) == shown
+    assert (list(schema["properties"]), schema["required"]) == (["command"], ["command"])
+    assert steps == ["started", "asked", "completed"] * 3
+    given = [json.dumps(call.arguments) for call in calls]
+    assert [ask.body for ask in heard.of(ApprovalRequested)] == [f"{SHELL} {said}" for said in given]
+    assert [(item.native_id, item.call_id, item.gist, item.body) for item in began] == [
+        (call.id, model.calls[0].response_id, f"{SHELL} {said}", said) for call, said in zip(calls, given, strict=True)
+    ]
+    assert [(item.native_id, item.call_id, item.approval, item.outcome, item.gist, item.body) for item in ended] == [
+        ("call_ran", None, asked[0], "completed", f"{SHELL} completed", "exit 0\nran\n"),
+        ("call_failed", None, asked[1], "failed", f"{SHELL} failed", "exit 3\n"),
+        ("call_denied", None, asked[2], "rejected", f"{SHELL} rejected", f"{SHELL} deny"),
+    ]
+    assert model.calls[1].says("there is no tool bash")
+    assert not (tmp_path / "denied").exists() and not (tmp_path / "bashed").exists()
+
+
+@op("shell", query=True, tool=True)
+def _ours(txn: Txn, a: Args) -> str:
+    """Answer, as a tool of ours named as the scripted harness's own tool is."""
+    return "ours"
+
+
+async def test_in_the_environment_a_tool_of_ours_named_shell_is_refused_at_start(tmp_path):
+    """A call goes to a tool of ours before one of the harness's own, so where its launch keeps its `shell`, an
+    extension's op of that name would take every call of it: there the agent's spawn fails, saying why. On a launch
+    that shows its shell nowhere, the agent starts."""
+    roles = {"bob": {"harness": scripted([AskModel()])}}
+    grants = [{"who": "role:bob", "ops": "shell"}]
+    team = Team.model_validate(
+        {"extensions": [extension(Extension("shell", ops=[_ours]))], "roles": roles, "topology": {"grants": grants}}
+    )
+    found = []
+    for in_environment in (False, True):
+        async with FakeModel() as model:
+            authority = Gateways(model, in_environment=in_environment)
+            async with Session.start(team, root=tmp_path / str(in_environment), authority=authority) as session:
+                await in_state(session, "bob", "idle", "ended")
+                found += [(row["state"], row["reason"]) for row in (await session.ending()).agents]
+
+    refused = "its spawn failed: a tool of ours is named shell, and would take every call of this harness's own"
+    assert found == [("idle", None), ("ended", refused)]
+
+
 async def test_an_effort_it_cannot_set_is_refused(tmp_path):
     with pytest.raises(DriverError, match="no effort"):
         await ScriptedDriver().start(make_spec(tmp_path, effort="low"), Heard())
@@ -534,6 +616,6 @@ async def test_scripted_driver_fails_the_turn_of_a_tool_call_under_an_id_it_has_
 
     assert [ended.reason for ended in heard.of(TurnEnded)] == [
         "stopped",
-        "failed: the model gave tool call id call_a twice, and an op joins its call by its id",
+        "failed: the model gave tool call id call_a twice, and a call joins its model call by its id",
     ]
     assert len(tools.calls) == 1

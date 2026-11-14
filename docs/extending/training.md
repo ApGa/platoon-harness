@@ -212,7 +212,8 @@ out. What a trainer can count on:
   export holds, keeps what a command printed, so let each bearer die with its rollout. It is earned too:
   `own_tools_in_first_request_in_the_environment` proves on `FakeModel` acting as a gateway in the environment that the first
   request shows the harness's own shell beside ours and the environment's, and `trainable` stands on it there, so a driver whose
-  launch in the environment failed it is refused before you spend anything. No driver here declares it.
+  launch in the environment failed it is refused before you spend anything. Of the drivers here, ScriptedDriver alone declares
+  it.
 
 ## Write rewards and credit
 
@@ -311,7 +312,10 @@ digest. The form a gist is shown in is the SDK's to change, so read it there.
   logs every request with its bearer and headers, gives each response an id in its body, and answers an `Overflow` in its script
   with each dialect's own refusal of a request too long for the model's window.
 - **`ScriptedDriver` launches sealed** with no binary: its tool calls are real MCP, its `AskModel` step a real model call, and its
-  `Compact` step a compaction call with the headers.
+  `Compact` step a compaction call with the headers. On a gateway that says its session runs in your environment it keeps its
+  `shell`, which its model can call, and which runs each command on the gateway's `environment_path`, where it names one,
+  behind the agent's `bin`.
 - **An example to read:** this repository's `tests/integration/test_contract.py`, whose
   `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use of the SDK with none
-  behind it, on ScriptedDriver, pi and OpenHands.
+  behind it, on ScriptedDriver, pi and OpenHands, and whose
+  `test_a_session_in_the_environment_runs_as_a_training_authority_drives_it` runs it in your environment, on ScriptedDriver.

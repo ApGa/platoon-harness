@@ -1042,6 +1042,17 @@ End of stdin ends the app-server and whatever tool it has running, even one in a
 
 The environment of a harness: an allowlist, and redaction of what it had to hold.
 
+### `platoon_harness.drivers.env.command_path`
+
+```python
+def command_path(spec: AgentSpec) -> str | None: ...
+```
+
+The `PATH` a command the model runs gets on a launch in the environment whose gateway names the one the
+environment gives its own commands, `Gateway.environment_path`: that one, behind the agent's `bin`, which holds `ph`
+alone, so a task's `python3` is the environment's and not that of what its harness runs from. None elsewhere, where
+a command gets its harness's own.
+
 ### `platoon_harness.drivers.env.harness_env`
 
 ```python
@@ -9809,7 +9820,8 @@ class AskModel: ...
 
 Behave like a harness: ask the model at `spec.access`, run what it calls, and go on until it only talks. A tool
 that is neither ours nor the environment's is gated, as a harness gates its shell, and on a gateway is no tool at
-all, as a sealed launch has none of its own.
+all, as a sealed launch has none of its own, but its `shell` on a gateway in the environment, which that launch
+keeps.
 
 ### `platoon_harness.testing.Call`
 

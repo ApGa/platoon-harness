@@ -4,7 +4,8 @@ A test-local authority admits each agent through FakeModel acting as a gateway, 
 environment's tools and compaction headers. A program opens the session on a repository with one commit, checked for
 training before any harness launches, and drives it as a training system does. Then, with no runtime, the record says
 what can train, and rewards and credit go in beside it. ScriptedDriver runs it in the fast pass, and pi and OpenHands,
-each on its real binary or SDK, in the slow pass.
+each on its real binary or SDK, in the slow pass. The same session runs in the environment too, each gateway saying so,
+where each agent's harness keeps its own shell.
 
 The same session with one agent isolated, confined by the `bwrap` extension, still reaches its gateway on loopback. A
 harness in the runtime's own process cannot be confined, so a scripted one on the wire runs it beside pi and OpenHands,
@@ -13,9 +14,10 @@ in the slow pass, as every session that confines one is.
 
 import contextlib
 import itertools
+import os
 import shutil
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -35,6 +37,7 @@ from platoon_harness.runtime.opening import make_driver
 from platoon_harness.runtime.paths import agent_folder, write_conformance
 from platoon_harness.testing import (
     ENVIRONMENT_TOOL,
+    SHELL,
     AskModel,
     Call,
     Compact,
@@ -58,25 +61,42 @@ pytestmark = pytest.mark.timeout(1800)
 AGENTS = ("alice", "bob")
 PROGRAM = "program:trainer"
 STATUSES = ("invalid", "error", "timeout", "cancelled")
+WHERE = ToolCall(SHELL, {"command": 'pwd -P; printf "%s\\n" "$PATH"'}, id="call_where")
+"""A call of the scripted harness's own shell, which says where it ran and on which `PATH`."""
 
 
 @dataclass(frozen=True)
 class Harness:
     """What a role's `harness` names, what the model says in each agent's one turn, which ends on a compaction its
-    harness made, how a result that proves it is kept, and how long a wait on it may take."""
+    harness made, how a result that proves it is kept, how long a wait on it may take, and what of an agent's folder its
+    harness keeps while it is idle, as its scratch or as a credential its driver names."""
 
     named: str | dict[str, Any]
     replies: Sequence[Any]
     proves: Callable[[Path], Awaitable[Conformance]]
     seconds: float = support.SECONDS
+    scratch: Sequence[str] = ()
+
+
+def shell(command: str) -> ToolCall:
+    """The scripted harness's own shell tool, which runs `command` once allowed."""
+    return ToolCall(SHELL, {"command": command})
 
 
 def _scripted() -> Harness:
     turn = [Call(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "looked"}), AskModel(), Compact()]
     made = support.harness(lambda: ScriptedDriver(itertools.repeat(turn)))
     return Harness(
-        made, (), lambda folder: check_driver(lambda: ScriptedDriver(every_turn_asks_the_model()), folder=folder)
+        made,
+        (),
+        lambda folder: check_driver(lambda: ScriptedDriver(every_turn_asks_the_model()), folder=folder, shell=shell),
     )
+
+
+def _scripted_in_the_environment() -> Harness:
+    """The scripted harness, whose model calls its own shell first, which a launch in the environment keeps; the
+    command's `TMPDIR` is the agent's, which its harness keeps."""
+    return replace(_scripted(), replies=(WHERE, "done"), scratch=("tmp",))
 
 
 def _wire() -> Harness:
@@ -98,7 +118,9 @@ def _pi() -> Harness:
         "the summary",
         "done",
     ]
-    return Harness("pi", replies, lambda folder: check_harness("pi", folder), seconds=120.0)
+    return Harness(
+        "pi", replies, lambda folder: check_harness("pi", folder), seconds=120.0, scratch=("pi/auth.json", "tmp")
+    )
 
 
 def _openhands() -> Harness:
@@ -106,23 +128,32 @@ def _openhands() -> Harness:
     agent's turn has taken a little over 300 seconds beside another slow test, so a wait on it may take twice that."""
     calls = [ToolCall(f"environment_{ENVIRONMENT_TOOL}", {"note": f"step {n}"}, id=f"call_{n}") for n in range(40)]
     return Harness(
-        "openhands", [*calls, "the summary", "done"], lambda folder: check_harness("openhands", folder), 600.0
+        "openhands",
+        [*calls, "the summary", "done"],
+        lambda folder: check_harness("openhands", folder),
+        600.0,
+        scratch=("tmp",),
     )
 
 
 class Training:
     """An authority as a training system's: each agent through the gateway on a bearer and a backend id of its own,
-    and told of each end."""
+    and told of each end. Given `environment_path`, each gateway says the session runs in the environment, which gives
+    its own commands that `PATH`."""
 
-    def __init__(self, model: FakeModel) -> None:
+    def __init__(self, model: FakeModel, environment_path: str | None = None) -> None:
         self.model = model
+        self.environment_path = environment_path
         self.admitted: list[SpawnRequest] = []
         self.gateways: dict[str, Gateway] = {}
         self.told: list[tuple[AgentRef, AgentOutcome]] = []
 
     async def admit(self, spawn: SpawnRequest) -> Admission:
         self.admitted.append(spawn)
-        self.gateways[spawn.agent] = gateway = self.model.gateway(bearer_of(spawn.agent))
+        gateway = self.model.gateway(bearer_of(spawn.agent))
+        if self.environment_path is not None:
+            gateway = gateway.model_copy(update={"in_environment": True, "environment_path": self.environment_path})
+        self.gateways[spawn.agent] = gateway
         return Admission(token=Secret(token_of(spawn.agent)), access=gateway, backend={"agent_id": f"id-{spawn.agent}"})
 
     async def finish(self, agent: AgentRef, outcome: AgentOutcome) -> None:
@@ -159,10 +190,6 @@ def holding(folder: Path, secrets: Sequence[str]) -> list[Path]:
     return [path for path in found if any(form in path.read_bytes() for form in held)]
 
 
-SCRATCH_AND_CREDENTIALS = {"pi": ["pi/auth.json", "tmp"], "openhands": ["tmp"]}
-"""What of an agent's folder its harness kept as scratch or as a credential its driver names, when it was idle."""
-
-
 def kept(session: Path, agent: str, team: Team, cwd: Path) -> list[str]:
     """What of an agent's folder in `session` is its harness's scratch, or is where its driver says it keeps a
     credential."""
@@ -176,16 +203,12 @@ async def stopped(session: Session) -> list[Any]:
     return [event for event in await of_type(session, "effect.finished") if event.data["kind"] == "stop"]
 
 
-@pytest.mark.parametrize(
-    "made",
-    [
-        pytest.param(_scripted, id="scripted"),
-        pytest.param(_pi, id="pi", marks=pytest.mark.slow),
-        pytest.param(_openhands, id="openhands", marks=pytest.mark.slow),
-    ],
-)
-async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path, monkeypatch, made):
-    harness: Harness = made()
+async def drives(
+    harness: Harness, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, environment_path: str | None = None
+) -> tuple[FakeModel, Session]:
+    """Run a session as a training authority drives one, on gateways that say it runs in the environment where
+    `environment_path` names the `PATH` the environment gives its own commands, and hold what it left to the contract.
+    The model, whose log holds every request, and the session's record."""
     if harness.named == "pi" and shutil.which("pi") is None:
         pytest.skip("pi is not installed, so the contract met no real harness here")
     monkeypatch.setattr(support, "SECONDS", harness.seconds)
@@ -194,7 +217,7 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
     team = trainable_team(harness.named)
 
     async with FakeModel() as model:
-        authority = Training(model)
+        authority = Training(model, environment_path)
         start: dict[str, Any] = {"principal": PROGRAM, "authority": authority, "trainable": True, "cwd": cwd}
         async with Session.start(team, name="rollout", root=root, **start) as session:
             recipients = team.recipients()
@@ -273,7 +296,7 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
     assert {request.bearer for request in model.calls} == set(bearers.values())
     assert {request.bearer for request in model.tool_calls} == set(bearers.values())
     assert holding(root / "sessions", list(bearers.values())) == [] and holding(cwd, list(bearers.values())) == []
-    assert before == {agent: SCRATCH_AND_CREDENTIALS.get(str(harness.named), []) for agent in AGENTS}
+    assert before == {agent: list(harness.scratch) for agent in AGENTS}
     assert {agent: kept(copied, agent, team, cwd) for agent in AGENTS} == {agent: [] for agent in AGENTS}
     assert viewing.value.refusal.code == "not_permitted"
     making = "doctor --check" if harness.named in CHECKED else "write_conformance"
@@ -291,6 +314,50 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
     told = {agent.agent: outcome for agent, outcome in authority.told}
     assert {agent: outcome.status for agent, outcome in told.items()} == {"alice": "cancelled", "bob": "retired"}
     assert all(outcome.report for outcome in told.values())
+    return model, history
+
+
+@pytest.mark.parametrize(
+    "made",
+    [
+        pytest.param(_scripted, id="scripted"),
+        pytest.param(_pi, id="pi", marks=pytest.mark.slow),
+        pytest.param(_openhands, id="openhands", marks=pytest.mark.slow),
+    ],
+)
+async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path, monkeypatch, made):
+    await drives(made(), tmp_path, monkeypatch)
+
+
+@pytest.mark.parametrize("made", [pytest.param(_scripted_in_the_environment, id="scripted")])
+async def test_a_session_in_the_environment_runs_as_a_training_authority_drives_it(tmp_path, monkeypatch, made):
+    """The same, on gateways that say the session runs in the environment and name the `PATH` the environment gives its
+    own commands: each start says its launch was there and is trainable, and each agent's harness keeps its own shell,
+    shown in its first request, which the model's first reply calls. That call asks, the policy allows it, it runs in
+    the agent's workspace on that `PATH` behind the agent's `bin`, and the record holds it as the harness reported it,
+    joined to the model call that made it."""
+    harness: Harness = made()
+    path = os.pathsep.join((str(tmp_path / "image" / "bin"), os.environ["PATH"]))
+    model, history = await drives(harness, tmp_path, monkeypatch, environment_path=path)
+
+    called = harness.replies[0]
+    starts = await of_type(history, "agent.started")
+    verdicts = {event.data["id"]: event.data["verdict"] for event in await of_type(history, "approval.resolved")}
+    items = [event for event in await of_type(history, "item.recorded") if event.data["native_id"] == called.id]
+    placed = [
+        (start.data["verified"]["in_environment"], start.data["levels"]["trainable"]["state"]) for start in starts
+    ]
+    assert placed == [(True, "met")] * len(AGENTS)
+    for agent in AGENTS:
+        first = next(request for request in model.calls if request.bearer == bearer_of(agent))
+        begun, ended = [item for item in items if item.agent == agent]
+        said = (await history.get_body(ended.data["body"])).decode()
+        assert called.name in first.tools
+        assert [begun.data["phase"], ended.data["phase"]] == ["started", "completed"]
+        assert begun.data["call_id"] == first.response_id
+        assert (ended.data["outcome"], verdicts[ended.data["approval"]]) == ("completed", "allow")
+        assert f"{(tmp_path / 'work').resolve()}\n" in said
+        assert os.pathsep.join((str(agent_folder(history.folder, agent) / "bin"), path)) in said
 
 
 def files_of(folder: Path, *besides: Path) -> dict[Path, bytes]:

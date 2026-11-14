@@ -191,16 +191,20 @@ built, as the table says, which no check proves.
 gateway, `Gateway.in_environment`, and there a sealed launch keeps the harness's own tools, its shell and its file tools,
 beside ours and the environment's, as they act on the environment's machine; the rest of the launch stands. A driver that has
 such a launch declares `in_environment`, and the host gives a gateway in the environment to no other, refusing it before that
-agent's harness launches. Its gateway can name `environment_path`, the `PATH` the environment gives its own commands, on which
-such a launch runs the model's commands, behind the agent's `bin`, while the harness keeps the runtime's; a wire frame names it
-only where it is given, and a wire program that declares the launch answers for its commands' `PATH`, which no check proves.
-Each tool of the harness's own that asks for an approval asks the runtime, as on any launch, and its
-calls are recorded only as the harness reports them, as they reach none of our servers. A wire frame names `in_environment` only
-where it is true, so a program built on an earlier SDK takes every frame it took before. Declaring it earns nothing either:
+agent's harness launches. Its gateway can name `environment_path`, the `PATH` the environment gives its own commands, on
+which such a launch runs the model's commands, behind the agent's `bin`, while the harness keeps the runtime's:
+`command_path(spec)`, from `platoon_harness.drivers.env`, gives that `PATH`, or None where a command gets its harness's own.
+Where the gateway names one, `ph` runs on the `python3` that `PATH` finds, so it fails where the environment has none of 3.7
+or later, and the model reaches our tools only as its harness shows them. A wire program that declares the launch answers
+for its commands' `PATH`, which no check proves. Each tool of the harness's own that asks for an approval asks the runtime,
+as on any launch, and its calls are recorded only as the harness reports them, as they reach none of our servers. A wire
+frame names `in_environment` only where it is true and `environment_path` only where it is given, so a program built on an
+earlier SDK takes every frame it took before. Declaring it earns nothing either:
 `own_tools_in_first_request_in_the_environment` proves, on FakeModel acting as a gateway in the environment, that the first
 request shows the harness's own shell, by the name `check_driver(shell=)` gives it, beside ours and the environment's, and
 `trainable` stands on it there; a driver whose launch in the environment failed it is trainable at no launch. That the shell
-runs, in the agent's workspace, is what the shell checks prove of it on a key. No driver here declares it.
+runs, in the agent's workspace, is what the shell checks prove of it on a key. Of the drivers here, ScriptedDriver declares
+it, as [A scripted harness](#a-scripted-harness) says.
 
 ## A one-shot CLI: `exec`
 
@@ -640,6 +644,13 @@ approval allows it, in `spec.cwd`, in a group recorded before it can run, so `ch
 behind a wire program, to every check a harness's shell meets. Its capabilities are data, and it holds to them, so a test can make it
 one-shot or unsteerable.
 
+On a key a model calls its `shell` unshown. On a gateway it is no tool, as a sealed launch keeps none of the harness's own, but
+on a gateway that says its session runs in the environment it is kept: shown in each request beside ours and the environment's,
+with a schema of one `command`, asked about before each call, run on the `PATH` `command_path` gives, and reported as pi and
+OpenHands report a tool of their own, begun under the id the model gave the call, with its input and the model call that made
+it, and ended `completed` or `failed` by how its command exited, or `rejected` where its approval was denied, which that end
+answers. A call goes to a tool of ours before one of its own, so there a tool of ours named `shell` fails its start.
+
 ```python
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 
@@ -665,8 +676,8 @@ call, as no model chose them. `ScriptedDriver(itertools.repeat([Do(act)]))` runs
 The steps are `Say`, `Think`, `Call`, `Do`, `Wait`, `EndTurn`, `Fail`, `Exit`, `Ask`, `Hang` and `AskModel`, which makes real model calls
 until the model only talks. A tool call the model chose goes under the id the model gave it, as `scripted/toolCallId` in MCP's
 `_meta`, which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and conformance's
-`tool_item_carries_its_anchor` holds it to that. A call under an id it has sent already fails its turn, since its op would join the
-call that sent it first. A `Call` step, which no model chose, sends no id, so the tool plane keys it by its turn, and an identical
+`tool_item_carries_its_anchor` holds it to that. A call under an id it has sent already fails its turn, since what it does would
+join the call that sent it first. A `Call` step, which no model chose, sends no id, so the tool plane keys it by its turn, and an identical
 one in the same turn is answered as a repeat. `Ask(gist, body)` asks for an approval with `body` as its whole ask, and the approval
 its `shell`, or any tool of its own that `AskModel` meets, asks for carries the tool's name and its input as JSON. A step that
 raises, of its own or of a subclass's, fails its turn saying what it raised, and the next turn runs.
