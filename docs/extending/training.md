@@ -212,8 +212,9 @@ out. What a trainer can count on:
   export holds, keeps what a command printed, so let each bearer die with its rollout. It is earned too:
   `own_tools_in_first_request_in_the_environment` proves on `FakeModel` acting as a gateway in the environment that the first
   request shows the harness's own shell beside ours and the environment's, and `trainable` stands on it there, so a driver whose
-  launch in the environment failed it is refused before you spend anything. Of the drivers here, ScriptedDriver alone declares
-  it.
+  launch in the environment failed it is refused before you spend anything. Of the drivers here, ScriptedDriver and OpenHands
+  declare it: OpenHands keeps its terminal, file editor and task tracker there, its terminal's shell starting on the gateway's
+  `environment_path`, where it names one, behind the agent's `bin`.
 
 ## Write rewards and credit
 
@@ -318,4 +319,5 @@ digest. The form a gist is shown in is the SDK's to change, so read it there.
 - **An example to read:** this repository's `tests/integration/test_contract.py`, whose
   `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use of the SDK with none
   behind it, on ScriptedDriver, pi and OpenHands, and whose
-  `test_a_session_in_the_environment_runs_as_a_training_authority_drives_it` runs it in your environment, on ScriptedDriver.
+  `test_a_session_in_the_environment_runs_as_a_training_authority_drives_it` runs it in your environment, on ScriptedDriver
+  and OpenHands.

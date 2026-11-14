@@ -118,7 +118,6 @@ async def test_the_openhands_driver_conforms(tmp_path, monkeypatch):
         "native_child_seen",
         "one_shot_exits",
         "declared_but_unproven",
-        "own_tools_in_first_request_in_the_environment",
     }
     installed = installation(OpenHandsDriver().describe().installed)
     profile = Profile(

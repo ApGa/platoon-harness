@@ -56,8 +56,14 @@ without a leading underscore that a class it lists defines; nothing else is, and
   that says its session runs in the environment it shows the model its `shell`, asks before each call, runs it on the
   `PATH` that `command_path` gives, the gateway's `environment_path` behind the agent's `bin` where it names one, and
   reports each call as pi and OpenHands report a tool of their own; a tool of ours named `shell` is refused there, as it
-  would take every call of the harness's own. Elsewhere it is as it was, and of the SDK's drivers it alone has the launch
+  would take every call of the harness's own. Elsewhere it is as it was
   ([Drivers](docs/extending/drivers.md#a-scripted-harness)).
+- **OpenHands keeps its coding tools in the environment.** It declares `Capabilities.in_environment`, and on a gateway that
+  says its session runs in the environment its sealed launch keeps its terminal, file editor and task tracker beside ours
+  and the environment's, each action asking as on a key, and its terminal's shell starts on the `PATH` that `command_path`
+  gives, the gateway's `environment_path` behind the agent's `bin` where it names one, which the startup files of the
+  image's `bash` may change. Its check passes `own_tools_in_first_request_in_the_environment`, so it is trainable there
+  ([Drivers](docs/extending/drivers.md#openhands-a-wire-worker)).
 
 ## 0.1.0 (2026-11-12)
 

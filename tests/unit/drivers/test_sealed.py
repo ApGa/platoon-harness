@@ -5,8 +5,11 @@ own."""
 
 import json
 import os
+import re
 import sys
 import textwrap
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +19,7 @@ from pydantic import ValidationError
 from platoon_harness.config import Secret
 from platoon_harness.drivers import (
     BEARER_VARIABLE,
+    ENVIRONMENT,
     AgentSpec,
     ApprovalRequested,
     Compacted,
@@ -27,6 +31,7 @@ from platoon_harness.drivers import (
     Report,
     TurnEnded,
 )
+from platoon_harness.drivers.openhands import OpenHandsDriver
 from platoon_harness.drivers.pi import PiDriver
 from platoon_harness.drivers.process import Record
 from platoon_harness.drivers.wire import WireDriver
@@ -52,6 +57,30 @@ BEARER = "bearer-of-ada"
 FAKE_PI = Path(__file__).with_name("fake_pi.py")
 ENVIRONMENT_PATH = os.pathsep.join(("/opt/task/bin", "/usr/bin", "/bin"))
 """The `PATH` an environment gives its own commands, which its gateway names."""
+SLOW = (pytest.mark.slow, pytest.mark.timeout(300))
+"""A real harness's marks: the slow pass, and as long as one takes to come up and take a turn beside other tests."""
+HARNESSES = ["scripted", "wire", pytest.param("openhands", marks=SLOW)]
+"""Each harness with a launch in the environment: the scripted one, here or on the wire, and OpenHands on its real
+SDK."""
+
+
+@dataclass(frozen=True)
+class Own:
+    """What a harness keeps of its own on a launch in the environment, by the names its model is shown, the one of them
+    that runs a command, and what it keeps on every sealed launch, as it acts on nothing."""
+
+    tools: frozenset[str]
+    shell: str
+    kept: frozenset[str] = frozenset()
+
+
+OWN = {
+    "scripted": Own(frozenset({SHELL}), SHELL),
+    "wire": Own(frozenset({SHELL}), SHELL),
+    "openhands": Own(
+        frozenset({"terminal", "file_editor", "task_tracker"}), "terminal", kept=frozenset({"finish", "think"})
+    ),
+}
 
 
 def served(tmp_path: Path, script: str) -> WireDriver:
@@ -75,10 +104,20 @@ def compacting(kind: str, tmp_path: Path) -> Driver:
 
 
 def asking(kind: str, tmp_path: Path) -> Driver:
-    """A harness that runs what the model calls each turn, as a harness does, here or on the wire."""
+    """A harness that runs what the model calls each turn, as a harness does: the scripted one, here or on the wire, or
+    a real one."""
     if kind == "wire":
         return served(tmp_path, "every_turn_asks_the_model()")
+    if kind == "openhands":
+        return OpenHandsDriver()
     return ScriptedDriver(every_turn_asks_the_model())
+
+
+def theirs(shown: Iterable[str]) -> set[str]:
+    """What of the tools a request shows is the harness's own: no tool of ours, whatever a harness puts before its name,
+    and none of the environment's, which every harness names by their server."""
+    environment = re.compile(rf"(.*_)?{ENVIRONMENT}_+({'|'.join(ENVIRONMENT_TOOLS)})")
+    return {name for name in shown if not name.endswith(TOOL) and environment.fullmatch(name) is None}
 
 
 class Allowing(Heard):
@@ -177,41 +216,47 @@ async def test_a_harness_with_no_launch_in_the_environment_refuses_a_gateway_in_
         await ScriptedDriver(capabilities=sealed).start(make_spec(tmp_path, model="m", access=gateway), Heard())
 
 
-@pytest.mark.parametrize("kind", ["scripted", "wire"])
+@pytest.mark.parametrize("kind", HARNESSES)
 async def test_a_sealed_launch_keeps_the_harness_s_own_tools_only_on_a_gateway_in_the_environment(tmp_path, kind):
     """On a gateway that does not say its session runs in the environment, a sealed launch shows the model no tool of
-    the harness's own, and a call of its shell asks nothing and runs nothing. On one that does, the launch keeps its
-    shell, shown beside ours and the environment's, and a call of it asks first and, once allowed, runs in the agent's
-    workspace."""
-    found = []
+    the harness's own but those that act on nothing, and a call of its shell asks nothing and runs nothing. On one that
+    does, the launch keeps its own tools, shown beside ours and the environment's, and a call of its shell asks first
+    and, once allowed, runs in the agent's workspace. The harness has a home of its own, so no startup file of yours
+    changes where its shell runs."""
+    own, found = OWN[kind], []
     for in_environment in (False, True):
         folder = tmp_path / str(in_environment)
-        folder.mkdir()
-        async with FakeModel(ToolCall(SHELL, {"command": "touch made"}), "done") as model, FakeTools() as tools:
+        (folder / "home").mkdir(parents=True)
+        async with FakeModel(ToolCall(own.shell, {"command": "touch made"}), "done") as model, FakeTools() as tools:
             gateway = model.gateway(BEARER).model_copy(update={"in_environment": in_environment})
-            spec = make_spec(folder, model=gateway.model, access=gateway, tools=tools.binding(folder))
+            home = {"HOME": str(folder / "home")}
+            spec = make_spec(folder, model=gateway.model, access=gateway, tools=tools.binding(folder), env=home)
             driver = asking(kind, folder)
             heard = Allowing(driver)
             await driver.start(spec, heard)
             await heard.until(TurnEnded)
             await driver.stop(1)
-        theirs = set(model.calls[0].tools) - {TOOL, *(f"mcp__environment__{tool}" for tool in ENVIRONMENT_TOOLS)}
-        found.append((theirs, len(heard.of(ApprovalRequested)), (folder / "made").exists()))
+        found.append((theirs(model.calls[0].tools), len(heard.of(ApprovalRequested)), (folder / "made").exists()))
 
-    assert found == [(set(), 0, False), ({SHELL}, 1, True)]
+    assert found == [(own.kept, 0, False), (own.kept | own.tools, 1, True)]
 
 
-@pytest.mark.parametrize("kind", ["scripted", "wire"])
+@pytest.mark.parametrize("kind", HARNESSES)
 async def test_in_the_environment_a_command_runs_on_the_environment_s_path(tmp_path, kind):
     """On a launch in the environment whose gateway names the `PATH` the environment gives its own commands, a command
     the model runs gets that one behind the agent's `bin`, which holds `ph` alone, so a task's `python3` is the
-    environment's, while the harness keeps the runtime's, on which it found what it runs."""
+    environment's, while the harness keeps the runtime's, on which it found what it runs: the scripted harness runs in
+    this process, so of it that holds by construction, and the others show it. The harness has a home of its own, so no
+    startup file of yours changes what its shell starts on."""
     runtime = os.environ["PATH"]
-    printing = ToolCall(SHELL, {"command": 'printf %s "$PATH" > path'})
+    printing = ToolCall(OWN[kind].shell, {"command": 'printf %s "$PATH" > path'})
+    home = tmp_path / "home"
+    home.mkdir()
     async with FakeModel(printing, "done") as model, FakeTools() as tools:
         placing = {"in_environment": True, "environment_path": ENVIRONMENT_PATH}
         gateway = model.gateway(BEARER).model_copy(update=placing)
-        spec = make_spec(tmp_path, model=gateway.model, access=gateway, tools=tools.binding(tmp_path / "bin"))
+        binding = tools.binding(tmp_path / "bin")
+        spec = make_spec(tmp_path, model=gateway.model, access=gateway, tools=binding, env={"HOME": str(home)})
         driver = asking(kind, tmp_path)
         heard = Allowing(driver)
         await driver.start(spec, heard)

@@ -89,6 +89,7 @@ _CAPABILITIES = Capabilities(
     coverage={"prompt": "partial", "tool_results": "observed", "compaction": "observed"},
     measures={"tokens"},
     sealed=True,
+    in_environment=True,
 )
 
 log = logging.getLogger(__name__)

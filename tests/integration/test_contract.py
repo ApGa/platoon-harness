@@ -5,7 +5,8 @@ environment's tools and compaction headers. A program opens the session on a rep
 training before any harness launches, and drives it as a training system does. Then, with no runtime, the record says
 what can train, and rewards and credit go in beside it. ScriptedDriver runs it in the fast pass, and pi and OpenHands,
 each on its real binary or SDK, in the slow pass. The same session runs in the environment too, each gateway saying so,
-where each agent's harness keeps its own shell.
+where each agent's harness keeps its own shell: ScriptedDriver's in the fast pass, and OpenHands' terminal in the slow
+pass.
 
 The same session with one agent isolated, confined by the `bwrap` extension, still reaches its gateway on loopback. A
 harness in the runtime's own process cannot be confined, so a scripted one on the wire runs it beside pi and OpenHands,
@@ -61,8 +62,6 @@ pytestmark = pytest.mark.timeout(1800)
 AGENTS = ("alice", "bob")
 PROGRAM = "program:trainer"
 STATUSES = ("invalid", "error", "timeout", "cancelled")
-WHERE = ToolCall(SHELL, {"command": 'pwd -P; printf "%s\\n" "$PATH"'}, id="call_where")
-"""A call of the scripted harness's own shell, which says where it ran and on which `PATH`."""
 
 
 @dataclass(frozen=True)
@@ -83,6 +82,12 @@ def shell(command: str) -> ToolCall:
     return ToolCall(SHELL, {"command": command})
 
 
+def where(tool: str) -> ToolCall:
+    """A call of a harness's own shell, `tool` by the name its model knows it by, which says where it ran and on which
+    `PATH`."""
+    return ToolCall(tool, {"command": 'pwd -P; printf "%s\\n" "$PATH"'}, id="call_where")
+
+
 def _scripted() -> Harness:
     turn = [Call(f"mcp__environment__{ENVIRONMENT_TOOL}", {"note": "looked"}), AskModel(), Compact()]
     made = support.harness(lambda: ScriptedDriver(itertools.repeat(turn)))
@@ -96,7 +101,7 @@ def _scripted() -> Harness:
 def _scripted_in_the_environment() -> Harness:
     """The scripted harness, whose model calls its own shell first, which a launch in the environment keeps; the
     command's `TMPDIR` is the agent's, which its harness keeps."""
-    return replace(_scripted(), replies=(WHERE, "done"), scratch=("tmp",))
+    return replace(_scripted(), replies=(where(SHELL), "done"), scratch=("tmp",))
 
 
 def _wire() -> Harness:
@@ -134,6 +139,13 @@ def _openhands() -> Harness:
         600.0,
         scratch=("tmp",),
     )
+
+
+def _openhands_in_the_environment() -> Harness:
+    """OpenHands, whose model calls its terminal first, which a launch in the environment keeps, in place of the first
+    of the calls past which its condenser forgets."""
+    made = _openhands()
+    return replace(made, replies=(where("terminal"), *made.replies[1:]))
 
 
 class Training:
@@ -329,14 +341,23 @@ async def test_a_managed_session_runs_as_a_training_authority_drives_it(tmp_path
     await drives(made(), tmp_path, monkeypatch)
 
 
-@pytest.mark.parametrize("made", [pytest.param(_scripted_in_the_environment, id="scripted")])
+@pytest.mark.parametrize(
+    "made",
+    [
+        pytest.param(_scripted_in_the_environment, id="scripted"),
+        pytest.param(_openhands_in_the_environment, id="openhands", marks=pytest.mark.slow),
+    ],
+)
 async def test_a_session_in_the_environment_runs_as_a_training_authority_drives_it(tmp_path, monkeypatch, made):
     """The same, on gateways that say the session runs in the environment and name the `PATH` the environment gives its
     own commands: each start says its launch was there and is trainable, and each agent's harness keeps its own shell,
     shown in its first request, which the model's first reply calls. That call asks, the policy allows it, it runs in
     the agent's workspace on that `PATH` behind the agent's `bin`, and the record holds it as the harness reported it,
-    joined to the model call that made it."""
+    joined to the model call that made it. Its harnesses have a home of their own, so no startup file of yours changes
+    what OpenHands' interactive shell starts on."""
     harness: Harness = made()
+    (tmp_path / "home").mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     path = os.pathsep.join((str(tmp_path / "image" / "bin"), os.environ["PATH"]))
     model, history = await drives(harness, tmp_path, monkeypatch, environment_path=path)
 
