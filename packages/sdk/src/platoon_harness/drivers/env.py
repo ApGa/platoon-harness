@@ -1,9 +1,9 @@
 """The environment of a harness: an allowlist, and redaction of what it had to hold."""
 
 import os
-import re
 import shutil
 import sys
+from bisect import bisect_left
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any, overload
@@ -28,6 +28,7 @@ __all__ = [
     "PYTHON",
     "Held",
     "Redactor",
+    "command_path",
     "harness_env",
     "homedir",
     "inherited",
@@ -61,6 +62,18 @@ def harness_env(spec: AgentSpec, *names: str, environ: Mapping[str, str] = os.en
         env[TOKEN_VARIABLE] = spec.tools.token.reveal()
     access = {BEARER_VARIABLE: spec.access.bearer} if isinstance(spec.access, Gateway) else spec.access
     return {**env, **spec.env, **{name: secret.reveal() for name, secret in access.items()}}
+
+
+def command_path(spec: AgentSpec) -> str | None:
+    """The `PATH` a command the model runs gets on a launch in the environment whose gateway names the one the
+    environment gives its own commands, `Gateway.environment_path`: that one, behind the agent's `bin`, which holds `ph`
+    alone, so a task's `python3` is the environment's and not that of what its harness runs from. None elsewhere, where
+    a command gets its harness's own."""
+    access = spec.access
+    if not isinstance(access, Gateway) or not access.in_environment or access.environment_path is None:
+        return None
+    bin = None if spec.tools is None else str(spec.tools.bin)
+    return os.pathsep.join(filter(None, (bin, access.environment_path)))
 
 
 def on_path(*programs: str) -> tuple[Path, ...]:
@@ -110,14 +123,19 @@ def secrets_of(spec: AgentSpec) -> tuple[Secret, ...]:
 
 
 class Redactor:
-    """Masks secrets, in their encoded forms too, wherever a harness's words go next. `reach` is one byte short of the
-    longest form, so holding that much back keeps a secret from straddling two chunks, and `Held` does."""
+    """Masks secrets, in their encoded forms too, wherever a harness's words go next, the longest form first. `reach`
+    is one byte short of the longest form, so holding that much back keeps a secret from straddling two chunks, and
+    `Held` does."""
 
     def __init__(self, secrets: Iterable[Secret]) -> None:
+        self._forms: tuple[bytes, ...] = ()
+        self.add(secrets)
+
+    def add(self, secrets: Iterable[Secret]) -> None:
+        """Mask these secrets too, from now on."""
         found = {form for secret in secrets if secret.reveal() for form in forms(secret)}
-        longest_first = sorted(found, key=len, reverse=True)
-        self._pattern = re.compile(b"|".join(map(re.escape, longest_first))) if found else None
-        self.reach = max(map(len, found), default=1) - 1
+        self._forms = tuple(sorted(found.union(self._forms), key=len, reverse=True))
+        self.reach = max(map(len, self._forms), default=1) - 1
 
     @overload
     def __call__(self, text: bytes) -> bytes: ...
@@ -126,11 +144,11 @@ class Redactor:
     def __call__(self, text: str) -> str: ...
 
     def __call__(self, text: bytes | str) -> bytes | str:
-        if self._pattern is None:
-            return text
-        if isinstance(text, str):
-            return self._pattern.sub(_MASK, text.encode(errors="surrogatepass")).decode(errors="surrogatepass")
-        return self._pattern.sub(_MASK, text)
+        raw = text.encode(errors="surrogatepass") if isinstance(text, str) else text
+        for form in self._forms[bisect_left(self._forms, -len(raw), key=lambda form: -len(form)) :]:
+            if form in raw:
+                raw = raw.replace(form, _MASK)
+        return raw.decode(errors="surrogatepass") if isinstance(text, str) else raw
 
     def masked(self, report: Report) -> Report:
         """A report with every text in it masked."""

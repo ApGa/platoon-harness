@@ -41,7 +41,7 @@ from platoon_harness.drivers import (
     unknown_frame,
 )
 from platoon_harness.drivers.env import Held, Redactor, homedir, inherited, open_beneath, secrets_of, tmpdir
-from platoon_harness.drivers.levels import Profile, implementation, levels, speaks_for, tool_visibility
+from platoon_harness.drivers.levels import Profile, implementation, installation, levels, speaks_for, tool_visibility
 from platoon_harness.drivers.process import clean, exit_reason, reap, run
 from platoon_harness.kernel import Effect, Event, Kernel, Outcome, Refused, first, hash_token, tool_name
 from platoon_harness.primitives import CUT_OFF, OWNER_STOP, Repo, Workspace
@@ -88,6 +88,10 @@ _RECONCILE_SECONDS = 10.0
 _RETRY_SECONDS = 1.0
 _RENEW_EVERY = 5.0
 _GOAL_BODY_LIMIT = 16 * 1024 * 1024
+_SHORTEST_CREDENTIAL = 8
+"""The fewest characters of a value the runtime hands a harness that every harness's reports are masked of. A shorter
+one is too short to be any provider's key and is found in ordinary words and in the ids reports name, so only the
+reports of the agent it was handed to are masked of it."""
 
 _THREADS = ThreadPoolExecutor(thread_name_prefix="host")
 """The host's own threads, for its git and its files, as many as an event loop's own pool has, and shared by every
@@ -120,12 +124,25 @@ def _ends_live_text(report: Report) -> bool:
 
 class DriverLink:
     """One harness as the host holds it. Links live on the `Host` and not in the daemon, so a restarted daemon loses
-    none. `pinned` is the model it must run and `login` what it runs on, as its access says. `leaving` means its end is
-    our doing. `ready` is set once `agent.start` commits, or nobody needs it to, or `refused` says why it never will.
-    `handing` is set to drop a handover under way."""
+    none. `pinned` is the model it must run, `login` what it runs on, and `in_environment` whether its gateway says its
+    session runs in the environment, as its access says, and `installation` the read-only installation its harness
+    runs from, if any, as its launch found it. `redact` masks its reports and its live text, of what its harness was
+    handed and of every credential the runtime has handed any harness. `leaving` means its end is our doing. `ready` is
+    set once `agent.start` commits, or nobody needs it to, or `refused` says why it never will. `handing` is set to drop
+    a handover under way."""
 
     def __init__(
-        self, agent: str, role: str, driver: Driver, info: DriverInfo, *, pinned: str | None, login: Login | None
+        self,
+        agent: str,
+        role: str,
+        driver: Driver,
+        info: DriverInfo,
+        redact: Redactor,
+        *,
+        pinned: str | None,
+        login: Login | None,
+        in_environment: bool,
+        installation: tuple[str, ...] | None,
     ) -> None:
         self.agent = agent
         self.role = role
@@ -133,12 +150,14 @@ class DriverLink:
         self.info = info
         self.pinned = pinned
         self.login = login
+        self.in_environment = in_environment
+        self.installation = installation
         self.leaving = False
         self.ready = asyncio.Event()
         self.refused: str | None = None
         self.handing: asyncio.Event | None = None
-        self.redact = Redactor(())
-        self.live = Held(self.redact)
+        self.redact = redact
+        self.live = Held(redact)
         self.held: set[str] = set()
         self.order = asyncio.Lock()
         self.renewal = 0.0
@@ -177,6 +196,8 @@ class Host:
         self._acting: dict[int, asyncio.Task[None]] = {}
         self._admitted: dict[str, Admission] = {}
         self._access: dict[str, Access] = {}
+        self._credentials: list[Secret] = []
+        self._redact = Redactor(())
         self._described: dict[str, DriverInfo] = {}
         self._closing = False
         self._looking: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -225,7 +246,8 @@ class Host:
         task.add_done_callback(lambda _: self._acting.pop(effect.id))
 
     async def _perform(self, effect: Effect) -> None:
-        """Start, act, report. A driver that raises anything but `DriverError` is broken, so its harness is lost."""
+        """Start, act, report. A driver that raises anything but `DriverError` is broken, so its harness is lost. What
+        was raised is journaled masked as its agent's reports are."""
         started = await self.insist("effect.start", {"id": effect.id})
         if started.refusal is not None:
             return  # It moved on before it started, which is no failure of ours.
@@ -248,9 +270,10 @@ class Host:
                 await self._lose(effect.agent, "it said it was ready and never began its goal")
 
     def _masked(self, effect: Effect, text: str) -> str:
-        """What a harness said is journaled with any credential it held masked."""
+        """Text of an effect, masked as its agent's reports are, or, with no harness of it held, of every credential
+        the runtime has handed any harness."""
         link = self.link(effect.agent)
-        return text if link is None else link.redact(text)
+        return (self._redact if link is None else link.redact)(text)
 
     async def insist(self, op: str, args: Mapping[str, Any]) -> Outcome:
         """Submit as the runtime. What left no event may be tried again, so it is, until the kernel closes, under one
@@ -291,19 +314,21 @@ class Host:
 
     async def admit(self, spawn: SpawnRequest) -> Admission:
         """Admit an agent and give it its credential: the raw token stays in memory, and only its hash is journaled. The
-        access it was admitted on is kept for this runtime's life, as a resume gives it back and no other agent shares a
-        gateway's bearer. A resumed admission that would not hold its agent to what it was is refused, and the agent is
-        lost, since its calls would go on an identity its record does not name."""
+        access it was admitted on is kept for this runtime's life, as a resume gives it back, no other agent shares a
+        gateway's bearer and a session runs in one place. A resumed admission that would not hold its agent to what it
+        was is refused, and the agent is lost, since its calls would go on an identity its record does not name. Several
+        can be under way at once, so each keeps its access as soon as it is checked, before it waits on anything, and is
+        checked against the access of every admission checked before it."""
         admission = await self._authority.admit(spawn)
-        if (why := self._unheld(spawn, admission)) is not None:
+        if (why := self._unheld(spawn, admission) or self._elsewhere(spawn.agent, admission.access)) is not None:
             if spawn.resumed:
                 await self.insist("agent.report", {"agent": spawn.agent, "report": Exited(reason=why)})
             raise DriverError(why)
+        self._access[spawn.agent] = admission.access
         token_hash = hash_token(admission.token.reveal())
         issued = await self.insist("principal.issue", {"id": f"agent:{spawn.agent}", "token_hash": token_hash})
         if issued.refusal is not None:
             raise DriverError(f"{spawn.agent} has no credential: {issued.refusal.detail}")
-        self._access[spawn.agent] = admission.access
         return admission
 
     def _unheld(self, spawn: SpawnRequest, admission: Admission) -> str | None:
@@ -322,6 +347,18 @@ class Host:
         if name in self._access and access != self._access[name]:
             return f"{name} came back on other model access than it was admitted on"
         return None
+
+    def _elsewhere(self, agent: str, access: Access) -> str | None:
+        """Why an agent's gateway says otherwise than the first gateway this runtime admitted of where its session runs,
+        as a session runs in one place, or None when it says the same, is no gateway or is the first."""
+        first = next((held for held in self._access.values() if isinstance(held, Gateway)), None)
+        if not isinstance(access, Gateway) or first is None or access.in_environment == first.in_environment:
+            return None
+        said = ("does not say", "says")
+        return (
+            f"{agent}'s gateway {said[access.in_environment]} its session runs in the environment, and the first "
+            f"gateway this runtime admitted {said[first.in_environment]} so: a session runs in one place"
+        )
 
     def _repo(self) -> Repo | None:
         """The repository the session opened on, as the journal holds it: a resume's own reading never replaces it."""
@@ -414,13 +451,18 @@ class Host:
         resume: str | None = None,
     ) -> None:
         """Bring a harness up on its own binding, with `goal`, a spawn's goal and body, as its first delivery, under
-        the id of the offer that launched it. A gateway goes only to a driver that declares a sealed launch. An isolated
-        harness runs in its isolation, on access it was given, as a login of its own would be in your home, which it
-        never sees. A harness that never says it is ready is a failure, not a hang."""
+        the id of the offer that launched it. A gateway goes only to a driver that declares a sealed launch, and one in
+        the environment only to a driver that declares a launch there. An isolated harness runs in its isolation, on
+        access it was given, as a login of its own would be in your home, which it never sees. What it is handed is
+        masked from then on in its reports, and each credential among it in every report, whichever harness makes it.
+        A harness that never says it is ready is a failure, not a hang."""
         info = await self.describe(role)
         access = admission.access
         if isinstance(access, Gateway) and not info.capabilities.sealed:
             raise DriverError(f"`{info.name}` has no sealed launch, which a gateway admission needs")
+        in_environment = isinstance(access, Gateway) and access.in_environment
+        if in_environment and not info.capabilities.in_environment:
+            raise DriverError(f"`{info.name}` has no launch in the environment, which its gateway asks for")
         pinned = _pinned(self._team.roles[role], access)
         login = "gateway" if isinstance(access, Gateway) else "key" if access else info.login
         workspace = self._workspace_of(agent)
@@ -431,12 +473,23 @@ class Host:
                 "give the role an auth profile"
             )
         await _to_thread(present, workspace, wrap)
-        driver = await _to_thread(make_driver, self._team.roles[role], self._cwd)
-        link = DriverLink(agent, role, driver, info, pinned=pinned, login=login)
+        installed, driver = await _to_thread(
+            lambda: (installation(info.installed), make_driver(self._team.roles[role], self._cwd))
+        )
+        link = DriverLink(
+            agent,
+            role,
+            driver,
+            info,
+            Redactor(self._credentials),
+            pinned=pinned,
+            login=login,
+            in_environment=in_environment,
+            installation=installed,
+        )
         spec = self._spec(link, admission, resume, Path(workspace.path), wrap)
         self._links[agent] = link
-        link.redact = Redactor(secrets_of(spec))
-        link.live = Held(link.redact)
+        self._hand(link, secrets_of(spec))
 
         async def up() -> None:
             offer = await self._instructed(agent, spec.instructions, goal=goal is not None, resumed=resume is not None)
@@ -457,6 +510,17 @@ class Host:
             if isinstance(error, DriverError):
                 raise DriverError(link.redact(str(error))) from error
             raise
+
+    def _hand(self, link: DriverLink, handed: tuple[Secret, ...]) -> None:
+        """Mask what a harness is handed in its own reports, and each credential among it, a value of
+        `_SHORTEST_CREDENTIAL` characters or more, in every harness's from now on, as a command one agent runs can read
+        another's credentials and print them."""
+        credentials = [secret for secret in handed if len(secret.reveal()) >= _SHORTEST_CREDENTIAL]
+        self._credentials += credentials
+        self._redact.add(credentials)
+        for held in self._links.values():
+            held.redact.add(credentials)
+        link.redact.add(handed)
 
     async def resume(self, agent: Mapping[str, Any]) -> None:
         """Bring an agent's harness back, as its record holds it, on a fresh credential: on its native session, or anew
@@ -965,10 +1029,11 @@ class Host:
     # Reports.
 
     async def _heard(self, link: DriverLink, report: Report) -> None:
-        """Take one report, in the order its harness said it, with every credential masked, whichever driver said it: a
-        driver waits here, and its own queue keeps a pipe draining. Live text is one stream, since a secret can straddle
-        two deltas, and any other report ends it. Nothing it cannot hear goes unsaid: a report that cannot be taken ends
-        the harness, not the host."""
+        """Take one report, in the order its harness said it, masked of what that harness was handed and of every
+        credential the runtime has given any harness, an ended agent's among them, as a command one agent runs can read
+        another's: a driver waits here, and its own queue keeps a pipe draining. Live text is one stream, since a secret
+        can straddle two deltas, and any other report ends it. Nothing it cannot hear goes unsaid: a report that cannot
+        be taken ends the harness, not the host."""
         try:
             if isinstance(report, Delta):
                 self._live(link, link.live.feed(report.text.encode(errors="surrogatepass")))
@@ -1065,9 +1130,10 @@ class Host:
     async def _ready(self, link: DriverLink, ready: Ready) -> None:
         """Commit what was declared with what was verified, so no driver can claim a level: levels come from the
         conformance result kept under the root for the harness's driver, read at every launch and resume, which is
-        recorded only where it speaks for this harness, here. A model that is not the one pinned is refused here: the
-        effective model must equal the requested one, and an unknown one stays unknown. A harness for an agent that has
-        started before comes back to it, whether it reopened a session or began anew."""
+        recorded only where it speaks for this harness, made here or from the read-only installation it runs from. A
+        model that is not the one pinned is refused here: the effective model must equal the requested one, and an
+        unknown one stays unknown. A harness for an agent that has started before comes back to it, whether it reopened
+        a session or began anew."""
         pinned = link.pinned
         if pinned is not None and ready.effective_model not in (None, pinned):
             link.refuse(f"it runs {ready.effective_model}, and {pinned} is pinned")
@@ -1077,7 +1143,9 @@ class Host:
             driver=info.name,
             implementation=implementation(link.driver),
             version=ready.version,
+            installation=link.installation,
             login=link.login,
+            in_environment=link.in_environment,
             tools=tool_visibility(ready.tools_visible, tuple(map(tool_name, link.held))),
             allow_native_children=role.allow_native_children,
         )

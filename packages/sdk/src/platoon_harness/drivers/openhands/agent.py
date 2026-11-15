@@ -1,6 +1,7 @@
 """One OpenHands conversation for one agent: OpenHands' coding tools and ours, the project's instructions and ours, and
-every action but ours asked about, or on a gateway a sealed one, with ours and the environment's tools alone. Importing
-this loads the OpenHands SDK, which takes seconds."""
+every action but ours asked about, or on a gateway a sealed one, with ours and the environment's tools alone, and its
+coding tools too where the gateway says its session runs in the environment. Importing this loads the OpenHands SDK,
+which takes seconds."""
 
 import sys
 from collections.abc import Callable, Mapping
@@ -31,6 +32,7 @@ from platoon_harness.config import Secret
 from platoon_harness.tools import SHIM
 
 from .. import ENVIRONMENT, AgentSpec, DriverError, Gateway
+from ..env import command_path
 
 Asked = Callable[[str, list[ActionEvent]], bool | None]
 """Whether a native child's step may run, or None to stop the child."""
@@ -136,7 +138,9 @@ def start(
 
     On a gateway the launch is sealed: none of OpenHands' coding tools, so ours, and the environment's once `ready`
     adds them, beside its own `finish` and `think`, which act on nothing, none of the project's instructions, and a
-    condenser whose every call carries the gateway's compaction headers."""
+    condenser whose every call carries the gateway's compaction headers. On a gateway that says its session runs in the
+    environment it keeps its coding tools, and its terminal's shell starts on the `PATH` `command_path` gives, where the
+    gateway names the one the environment gives its own commands."""
     llm = _llm(spec, key, url)
     gateway = spec.access if isinstance(spec.access, Gateway) else None
     headers = None if gateway is None else dict(gateway.compaction_headers) or None
@@ -144,12 +148,15 @@ def start(
     condensing.reset_metrics()
     llm.telemetry.log_enabled = True
     llm.telemetry.set_log_completions_callback(on_request)
+    terminal: dict[str, Any] = {"terminal_type": "subprocess"}
+    if (path := command_path(spec)) is not None:
+        terminal["env"] = {"PATH": path}
     tools = [
-        Tool(name=TerminalTool.name, params={"terminal_type": "subprocess"}),
+        Tool(name=TerminalTool.name, params=terminal),
         Tool(name=FileEditorTool.name),
         Tool(name=TaskTrackerTool.name),
     ]
-    if gateway is not None:
+    if gateway is not None and not gateway.in_environment:
         tools = []
     if spec.allow_native_children:
         AskingTasks.asked = asked

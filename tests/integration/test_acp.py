@@ -9,7 +9,7 @@ import shutil
 
 import pytest
 
-from platoon_harness.drivers.levels import Profile, implementation, levels
+from platoon_harness.drivers.levels import Profile, implementation, installation, levels
 from platoon_harness.drivers.opencode import OpenCodeDriver
 from platoon_harness.testing import check_harness
 
@@ -30,6 +30,13 @@ async def test_opencode_through_acp_passes_check_driver_against_fake_model(tmp_p
     print(result)
     assert result.failed == (), str(result)
     assert result.driver == "opencode" and result.implementation == implementation(OpenCodeDriver())
-    profile = Profile(driver="opencode", implementation=result.implementation, version=result.version, login="gateway")
+    installed = installation(OpenCodeDriver().describe().installed)
+    profile = Profile(
+        driver="opencode",
+        implementation=result.implementation,
+        version=result.version,
+        installation=installed,
+        login="gateway",
+    )
     earned = levels(OpenCodeDriver().describe().capabilities, profile, result)
     assert (earned.operational.state, earned.observable.state, earned.trainable.state) == ("met", "met", "unmet")

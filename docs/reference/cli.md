@@ -757,8 +757,10 @@ comes from the harness's own status command: no account name is kept, and no cre
 A harness's levels come from a result of its checks kept under the root, which `--check` makes for each harness it
 finds that a check ships for, the SDK's own or one its installed driver names, on the binary that runs, against a
 model of ours on loopback and on no account.
-The runtime reads it at every launch and resume, and a result made of another version, under another SDK or on
-another host says nothing of the one that runs. A check that cannot run keeps nothing, says why, and goes on.
+The runtime reads it at every launch and resume, and a result made of another version or under another SDK says
+nothing of the one that runs. One made from the read-only installation the binary runs from speaks for it, on any
+host, and doctor names the host it was made on; one that names no installation speaks only on the host it was made
+on, for a binary that runs from none. A check that cannot run keeps nothing, says why, and goes on.
 
 For example:
 

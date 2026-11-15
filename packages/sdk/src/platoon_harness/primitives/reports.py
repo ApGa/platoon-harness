@@ -78,7 +78,9 @@ class Capabilities(Model):
     """What a driver declares of a harness. Absence means unsupported, and `levels` believes only what was verified.
     `native_children_off` says it turns the harness's own agents off for a launch whose role does not allow them, so a
     role on a harness with agents of its own that its driver cannot turn off must allow them. `sealed` says it launches
-    on a gateway's access with nothing of the user's, which is the one launch a gateway admission gets."""
+    on a gateway's access with nothing of the user's, which is the one launch a gateway admission gets, and
+    `in_environment` that on a gateway that says its session runs in the environment, that launch keeps the harness's
+    own tools, which is the one launch such a gateway gets."""
 
     persistent: bool = False
     resume: bool = False
@@ -96,6 +98,7 @@ class Capabilities(Model):
     measures: frozenset[Literal["tokens", "usd"]] = frozenset()
     sandboxes: frozenset[str] = frozenset()
     sealed: bool = False
+    in_environment: bool = False
 
 
 class Ready(Args):

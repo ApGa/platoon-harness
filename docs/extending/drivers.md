@@ -40,7 +40,8 @@ method promises:
   for a delivery. An unset model on the harness's own login means the harness's own default, and `ready` says which. Where access was
   given, in `spec.access`, a driver refuses an unset model, since the default may then go somewhere nobody chose. That access is
   variables by name, which `keys_of(spec)` reads and `harness_env` puts in the harness's environment, or a `Gateway`, which only a
-  driver that declares `sealed` is given, with `spec.model` the model it serves. Any process on the machine can read a command line,
+  driver that declares `sealed` is given, and one whose `in_environment` is true only a driver that declares `in_environment` too,
+  with `spec.model` the model it serves. Any process on the machine can read a command line,
   so one may name a variable of that access and never hold its value. `spec.effort` goes to
   the harness as it stands, and a driver that cannot honor one raises `DriverError`. `spec.sandbox` is one of the values declared in
   `sandboxes`, and None leaves it to the harness. Unless `spec.allow_native_children` says otherwise, the harness offers its model nothing of
@@ -147,6 +148,7 @@ out what they earned. A `ready` that tries to state a level is an unknown frame.
 | `measures` | Which of `tokens` and `usd` it reports |
 | `sandboxes` | The values a role's `sandbox` may take |
 | `sealed` | Whether it launches on a gateway's access with nothing of the user's: only a driver that says so is given a `Gateway` |
+| `in_environment` | Whether, on a gateway that says its session runs in the environment, its sealed launch keeps the harness's own tools: only a driver that says so is given such a gateway |
 
 A declaration earns nothing by itself. See [Conformance](#conformance).
 
@@ -174,16 +176,38 @@ How each harness here does it:
 
 | Harness | Sealed launch | Compaction calls |
 |---|---|---|
-| ScriptedDriver | Its access is the gateway's, and it lists the environment's tools beside ours, as `mcp__environment__<tool>`; a call of its `shell`, or of any tool neither lists, is told there is no such tool and runs nothing | A `Compact` step: one call, with the headers, reported with its id |
+| ScriptedDriver | Its access is the gateway's, and it lists the environment's tools beside ours, as `mcp__environment__<tool>`; a call of its `shell`, or of any tool neither lists, is told there is no such tool and runs nothing. In the environment, its `shell` kept | A `Compact` step: one call, with the headers, reported with its id |
 | A wire program | It finds the gateway in its launch frame, and the bearer in the variable the frame names, and names the environment's tools by their server | It sends the headers from its frame, and reports each call with its id |
-| `pi` | An agent directory of its own in the agent's folder, settings that retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve`, `--offline`, and the environment's server registered by our extension, whose tools pi shows as `mcp__environment__<tool>` | Our extension takes `session_before_compact` and runs pi's own `compact` with the headers and a stream function that keeps each response's id, one call or two for a split turn; it says each call made, by its id or null for one that never answered, as a status the driver reads before pi says the compaction ended, so a compaction cut after its first call still reports both |
-| `openhands` | None of its coding tools, so ours and the environment's, the latter through an MCP client of their own and named by it as the SDK's client of two servers names a server's tools, `environment_<tool>`, beside its `finish` and `think`; no project instructions | Its condenser's LLM sends the headers as `extra_headers`, and its calls are reported as `compaction` |
+| `pi` | An agent directory of its own in the agent's folder, settings that retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve`, `--offline`, and the environment's server registered by our extension, whose tools pi shows as `mcp__environment__<tool>`. In the environment, no `--no-builtin-tools`, so its default tools kept, and settings whose `shellCommandPrefix`, which pi puts before each command its `bash` runs, sets the `PATH` `command_path` gives | Our extension takes `session_before_compact` and runs pi's own `compact` with the headers and a stream function that keeps each response's id, one call or two for a split turn; it says each call made, by its id or null for one that never answered, as a status the driver reads before pi says the compaction ended, so a compaction cut after its first call still reports both |
+| `openhands` | None of its coding tools, so ours and the environment's, the latter through an MCP client of their own and named by it as the SDK's client of two servers names a server's tools, `environment_<tool>`, beside its `finish` and `think`; no project instructions. In the environment, its coding tools kept | Its condenser's LLM sends the headers as `extra_headers`, and its calls are reported as `compaction` |
 
 A driver with no sealed launch reads access through `keys_of(spec)`, which refuses a gateway, and the host refuses one before that.
 Declaring `sealed` earns nothing either: two checks earn it, in the one result kept for the driver. They prove, on the machine's own
 home as a rollout runs, that the first request goes under the gateway's bearer, holds none of the project's instructions and shows
 only ours, the environment's and the tools `check_driver(kept=)` names. What else of the user's a launch keeps out is how it is
 built, as the table says, which no check proves.
+
+**A launch in the environment.** A training system that runs a whole session inside its environment's sandbox says so on each
+gateway, `Gateway.in_environment`, and there a sealed launch keeps the harness's own tools, its shell and its file tools,
+beside ours and the environment's, as they act on the environment's machine; the rest of the launch stands. A driver that has
+such a launch declares `in_environment`, and the host gives a gateway in the environment to no other, refusing it before that
+agent's harness launches. Its gateway can name `environment_path`, the `PATH` the environment gives its own commands, on
+which such a launch runs the model's commands, behind the agent's `bin`, while the harness keeps the runtime's:
+`command_path(spec)`, from `platoon_harness.drivers.env`, gives that `PATH`, or None where a command gets its harness's own.
+Where the gateway names one, `ph` runs on the `python3` that `PATH` finds, so it fails where the environment has none of 3.7
+or later, and the model reaches our tools only as its harness shows them. A wire program that declares the launch answers
+for its commands' `PATH`, which no check proves. Each tool of the harness's own that asks for an approval asks the runtime,
+as on any launch, and its calls are recorded only as the harness reports them, as they reach none of our servers. A wire
+frame names `in_environment` only where it is true and `environment_path` only where it is given, so a program built on an
+earlier SDK takes every frame it took before. Declaring it earns nothing either:
+`own_tools_in_first_request_in_the_environment` proves, on FakeModel acting as a gateway in the environment, that the first
+request shows the harness's own shell, by the name `check_driver(shell=)` gives it, beside ours and the environment's, and
+`trainable` stands on it there; a driver whose launch in the environment failed it is trainable at no launch. That the shell
+runs, in the agent's workspace, is what the shell checks prove of it on a key. Of the drivers here, ScriptedDriver,
+OpenHands and pi declare it, as the table above, [A scripted harness](#a-scripted-harness) and
+[OpenHands: a wire worker](#openhands-a-wire-worker) say: pi keeps `read`, `bash`, `edit` and `write`, all but `read` asking
+as on a key, and runs on Node and its packages as the runtime's `PATH` finds them, while its commands run on the one
+`command_path` gives.
 
 ## A one-shot CLI: `exec`
 
@@ -401,6 +425,11 @@ What an OpenHands agent does differently from the others:
   approval covers what a step holds, with each of its actions as its ask.
 - **Its own agents are off** unless a role allows them; allowed, a child is the gap `native_child_unattributed`, its spending
   its parent's.
+- **In the environment,** on a gateway that says its session runs there, it keeps its coding tools beside ours and the
+  environment's, each action asking as on a key. Its terminal's shell, an interactive `bash` on a pseudoterminal, starts on
+  the `PATH` `command_path` gives, the gateway's `environment_path` behind the agent's `bin` where it names one, and the
+  startup files of the image's `bash` may change it after; an image with no `bash` fails the terminal, and so the agent's
+  start.
 - **Spending:** tokens are the provider's, and dollars come only where litellm prices the model, as an estimate. An interrupt
   abandons a model call in flight, which a gateway may have recorded all the same, so that turn says its usage is a lower bound.
 
@@ -548,6 +577,7 @@ async def test_my_driver_conforms(tmp_path):
 | `one_shot_exits` | A harness that is not persistent exits after its turn |
 | `sealed_first_request_holds_only_ours` | On a gateway, the first request goes under its bearer, holds none of the instructions an `AGENTS.md` or `CLAUDE.md` in the folder it works in gives, and shows no tool but ours, the environment's named by its server, and those `kept` names. Needs `sealed` |
 | `environment_tools_in_first_request` | On a gateway, each of the environment's tools, at the URL the gateway names, is in the first model request named by the environment's server, never bare, so FakeModel's `finish` and `think` collide with no tool of the harness's own. Needs `sealed` |
+| `own_tools_in_first_request_in_the_environment` | On a gateway that says its session runs in the environment, the first request goes under its bearer, holds none of the instructions an `AGENTS.md` or `CLAUDE.md` in the folder it works in gives, and shows the harness's own shell, by the name `shell` gives it, beside ours and each of the environment's tools named by its server. Needs `in_environment`. Pass `shell`, or it is skipped |
 | `declared_but_unproven` | Always a skip: it names what you declared that no check can prove yet |
 
 Each check gets a fresh instance, a fresh model and a fresh folder, and `timeout` bounds each one, so a wedged harness costs only its
@@ -564,26 +594,38 @@ own checks. What a driver leaves running, the suite reaps.
 | `kept` | None | The names of the tools of the harness's own that a sealed launch keeps, each of which acts on nothing, such as OpenHands' `finish` and `think` |
 | `timeout` | 10 s | How long one check may take |
 
-The result is pinned to the driver, by its name and the class that implements it, the harness version it reported, the SDK, the
-host it ran on and, for a class outside the SDK, the release of each distribution that holds it. So a program calling itself
-`claude` earns nothing from what was kept of the claude driver's checks, a result made elsewhere, or of a version nobody said,
-says nothing of this agent, and an upgrade reads `unverified` until it is checked again. The runtime reads a result kept under the
+The result is pinned to the driver, by its name and the class that implements it, the harness version it reported, the SDK, where
+it ran and, for a class outside the SDK, the release of each distribution that holds it. Where it ran is the read-only installation
+its harness ran from, the paths your `DriverInfo.installed` names, resolved, where every one lies on a read-only mount, and
+otherwise the host. So a program calling itself `claude` earns nothing from what was kept of the claude driver's checks, a result
+made elsewhere, or of a version nobody said, says nothing of this agent, and an upgrade reads `unverified` until it is checked
+again: a result made from a read-only installation speaks for an agent whose harness runs from the same paths, read-only, on any
+host, and one made from none only on its host, for an agent whose harness runs from none. The runtime reads a result kept under the
 root at every launch and resume, where `write_conformance(root, result)`, from `platoon_harness.runtime.paths`, keeps one, and
 `platoon-harness doctor --check` makes one for each harness `levels.CHECKED` names and for an installed driver whose
 `DriverInfo.check` names its check, as `module:function`, imported only to run it. A level with no result that speaks for the
-harness that runs says so, and names what makes one.
+harness that runs says so, and names what makes one. A `Profile` you build to read levels names the installation too, as the
+runtime's does, or a result made from a read-only one would say nothing of it:
 
 ```python
-from platoon_harness.drivers.levels import Profile, implementation, levels
+from platoon_harness.drivers.levels import Profile, implementation, installation, levels
 
-profile = Profile(driver="pi", implementation=implementation(driver), version="1.5.0", login="key", tools="unverified")
+profile = Profile(
+    driver="pi",
+    implementation=implementation(driver),
+    version="1.5.0",
+    installation=installation(driver.describe().installed),
+    login="key",
+    tools="unverified",
+)
 earned = levels(capabilities, profile, result)
 ```
 
 `levels` gives `operational`, `observable` and `trainable`, each `met`, `unmet` or `unverified`, with reasons. It is a pure function,
 and nothing a driver says reaches it except through a check that passed. Native and plan logins are never trainable: `trainable`
 needs a gateway login, a driver that declares `sealed`, our tools seen, and a kept result whose sealed checks passed beside
-`ready_with_pinned_model`, `tool_in_first_request` and `call_ids_reported`.
+`ready_with_pinned_model`, `tool_in_first_request` and `call_ids_reported`, and at a launch in the environment
+`own_tools_in_first_request_in_the_environment` too; once that check has failed, no launch of the driver is trainable.
 
 ### A real binary for free
 
@@ -610,6 +652,13 @@ approval allows it, in `spec.cwd`, in a group recorded before it can run, so `ch
 behind a wire program, to every check a harness's shell meets. Its capabilities are data, and it holds to them, so a test can make it
 one-shot or unsteerable.
 
+On a key a model calls its `shell` unshown. On a gateway it is no tool, as a sealed launch keeps none of the harness's own, but
+on a gateway that says its session runs in the environment it is kept: shown in each request beside ours and the environment's,
+with a schema of one `command`, asked about before each call, run on the `PATH` `command_path` gives, and reported as pi and
+OpenHands report a tool of their own, begun under the id the model gave the call, with its input and the model call that made
+it, and ended `completed` or `failed` by how its command exited, or `rejected` where its approval was denied, which that end
+answers. A call goes to a tool of ours before one of its own, so there a tool of ours named `shell` fails its start.
+
 ```python
 from platoon_harness.testing import Ask, Call, Hang, Say, ScriptedDriver
 
@@ -635,8 +684,8 @@ call, as no model chose them. `ScriptedDriver(itertools.repeat([Do(act)]))` runs
 The steps are `Say`, `Think`, `Call`, `Do`, `Wait`, `EndTurn`, `Fail`, `Exit`, `Ask`, `Hang` and `AskModel`, which makes real model calls
 until the model only talks. A tool call the model chose goes under the id the model gave it, as `scripted/toolCallId` in MCP's
 `_meta`, which its tool item holds, so its op joins that model call as a Claude Code or pi tool call does, and conformance's
-`tool_item_carries_its_anchor` holds it to that. A call under an id it has sent already fails its turn, since its op would join the
-call that sent it first. A `Call` step, which no model chose, sends no id, so the tool plane keys it by its turn, and an identical
+`tool_item_carries_its_anchor` holds it to that. A call under an id it has sent already fails its turn, since what it does would
+join the call that sent it first. A `Call` step, which no model chose, sends no id, so the tool plane keys it by its turn, and an identical
 one in the same turn is answered as a repeat. `Ask(gist, body)` asks for an approval with `body` as its whole ask, and the approval
 its `shell`, or any tool of its own that `AskModel` meets, asks for carries the tool's name and its input as JSON. A step that
 raises, of its own or of a subclass's, fails its turn saying what it raised, and the next turn runs.

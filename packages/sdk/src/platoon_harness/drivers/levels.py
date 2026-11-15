@@ -1,8 +1,10 @@
 """The three levels of an agent, computed from what was verified. No driver can claim one."""
 
 import functools
+import os
 import socket
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -12,7 +14,7 @@ from platoon_harness.primitives import Capabilities
 from platoon_harness.schema import Model
 from platoon_harness.version import __version__
 
-from . import Login
+from . import DriverError, Login
 
 SURFACES = ("prompt", "tool_results", "shell_reads", "files", "native_children", "compaction", "external")
 
@@ -30,6 +32,10 @@ Visibility = Literal["visible", "hidden", "unverified"]
 Standing = Literal["met", "unmet", "unverified"]
 
 _Finding = tuple[Standing, str]
+
+_IN_ENVIRONMENT = "own_tools_in_first_request_in_the_environment"
+"""The check of a launch in the environment, which `trainable` needs passed at such a launch, and not failed at any
+launch of its driver, as a capability a check shows false leaves a level unmet."""
 
 _STANDS_ON: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "operational": (
@@ -68,7 +74,7 @@ _STANDS_ON: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "sealed_first_request_holds_only_ours",
             "environment_tools_in_first_request",
         ),
-        (),
+        (_IN_ENVIRONMENT,),
     ),
 }
 """The checks each level stands on: those it needs passed, and those covering what a harness may leave out, which must
@@ -86,6 +92,7 @@ __all__ = [
     "Standing",
     "Visibility",
     "implementation",
+    "installation",
     "levels",
     "speaks_for",
     "tool_visibility",
@@ -121,26 +128,32 @@ class Checks(Model):
 
 class Conformance(Checks):
     """What `check_driver` found, pinned to one driver, by the name it gave and the class that implements it, at the
-    harness version it said, under one SDK, on one host, since the checks prove the driver's code and the binary
-    together, where they ran."""
+    harness version it said, under one SDK, and to where it ran, since the checks prove the driver's code and the binary
+    together, where they ran: to `installation`, the read-only installation its harness ran from, as `installation`
+    gives it, and where it names none, to `host`, which names where it was made either way."""
 
     driver: str
     implementation: str
     version: str | None
     sdk: str
     host: str
+    installation: tuple[str, ...] | None = None
 
 
 class Profile(Model):
     """One agent as it runs: which driver, by name and class, at which harness version, under which SDK on which host,
-    on which login, whether its tools were seen, and whether its role lets its harness start agents of its own."""
+    from which read-only installation, if any, on which login, whether its gateway said its session runs in the
+    environment, so that its launch kept the harness's own tools, whether its tools were seen, and whether its role lets
+    its harness start agents of its own."""
 
     driver: str
     implementation: str
     version: str | None = None
     sdk: str = __version__
     host: str = Field(default_factory=socket.gethostname)
+    installation: tuple[str, ...] | None = None
     login: Login | None = None
+    in_environment: bool = False
     tools: Visibility = "unverified"
     allow_native_children: bool = False
 
@@ -177,15 +190,33 @@ def _level(findings: Iterable[_Finding]) -> Level:
 
 
 def _making(profile: Profile) -> str:
-    """What makes a result that speaks for an agent's driver here."""
-    if CHECKED.get(profile.driver) == profile.implementation:
+    """What makes a result that speaks for an agent's driver here, or, where its harness runs from a read-only
+    installation, from that installation, which need not hold the command line, as one made for a sandbox may not, so
+    the SDK's own functions are named beside it."""
+    shipped = CHECKED.get(profile.driver) == profile.implementation
+    if profile.installation is not None:
+        kept = "`write_conformance` keeps what it found under the root"
+        if not shipped:
+            return f"`check_driver` checks it from this installation, and {kept}"
+        doctor = "`platoon-harness doctor --check` checks it from this installation and keeps what it found"
+        return f"{doctor}, or, without the command line, `check_harness` checks it and {kept}"
+    if shipped:
         return "`platoon-harness doctor --check` checks it here and keeps what it found"
     return "`check_driver` checks it, and `write_conformance` keeps what it found here"
 
 
+def _installed(pinned: Conformance | Profile) -> str:
+    """The read-only installation a result was made from, or an agent's harness runs from, in words."""
+    if pinned.installation is None:
+        return "no read-only installation"
+    return f"the read-only installation {', '.join(pinned.installation)}"
+
+
 def _pin(profile: Profile, conformance: Conformance | None) -> str | None:
     """Why a result says nothing of this agent, if it does not, and what makes one that does. A version nobody said
-    pins nothing, as no result can be known to have run on it."""
+    pins nothing, as no result can be known to have run on it. A result made from a read-only installation speaks for
+    a harness that runs from it, on any host, and one made from none only on its host, for a harness that runs from none
+    too, as what it checked could have changed under it."""
     making = _making(profile)
     if conformance is None:
         return f"no conformance result for {profile.driver} is kept: {making}"
@@ -197,10 +228,13 @@ def _pin(profile: Profile, conformance: Conformance | None) -> str | None:
         (f"{conformance.driver} {conformance.version}", f"{profile.driver} {profile.version}"),
         (conformance.implementation, profile.implementation),
         (f"SDK {conformance.sdk}", f"SDK {profile.sdk}"),
-        (conformance.host, profile.host),
     ):
         if ran != runs:
             return f"conformance ran on {ran}, and this is {runs}: {making}"
+    if conformance.installation != profile.installation:
+        return f"conformance ran from {_installed(conformance)}, and this runs from {_installed(profile)}: {making}"
+    if conformance.installation is None and conformance.host != profile.host:
+        return f"conformance ran on {conformance.host}, and this is {profile.host}: {making}"
     return None
 
 
@@ -228,20 +262,54 @@ def _release(package: str) -> str | None:
     return held.pop() if len(held) == 1 else None
 
 
+def installation(installed: Iterable[Path]) -> tuple[str, ...] | None:
+    """The read-only installation a harness runs from, which a result is pinned to in place of its host: the paths
+    `DriverInfo.installed` names, each resolved, in that order, where there is at least one and each lies on a mount
+    that is read-only where this process looks, when it looks; else None, as a result made from what could change
+    vouches for no installation. It names paths, not what they hold: that they hold what was checked is for whoever
+    mounts them to keep. Where no path is writable and the mount of one cannot be read, whether there is one is
+    unknown, and it raises `DriverError`, naming that path and why."""
+    found: dict[Path, bool] = {}
+    unread: list[str] = []
+    for path in installed:
+        try:
+            resolved = path.resolve()
+            found[resolved] = _read_only(resolved)
+        except (OSError, RuntimeError) as error:  # Before Python 3.13, `resolve` raises RuntimeError on a symlink loop.
+            unread.append(f"whether {path} lies on a read-only mount is unknown: {error}")
+    if not (found or unread) or not all(found.values()):
+        return None
+    if unread:
+        raise DriverError("; ".join(unread))
+    return tuple(map(str, found))
+
+
+def _read_only(path: Path) -> bool:
+    """Whether `statvfs` says a path lies on a read-only mount."""
+    return bool(os.statvfs(path).f_flag & os.ST_RDONLY)
+
+
 def speaks_for(profile: Profile, conformance: Conformance | None) -> bool:
-    """Whether a result was made of the agent's driver, by name and class, at its harness version, under its SDK, on
-    its host, as only such a result counts toward a level."""
+    """Whether a result was made of the agent's driver, by name and class, at its harness version, under its SDK, from
+    the read-only installation its harness runs from, on any host, or, where it names none, on its host, for a harness
+    that runs from none, as only such a result counts toward a level."""
     return _pin(profile, conformance) is None
 
 
-def _verified(
-    profile: Profile, conformance: Conformance | None, needed: Iterable[str], declared: Iterable[str] = ()
-) -> Iterator[_Finding]:
-    """`needed` checks must have passed. `declared` ones cover what a harness may leave out, so they must not fail."""
+def _verified(profile: Profile, conformance: Conformance | None, level: str) -> Iterator[_Finding]:
+    """What a result proves of the checks `level` stands on. Those it needs must have passed, and at a launch in the
+    environment, that launch's check too, where the level stands on it. Those covering what a harness may leave out
+    must not fail. A result that speaks from another host, by the installation it names, says where it was made, as
+    what its checks proved of the machine around that installation, such as its shell, they proved there."""
+    needed, declared = _STANDS_ON[level]
+    if profile.in_environment and _IN_ENVIRONMENT in declared:
+        needed = (*needed, _IN_ENVIRONMENT)
     if (unpinned := _pin(profile, conformance)) is not None:
         yield "unverified", unpinned
         return
     assert conformance is not None
+    if conformance.host != profile.host:
+        yield "met", f"its result was made on {conformance.host}, from this installation"
     for name in needed:
         check = conformance.get(name)
         if check is None or check.state == "skipped":
@@ -252,7 +320,7 @@ def _verified(
 
 
 def _operational(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Iterator[_Finding]:
-    yield from _verified(profile, conformance, *_STANDS_ON["operational"])
+    yield from _verified(profile, conformance, "operational")
     if not capabilities.tool_paths:
         yield "unmet", "it has no path to our tools"
     elif profile.tools == "hidden" and "shell" not in capabilities.tool_paths:
@@ -262,7 +330,7 @@ def _operational(capabilities: Capabilities, profile: Profile, conformance: Conf
 
 
 def _observable(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Iterator[_Finding]:
-    yield from _verified(profile, conformance, *_STANDS_ON["observable"])
+    yield from _verified(profile, conformance, "observable")
     blind = [surface for surface in SURFACES if capabilities.coverage.get(surface, "none") == "none"]
     if len(blind) == len(SURFACES):
         yield "unmet", "it observes no surface"
@@ -283,7 +351,7 @@ def _trainable(capabilities: Capabilities, profile: Profile, conformance: Confor
         yield "unmet", "our tools never reach the policy"
     elif profile.tools == "unverified":
         yield "unverified", "tools unverified"
-    yield from _verified(profile, conformance, *_STANDS_ON["trainable"])
+    yield from _verified(profile, conformance, "trainable")
 
 
 def unearned(
@@ -291,7 +359,8 @@ def unearned(
 ) -> tuple[str, ...]:
     """Why a result does not prove what `level` stands on for the harness a profile names, naming what makes one that
     does, or nothing when it proves it."""
-    return tuple(reason for _, reason in _verified(profile, conformance, *_STANDS_ON[level]))
+    found = _verified(profile, conformance, level)
+    return tuple(reason for standing, reason in found if standing != "met")
 
 
 def levels(capabilities: Capabilities, profile: Profile, conformance: Conformance | None) -> Levels:

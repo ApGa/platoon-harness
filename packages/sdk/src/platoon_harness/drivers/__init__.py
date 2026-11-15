@@ -149,13 +149,20 @@ class Gateway(Model):
     """Model access through a training system's gateway: its models at `origin`, a scheme and a host with nothing more,
     under `bearer`, serving `model`. `tools` is the URL of the environment's own MCP server at the same origin under the
     same bearer, when there is one, and `compaction_headers` go with each call a harness makes to compact its context,
-    so that the gateway tells that call apart as it is made."""
+    so that the gateway tells that call apart as it is made. `in_environment` says the session runs in the environment,
+    on the machine its tools act on, where a launch keeps its harness's own tools: the SDK cannot see where it runs, so
+    the word is the authority's to keep true. `environment_path` is the `PATH` the environment gives its own commands,
+    which the model's commands on such a launch run on, behind the agent's folder that holds `ph`, while its harness
+    keeps the runtime's; it is refused empty, as it names no folder, and on a gateway that does not say its session runs
+    in the environment, as nothing else would carry it out."""
 
     origin: str
     bearer: Secret
     model: str
     tools: str | None = None
     compaction_headers: Mapping[str, str] = {}
+    in_environment: bool = False
+    environment_path: str | None = None
 
     @field_validator("origin")
     @classmethod
@@ -166,6 +173,20 @@ class Gateway(Model):
     @classmethod
     def _a_server(cls, tools: str | None) -> str | None:
         return None if tools is None else _url(tools, path=True)
+
+    @model_validator(mode="after")
+    def _a_path_in_the_environment(self) -> Self:
+        if self.environment_path is not None and not self.in_environment:
+            raise ValueError(
+                "a gateway's `environment_path` is for commands run in the environment, and this gateway does not say "
+                "its session runs there, so nothing would carry it out"
+            )
+        if self.environment_path == "":
+            raise ValueError(
+                "a gateway's `environment_path` is the `PATH` the environment gives its own commands, and this one "
+                "is empty"
+            )
+        return self
 
     @model_validator(mode="after")
     def _bearer_alone(self) -> Self:
@@ -222,10 +243,11 @@ class AgentSpec(Model):
     under the id of the offer that launched it, so its harness says it landed as it says any input did, and None when
     there is none, as on a resume. `folder` is the agent's own directory, for its record, log and native home. `access`
     is model access: variable names to values, URLs included, that reach only the harness's environment, or a gateway,
-    which only a driver that declares `sealed` is given. `effort` goes to the harness as it stands, and `sandbox` is one
-    of the values the driver declared. `allow_native_children` lets the harness start agents of its own. A `HOME` in
-    `env` is the harness's home. `wrap` is the argv of the isolation it runs in, which `Process` puts before its
-    command, so that all it starts is confined with it, and is empty for a harness that runs unconfined."""
+    which only a driver that declares `sealed` is given, and one in the environment only a driver that declares
+    `in_environment` too. `effort` goes to the harness as it stands, and `sandbox` is one of the values the driver
+    declared. `allow_native_children` lets the harness start agents of its own. A `HOME` in `env` is the harness's
+    home. `wrap` is the argv of the isolation it runs in, which `Process` puts before its command, so that all it starts
+    is confined with it, and is empty for a harness that runs unconfined."""
 
     agent: str
     role: str

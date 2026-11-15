@@ -46,11 +46,15 @@ team holds it, whose yes covers what you were shown and nothing the file says si
   their reach, in a directory only you can open.
 - **An agent that can run commands, as you.** Claude Code, Codex, pi and OpenHands run shell commands, as your user, so
   such an agent can read the session folder, the owner's token, another agent's token in that agent's environment, other
-  sessions and your home. On such a session, approvals and the line between sessions are workflow controls, not
-  boundaries, and every agent's assurance is `cooperative`. An `isolated` workspace hides your home, the session root and
-  the runtime directory from its harness, but it still reaches the network, every loopback service, every socket file
-  outside those folders and everything you can read elsewhere, on the same kernel. It is experimental, Linux only, and has
-  passed its escape tests on one Linux host with bubblewrap 0.4.1.
+  sessions and your home, and write the journal, and into any harness's pipes, to steer that harness or report as it. On
+  such a session, approvals and the line between sessions are workflow controls, not boundaries, and every agent's
+  assurance is `cooperative`. In a session in a training system's environment, a command can thus have a call it made on
+  another agent's bearer recorded as that agent's own, under the id the gateway gave it, without writing the journal, and
+  no check against the gateway's records for that agent's key can tell, so such a session should hold agents of one
+  policy only. An `isolated` workspace hides your home, the session root and the runtime directory from its harness, but
+  it still reaches the network, every loopback service, every socket file outside those folders and everything you can
+  read elsewhere, on the same kernel. It is experimental, Linux only, and has passed its escape tests on one Linux host
+  with bubblewrap 0.4.1.
 - **The network, from an agent.** Nothing confines an agent's network access, an isolated one's included.
 - **Resources.** No agent's CPU, memory or disk is limited. `session.metrics` reports the CPU and peak memory of the
   process holding the journal, and what an agent's harness processes use as unknown, since nothing measures it.
@@ -62,7 +66,8 @@ team holds it, whose yes covers what you were shown and nothing the file says si
   harness gets, and with none the harness signs itself in, as it does in your shell. Each harness starts with an allowlist of
   variables, so nothing else of yours passes through. `Secret`, which holds a value, prints as a mask and refuses JSON,
   pickling and copying. A training system's gateway bearer lives only in its harness's environment: no form of it is in
-  the session folder or in the command line of any of the harness's processes.
+  the session folder or in the command line of any of the harness's processes, as far as the SDK and the harness put it there.
+  On a launch in the environment, a command the model runs can read it and write it wherever its user can.
 - **Agents' tokens.** Each agent has a token of its own for the tool plane, held in memory and in its harness's environment,
   and only its hash is journaled. An ended agent's token is refused, and so is one session's at another's tool plane.
 - **What a harness keeps.** A harness on your own login keeps its login where it always does, in your home, which nothing
@@ -132,14 +137,22 @@ Tombstoning does not reach:
 
 ## Redaction
 
-What the runtime gave a harness is masked wherever that harness's words go: its auth profile's values, a gateway's bearer
-and its token, plain, JSON-escaped, URL-quoted and in base64 of either alphabet, in what it writes to its `stderr.log`, in
-what it reports to the journal, its live text among it, and in the runtime's log. A resolved config refuses a secret's
-exact value.
+Every credential the runtime has given a harness, each auth profile's values, a gateway's bearer and each agent's token, an
+ended agent's among them, is masked, plain, JSON-escaped, URL-quoted and in base64 of either alphabet, in what every harness
+reports to the journal, its live text among it, whichever agent's harness says it, and in the runtime's log: a command one
+agent runs can read another agent's credentials and print them. A value shorter than eight characters, as an auth profile's
+`PI_OFFLINE` may be, is too short to be any provider's key and is found in ordinary words and in the ids reports name, so it
+is masked only where the harness it was given says it. What a harness writes to its `stderr.log` is masked of the
+credentials it was given. A driver that cuts what its harness said, as to a gist, a reason or the last of a long output, masks
+its own harness's credentials before the cut, and the runtime masks only whole credentials, so where a cut splits another
+agent's, the part on the side it kept stays there. A resolved config refuses a secret's exact value.
 
 Nothing else is masked. A key an agent reads from a file, one in a repository or one typed into a prompt is content, and is
-kept as it was written: in a gist, a body, a commit or a harness's own transcript. Nothing sanitizes a session's folder.
-Keep secrets out of what agents read, and tombstone a body that holds one.
+kept as it was written: in a gist, a body, a commit or a harness's own transcript. So is a credential a command recoded before
+it printed it. A harness's own transcript keeps what a command printed as the harness wrote it, so where a harness keeps its
+transcript in its agent's folder and has a shell, as on a launch in a training system's environment, the export can hold a
+bearer a command printed. Nothing sanitizes a session's folder. Keep secrets out of what agents read, and tombstone a body that
+holds one.
 
 ## Reporting a vulnerability
 

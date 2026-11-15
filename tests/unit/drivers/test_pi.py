@@ -421,6 +421,16 @@ def test_a_harness_that_is_not_installed_describes_no_login(tmp_path, monkeypatc
     assert PiDriver().describe().login is None
 
 
+def test_a_pi_that_cannot_start_is_refused_with_what_it_printed(stand):
+    loader = "node: error while loading shared libraries: libatomic.so.1: cannot open shared object file"
+    stand.install(version_code=127, stderr=loader)
+
+    with pytest.raises(DriverError) as refused:
+        PiDriver().describe()
+
+    assert str(refused.value) == f"pi cannot start: `pi --version` failed: {loader}"
+
+
 def test_describing_answers_alike_and_declares_what_ran(stand):
     driver = PiDriver()
 

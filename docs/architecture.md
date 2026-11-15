@@ -1190,7 +1190,7 @@ class Driver(Protocol):
 
 `AgentSpec` holds agent, role, goal, cwd, which is where the journal says its agent works, so no driver knows the mode, the agent's
 own folder, model, effort (a string handed to the harness as it stands), sandbox
-(one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included, or a `Gateway`, which only a driver that declares `sealed` is given, with the gateway's model as the model), env, where a `HOME` is the harness's home, so the driver inherits none of the variables that keep its state elsewhere, wrap, the argv of the isolation it runs in, which `Process` puts before its command, so the recorded leader is the confiner, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path, the same
+(one of the values the driver declared, or left to the harness), whether the harness may start agents of its own, tool binding, model access (`Secret` values by variable name, URLs included, or a `Gateway`, which only a driver that declares `sealed` is given, and one that says its session runs in the environment only a driver that declares `in_environment` too, with the gateway's model as the model), env, where a `HOME` is the harness's home, so the driver inherits none of the variables that keep its state elsewhere, wrap, the argv of the isolation it runs in, which `Process` puts before its command, so the recorded leader is the confiner, instructions (the preamble and then the role's words, so a role has the last word, appended by the supported path, the same
 again on a resume, and journaled; native project files are never touched) and resume. A fresh start begins the first turn on the goal,
 which is a `Delivery`, the first, under the id of the offer that launched it, sent as the driver sends any input, so its harness says
 it landed as it says any did. With no goal, or resumed, it waits for a delivery. A driver raises `DriverError` for what it cannot do, so a one-shot harness refuses a start with no goal, and a harness with no
@@ -1225,6 +1225,8 @@ wire program in any language has it for nothing, and `items` is there for one th
 The host commits each report through `agent.report`, except two: a `delta` goes to `Kernel.push_delta`, and `ready` goes to
 `agent.start` with the declared capabilities, the verified profile, the conformance result kept for its driver, as a body, and the
 levels, as `resumed` when it comes from a resumed harness, which leaves the agent as it stood. A report cannot carry those, so a driver that tries to state one has sent an unknown frame.
+Each report is masked first of what its harness was handed, and of every credential the runtime has given any harness, an ended
+agent's among them, as a command one agent runs can read another's (§15).
 
 ### 9.1 Wire
 
@@ -1244,8 +1246,10 @@ wire command. See [RFC 0030](rfcs/0030-openhands-is-an-extra-of-the-sdk.md).
 < {"jsonrpc":"2.0","method":"report","params":{"type":"input.delivered","input":"d41","boundary":"turn","evidence":"message_start"}}
 ```
 
-Credentials never travel in a frame: `start` names them, and the program finds their values in its environment. `serve(driver)`
-is all a wire driver in Python needs. Unknown lines and reports become `native` plus a gap, and a line past 16 MiB stops the agent
+Credentials never travel in a frame: `start` names them, and the program finds their values in its environment. A gateway's
+frame names `in_environment` only where it is true, and `environment_path` only where it is given, so a program built on an
+earlier SDK takes every frame it took before.
+`serve(driver)` is all a wire driver in Python needs. Unknown lines and reports become `native` plus a gap, and a line past 16 MiB stops the agent
 with a gap, since it may have held an answer. A team names a program with `harness = { command = [...], mode = "wire" }`.
 [drivers.md](extending/drivers.md) is the guide, with a complete wire driver that a test runs through the conformance suite.
 
@@ -1286,6 +1290,7 @@ Absence means unsupported, as in ACP.
 | `measures` | Budget units it reports, of `tokens` and `usd`. The runtime counts `turns`, `agents` and `wall` for every harness |
 | `sandboxes` | The values a role's `sandbox` may take |
 | `sealed` | It launches on a gateway's access with nothing of the user's. A gateway goes to no other driver: that launch fails, naming why |
+| `in_environment` | On a gateway that says its session runs in the environment, its sealed launch keeps the harness's own tools. Such a gateway goes to no other driver: that launch fails before its harness launches, naming why |
 
 ### 9.3 Verified, not believed
 
@@ -1296,9 +1301,16 @@ Absence means unsupported, as in ACP.
   that logs each request exactly as it arrived. So "tool in the first model request" and "delivered text in the next prompt" are tested
   against ground truth, and "connected" counts for nothing. Unsupported is a skip with a reason, never a pass. Results pin to the
   driver, by the name it gives and the class that implements it, with the release of each distribution outside the SDK that
-  holds that class or a class it is built on and names a driver of its own, the harness version it said, the SDK and the host,
-  as a check proves the driver's code and the binary together where they ran, and a result pinned elsewhere, or to a version
-  nobody said, says nothing of this agent. A wire `describe` runs the program once and starts no harness.
+  holds that class or a class it is built on and names a driver of its own, the harness version it said, the SDK, and where it
+  ran, as a check proves the driver's code and the binary together where they ran: its read-only installation, the paths
+  `DriverInfo.installed` names, each resolved, where every one lies on a mount `statvfs` calls read-only, as they name what a
+  training system keeps unchanged wherever it mounts them, and otherwise the host. A result pinned elsewhere, or to a version
+  nobody said, says nothing of this agent: one that names an installation speaks for an agent whose harness runs from the same
+  paths, read-only, on any host, and one that names none only on its host, for an agent whose harness runs from no installation
+  either, as what it checked could have changed under it. Whether the paths still hold what was checked is for whoever mounts
+  them to keep. Where `statvfs` cannot read the mount of a path and no other path is writable, whether there is an installation
+  is unknown: a result made there names none, and an agent's launch there fails, naming that path and why, as `check` names it
+  too. A wire `describe` runs the program once and starts no harness.
 - **A driver says its version where it can.** `describe` gives the harness version it would run when it can tell without starting
   one, which a check before any cost holds a kept result to, and `ready` the one that runs, which the levels hold it to.
 - **A result is made where it runs.** `platoon-harness doctor --check` runs every check, through `check_harness`, on each harness the
@@ -1306,9 +1318,16 @@ Absence means unsupported, as in ACP.
   binary that runs, against `FakeModel` and on no account, and keeps what it found under
   the root, `conformance/<driver>.json`, one for each driver, beside the folder it ran in; a check that cannot run, or of a harness
   that says no version, keeps nothing and says why. The host reads it at every launch and resume, and records it where it speaks for
-  the harness, so an agent's levels come from proof made on its own machine, and an upgrade of the harness or the SDK the result did
-  not run on reads `unverified`, naming what makes one. No check proves a coverage surface, so a result proves none, and `exposure`
-  still answers no `NotSeen`. See [RFC 0044](rfcs/0044-a-level-is-earned-on-the-machine-that-runs-it.md).
+  the harness, so an agent's levels come from proof made on its own machine, or from the read-only installation its harness runs
+  from, and an upgrade of the harness or the SDK the result did not run on reads `unverified`, naming what makes one. A level
+  earned from a result made on another host says where it was made, as what the checks proved of the machine around an
+  installation, such as the shell a harness runs, they proved there. An agent whose harness runs from a read-only installation,
+  with no result that speaks for it, is told to make one from it with `doctor --check`, or, as a build made for a sandbox need
+  not hold the command line, with `check_harness`, or `check_driver` for a harness no check ships for, and to keep it under the
+  root with `write_conformance`; a training system makes one for each build and places it in each fresh root. No check proves a
+  coverage surface, so a result proves none, and `exposure` still answers no `NotSeen`. See
+  [RFC 0044](rfcs/0044-a-level-is-earned-on-the-machine-that-runs-it.md) and
+  [RFC 0083](rfcs/0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md).
 - **A sealed launch is earned too.** On a driver that declares `sealed`, two checks run on `FakeModel` acting as a gateway, its
   models and an MCP server of the environment's tools each under a bearer it gave, two of them named `finish` and `think` as
   harnesses name tools of their own: `sealed_first_request_holds_only_ours`, that the first request goes under the gateway's bearer,
@@ -1318,6 +1337,13 @@ Absence means unsupported, as in ACP.
   result per driver and version, never a second per mode. They run as a rollout would, on the machine's own home, so what else a
   sealed launch keeps out of the user's, settings, extensions and skills, is how its driver builds the launch (§9.5), which no check
   proves.
+- **A launch in the environment is earned too.** On a driver that declares `in_environment`, a third check runs on `FakeModel`
+  acting as a gateway that says its session runs in the environment: `own_tools_in_first_request_in_the_environment`, that the
+  first request goes under its bearer, holds none of the project's instructions, and shows the harness's own shell, by the name
+  `check_driver`'s `shell` gives it, beside ours and each of the environment's tools named by its server, and it skips, saying
+  why, with no `shell` given. It goes in the same one result. That the shell runs, in the agent's workspace, is what the shell
+  checks under `operational` prove of the same tool on a key, and what else such a launch keeps and keeps out is how its driver
+  builds it, which no check proves.
 - **Model pinning.** The effective model must equal the requested one, which is the gateway's when access is a gateway, and a role
   may name only that one, so an alias a harness resolves to another name fails. The host
   holds `ready` to this and fails a spawn or a resume that differs. An effective model a harness does not name stays unknown, and refuses
@@ -1328,13 +1354,16 @@ Absence means unsupported, as in ACP.
 
 `levels(capabilities, profile, conformance)` is a pure function giving `operational`, `observable` and `trainable`, each `met`,
 `unmet` or `unverified` with reasons, journaled in `agent.started` beside `declared` and `verified`. A `Profile` is how one agent
-runs: its driver and observed harness version, its login, whether its tools were seen, and whether its role lets its harness start
-agents of its own, as opaque ones cost `trainable` only then. Its access says its login: `gateway` exactly when its access is a
-gateway, which is never a plan login, `key` when it was given variables, and otherwise what the harness says it is signed in on.
+runs: its driver and observed harness version, its login, whether its launch was in the environment, whether its tools were seen,
+and whether its role lets its harness start agents of its own, as opaque ones cost `trainable` only then. Its access says its
+login: `gateway` exactly when its access is a gateway, which is never a plan login, `key` when it was given variables, and
+otherwise what the harness says it is signed in on; and its launch was in the environment exactly when its gateway said so.
 `operational` is unmet when a check it stands on fails, `approval_answered`, `denial_holds` and `approval_shows_its_ask` among
 them, so a driver whose approvals carry no ask is not `operational`. `trainable` needs a gateway login, a driver that declares
 `sealed`, our tools seen, and a kept result whose `ready_with_pinned_model`, `tool_in_first_request`, `call_ids_reported` and two
-sealed checks passed. No driver can claim a level: the host commits all of this through `agent.start`, and a report has no field
+sealed checks passed, and at a launch in the environment `own_tools_in_first_request_in_the_environment` too. Once that check has
+failed, no launch of its driver is trainable, so `check(team, trainable=True)`, which sees no gateway, refuses the driver before
+any harness launches. No driver can claim a level: the host commits all of this through `agent.start`, and a report has no field
 for it.
 
 ### 9.5 Mappings
@@ -1343,8 +1372,8 @@ for it.
 |---|---|---|
 | `claude` | `claude -p` stream-json plus control protocol, stdin held open | The user's own setup, with ours beside it: HTTP MCP inline with `alwaysLoad`, naming the token's variable so that no file holds it, and no `--setting-sources`, no `--strict-mcp-config`. `--permission-prompt-tool stdio --permission-mode default` is the one launch path, as a user's `defaultMode` would answer first, and the runtime applies the approval policy to every request; `AskUserQuestion`, which that prompt tool brings in and no verdict can answer, is disallowed, and so are `EnterWorktree` and `ExitWorktree`, which would move the agent out of its workspace, always ([RFC 0033](rfcs/0033-a-harness-s-own-worktrees-are-off.md)), and `Agent`, `Workflow`, `ListAgents` and `SendMessage`, which start or reach the harness's own agents, unless a role allows them; a role's budget is what limits it, so no `--max-turns`. `uuid` on every input, and `command_lifecycle` says what landed where; an interrupt passes `cancel_queued`, as the runtime offers again what never landed, and the harness would otherwise begin a turn on it by itself; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, since a result is not a turn end while background tasks run, and it keeps a native child inside the tool call that started it, so an open turn covers it and `child.seen` needs no end; exit 1 after our own interrupt is normal. `get_settings` says the effective model before any model call, and `mcp_status` that our server failed, which fails the start. Its `toolUseId` equals the model's tool id. Never `ANTHROPIC_BASE_URL` without a gateway credential |
 | `codex` | `codex app-server` over stdio, no `experimentalApi` | The user's own setup, with ours beside it: `thread/start.config` overlays it for one thread, the same fields again on `thread/resume`, where a thread keeps the instructions and the setting of its own agents it began with, and what that overlay would replace, `developer_instructions` and `shell_environment_policy.exclude`, is read from `config/read` and kept. `approvalPolicy: "on-request"`, so every approval it asks for comes to the runtime, and `approvalsReviewer: "user"`, as user config can send them elsewhere. `agents.enabled = false` in that overlay, unless a role allows them, takes away both generations of the tools for its own agents, where `features.multi_agent` takes only the first. MCP with `default_tools_approval_mode: "approve"`, `required: true` and `omit_tools_from: ["deferred"]`, or the model must find our tools by writing a filter, and sometimes misses; `shell_environment_policy.exclude` names the token variable, or it reaches the agent shell. A thread whose `thread/start` or `thread/resume` names a `cwd` other than `spec.cwd` is refused. Under `workspace-write` and `read-only` its sandbox keeps `.git` read-only, so a commit outside the session's checkout waits on an approval, and `team check` names the three postures. `turn/start` is one way in: it steers a turn under way and otherwise begins one. `turn/interrupt` stops one thread, so the driver walks its children. A turn ends with the last thread at work, since a child can outlive its parent's turn, so an open turn covers it and `child.seen` needs no end. `item/completed` is truth. A file change asks with the patch of the item its `itemId` names, which Codex starts before it asks, as its request names no patch, and a command with its command, each after a line for each of `reason`, `cwd`, `networkApprovalContext` and `grantRoot` the request gives. `callId` joins to the `exec` script, not to a model call. `ph` is blocked by the default sandbox, so MCP is the path. Access by key is a provider of the agent's own, so no saved login pays: `-c` names it as the app-server starts, as from 0.167.0 a thread runs on no other, and the thread gives it its URL, as argv names no secret |
-| `pi` | `pi --mode rpc` | The user's own setup, with ours beside it: pi keeps its own agent directory, so their login, settings and extensions stay theirs, and one extension loaded with `-e` adds our tools through the stdio shim, `exposure: direct`, with the timeout `tool_timeout_s` says, and our instructions as a section of their own, since `--append-system-prompt` replaces the user's `APPEND_SYSTEM.md`. A provider of the agent's own is how access by URL arrives, so no saved login pays. `prompt` with a `streamingBehavior` is one way in: it begins a turn or queues in one, and the id goes in the text, as `reconcile` finds it in `get_entries`. A provider with no login is refused at start, as only a prompt would say so. `agent_settled` is `turn.ended`. What an interrupt leaves in pi's queue no run takes, so it is cleared. `gated` approvals through that extension, and no boundary. An input is said to land under the id of the entry pi wrote it down as, which `get_entries` names from the last entry seen once its message has ended, and what pi says after it waits behind it, so the reports keep pi's order. The extension puts pi's own id for a call of ours among its arguments as `_meta`, which the shim moves to where MCP keeps it, so the call's op goes under `pi/toolCallId`, which its tool item holds. `message_end` gives `model.call`, with `responseId`, which is the response's own id. `compaction_end` gives a `model.call` of purpose `compaction`, one by each id our extension kept or one with none for pi's own, and `forgotten` from `get_entries`. Our extension says, as a status `ready` waits for, which tools pi declares once ours have connected, as pi says nothing when a server's tools arrive. Sealed, on a gateway: a context window stated that no context reaches, as pi takes one unstated as none and would compact after every turn, an agent directory of its own, `PI_CODING_AGENT_DIR` in the agent's folder, whose settings retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve` and `--offline`, and the environment's server beside ours; our extension takes `session_before_compact` and runs pi's own `compact` with the gateway's compaction headers and a stream function that keeps each of its one or two calls' ids, which reach the driver in the details pi keeps of the compaction |
-| `openhands` | Wire worker on SDK `arun()`, from the `openhands` extra | A key from the role's auth profile, as OpenHands keeps no login, the shell's proxies, and no retries, as a retry is a call a gateway records twice. OpenHands' coding tools, its terminal in a subprocess, and ours through the stdio shim, shown `bare`; a start with none of ours fails, as the SDK only warns. Boundary is a model call: the request that carried a delivery, read from the SDK's completion log, never from event order. Every action but ours and a lone `finish` or `think` asks, one approval a step. A delivery goes to the conversation only between runs with no action pending, since one during a step's model call has the SDK reject what the step asks, unasked; one that comes during a run pauses it after its step, and a turn leaves no action pending. `llm_response_id` gives `model.call`, with the SDK's per-call usage; `Condensation` gives `compacted{forgotten}`. Its own agents are off unless allowed, and then unseen, a gap, with their steps asking the runtime, and an interrupt stops one at its next ask. An action a crash left with no result is rejected on resume, as the SDK would run it again. Its condenser's calls are reported as `compaction`. Sealed, on a gateway: none of its coding tools, so ours and the environment's beside its own `finish` and `think`, which act on nothing; the environment's tools come from an MCP client of their own, as the SDK's client of two servers would name ours by their server too, and are each named `environment_<tool>`, as that client names a server's tools, so none collides with `finish` or `think`; no project instructions; and a condenser whose LLM sends the gateway's compaction headers as `extra_headers` |
+| `pi` | `pi --mode rpc` | The user's own setup, with ours beside it: pi keeps its own agent directory, so their login, settings and extensions stay theirs, and one extension loaded with `-e` adds our tools through the stdio shim, `exposure: direct`, with the timeout `tool_timeout_s` says, and our instructions as a section of their own, since `--append-system-prompt` replaces the user's `APPEND_SYSTEM.md`. A provider of the agent's own is how access by URL arrives, so no saved login pays. `prompt` with a `streamingBehavior` is one way in: it begins a turn or queues in one, and the id goes in the text, as `reconcile` finds it in `get_entries`. A provider with no login is refused at start, as only a prompt would say so. `agent_settled` is `turn.ended`. What an interrupt leaves in pi's queue no run takes, so it is cleared. `gated` approvals through that extension, and no boundary. An input is said to land under the id of the entry pi wrote it down as, which `get_entries` names from the last entry seen once its message has ended, and what pi says after it waits behind it, so the reports keep pi's order. The extension puts pi's own id for a call of ours among its arguments as `_meta`, which the shim moves to where MCP keeps it, so the call's op goes under `pi/toolCallId`, which its tool item holds. `message_end` gives `model.call`, with `responseId`, which is the response's own id. `compaction_end` gives a `model.call` of purpose `compaction`, one by each id our extension kept or one with none for pi's own, and `forgotten` from `get_entries`. Our extension says, as a status `ready` waits for, which tools pi declares once ours have connected, as pi says nothing when a server's tools arrive. Sealed, on a gateway: a context window stated that no context reaches, as pi takes one unstated as none and would compact after every turn, an agent directory of its own, `PI_CODING_AGENT_DIR` in the agent's folder, whose settings retry nothing and warm no cache, `--no-builtin-tools`, `--no-context-files`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, `--no-approve` and `--offline`, and the environment's server beside ours; our extension takes `session_before_compact` and runs pi's own `compact` with the gateway's compaction headers and a stream function that keeps each of its one or two calls' ids, which reach the driver in the details pi keeps of the compaction. In the environment, on a gateway that says so, no `--no-builtin-tools`, so its default tools, `read`, `bash`, `edit` and `write`, beside ours and the environment's, all but `read` asking as on a key, and its settings' `shellCommandPrefix`, a line pi puts before each command its `bash` runs, sets the `PATH` `command_path` gives, while pi runs on the runtime's |
+| `openhands` | Wire worker on SDK `arun()`, from the `openhands` extra | A key from the role's auth profile, as OpenHands keeps no login, the shell's proxies, and no retries, as a retry is a call a gateway records twice. OpenHands' coding tools, its terminal in a subprocess, and ours through the stdio shim, shown `bare`; a start with none of ours fails, as the SDK only warns. Boundary is a model call: the request that carried a delivery, read from the SDK's completion log, never from event order. Every action but ours and a lone `finish` or `think` asks, one approval a step. A delivery goes to the conversation only between runs with no action pending, since one during a step's model call has the SDK reject what the step asks, unasked; one that comes during a run pauses it after its step, and a turn leaves no action pending. `llm_response_id` gives `model.call`, with the SDK's per-call usage; `Condensation` gives `compacted{forgotten}`. Its own agents are off unless allowed, and then unseen, a gap, with their steps asking the runtime, and an interrupt stops one at its next ask. An action a crash left with no result is rejected on resume, as the SDK would run it again. Its condenser's calls are reported as `compaction`. Sealed, on a gateway: none of its coding tools, so ours and the environment's beside its own `finish` and `think`, which act on nothing; the environment's tools come from an MCP client of their own, as the SDK's client of two servers would name ours by their server too, and are each named `environment_<tool>`, as that client names a server's tools, so none collides with `finish` or `think`; no project instructions; and a condenser whose LLM sends the gateway's compaction headers as `extra_headers`. In the environment, on a gateway that says so, its coding tools are kept beside ours and the environment's, each action asking as on a key, and its terminal's shell, an interactive `bash` on a pseudoterminal, starts on the `PATH` `command_path` gives, which the startup files of the image's `bash` may change |
 | ACP agents, `opencode` among them | `AcpDriver(command)`, a driver of the SDK's own, protocol 1 over the SDK's own `Peer`, `fs` and `terminal` false | Turn boundary only: a delivery during a turn waits to go as the next prompt, and any other boundary is refused until a fixture shows an agent taking one. An update nothing maps keeps its raw frame, as the peer read it, with a gap. A permission request is an approval whose whole ask is the tool call it names, as last updated, answered by the option of its kind for this once and never `always`, and `cancelled` where there is none, which runs nothing, so an allow fails, saying so. A change of mode or option once the session is ready keeps its raw frame with a gap, as `ready` named the model. Stable ACP neither shows an agent's own agents nor turns them off, so a role on it must allow them. Our tools are one HTTP MCP server, instructions are `systemPrompt` where the agent offers it and else go before the first prompt, and the model is the session's config option of category `model`. No model call and no spend are said, so it is never trainable. `opencode` refuses an unset model, as OpenCode then uses a hosted one. No real ACP agent has passed its checks: OpenCode 2.2.6, run by hand on 2026-11-08, failed 7 of 18, and a probe of 2.2.5 saw an MCP server ACP gave it reach the model behind Code Mode ([RFC 0072](rfcs/0072-acp-agents-are-driven-by-a-first-party-extension-that-names-its-own-check.md)) |
 
 ## 10. Tool plane
@@ -2016,6 +2045,8 @@ class Gateway(Model):
     model: str
     tools: str | None                           # the environment's own MCP server, under the same bearer
     compaction_headers: Mapping[str, str]
+    in_environment: bool                        # the session runs in the environment, on the machine its tools act on
+    environment_path: str | None                # there, the PATH the environment gives its own commands
 
 class AgentOutcome(Model):
     status: Status                              # finished, cancelled, retired, lost or failed
@@ -2028,11 +2059,13 @@ class AgentOutcome(Model):
   between an agent of ours and the training system's: each entry names that agent alone, so one two admissions share bars both as
   `shared_key`; no key or value holds a secret of the admission's own, in any form; and a gateway admission names backend ids, as
   nothing else ties its agent to what the gateway records. A gateway's bearer is one agent's, so an admission on a bearer another
-  agent of the runtime holds is refused.
+  agent of the runtime holds is refused. A session runs in one place, so the runtime keeps the word of the first gateway it
+  admits on whether the session runs in the environment, and refuses, saying so, an admission whose gateway says otherwise: that
+  agent's spawn fails before its harness launches, and the agents admitted before it run on.
 - **Model access is one value.** Variables by name reach the harness's environment: under `LocalAuthority`, which issues
   session-scoped identity and leaves the harness's own auth alone, a role's auth profile names them, and with none the harness signs
-  itself in. A `Gateway` goes only to a driver that declares `sealed` (§9.2), its model is the one pinned, and its login is
-  `gateway`, which is no plan login. Its URLs carry no credential, as the bearer alone does, to the origin alone: an origin with a
+  itself in. A `Gateway` goes only to a driver that declares `sealed` (§9.2), and one in the environment only to a driver that
+  declares `in_environment` too; its model is the one pinned, and its login is `gateway`, which is no plan login. Its URLs carry no credential, as the bearer alone does, to the origin alone: an origin with a
   path, a URL or a compaction header that holds the bearer in any form, a header that would authorize a call, or tools at another
   origin, is refused, and a harness's words are masked of the bearer in every form, as of any access value. A secret it cannot
   know, such as another agent's key in a tools path, is the authority's to keep out.
@@ -2045,12 +2078,33 @@ class AgentOutcome(Model):
   export, and a cut rollout's stop may never run. A wire frame names the variable, with the gateway's origin, model, tools and
   compaction headers in the clear. ScriptedDriver, wire programs that declare it, pi and OpenHands launch sealed (§9.5), and two
   checks in the one kept result earn it (§9.3).
+- **A launch in the environment keeps the harness's own tools.** A training system that runs a whole session inside its
+  environment's sandbox says so on each gateway, `Gateway.in_environment`, and there a sealed launch keeps the harness's own
+  tools, as they act on the environment's machine, beside ours and the environment's, and the rest of the sealed launch stands.
+  Its gateway can name the `PATH` the environment gives its own commands, `Gateway.environment_path`, on which the model's
+  commands there run, behind the agent's folder that holds `ph`, while the harness keeps the runtime's, so a task's `python3` or
+  `node` is the image's and not that of the toolchain the harness runs from; a gateway that does not say its session runs in
+  the environment is refused one, as nothing would carry it out.
+  Only an authority gives a gateway, so nothing a team, a role, a person or the command line names keeps a harness's own tools.
+  The SDK cannot see where it runs, so the word is the authority's to keep true, and each start records it (§9.4). A driver that
+  has the launch declares `in_environment`, a third check in the one kept result earns it (§9.3), and of the drivers here
+  ScriptedDriver, OpenHands and pi declare it: there ScriptedDriver shows its `shell` and runs each command on the `PATH`
+  `command_path` gives, and refuses a tool of ours named `shell`, which would take every call of its own, OpenHands keeps
+  its coding tools, its terminal's shell starting on that `PATH`, and pi keeps its default tools, its `bash` setting that
+  `PATH` before each command. There every harness, the runtime and whatever the model runs share one user, as on any session
+  whose agents have a shell: a command can read any agent's bearer, write the journal and write into any harness's pipes, so as
+  to report as any agent, and what a harness's own tools do is recorded only as it reports them (§15).
 - **Compaction is labelled at call time.** Every sealed driver sends the admission's `compaction_headers` on each call it makes to
   compact a context, and reports that call as `model.call` of purpose `compaction` with the id the model gave: ScriptedDriver's
   `Compact` step, a wire program from its launch spec, OpenHands' condenser, and pi through our extension, which runs pi's own
   `compact`, one or two calls, each with the headers and each reported, by its id or with none where it never answered, even when
   the compaction is cut. A gateway that counts a budget does so as calls arrive, so only a label a call carries keeps it out, and a
-  call no harness reported has no id to join, so it never trains.
+  call no harness reported has no id to join, so it never trains, in a session whose journal and harness pipes no command wrote.
+  In the environment a command the model runs can call the gateway on any agent's bearer and write the journal, and, without
+  writing the journal, it can have such a call recorded as that agent's own, under the id the gateway gave it, by writing a report
+  of it into that agent's harness's pipes. Nothing here detects either, nor can a check against the gateway's records for that
+  agent's key, which did serve the call, so a session in the environment is for agents of one policy only: with two, one policy's
+  commands could write what the other trains on.
 - **Finish** tells the authority how an agent ended, with its report, last in its stop, even when a step before fails. Until it has
   returned, its parent is handed nothing and a `wait` the parent holds open does not answer `released` (§7), so a training system
   settles a child before a parent that waited for it can act on the report. A parent at work on its own when its child ended can
@@ -2070,7 +2124,8 @@ class AgentOutcome(Model):
   allowed, a workspace other than `shared` or `isolated`, and an `until` only a person reaches, with approvals judged by the
   session's own `approvals` where it states one. `Session.start(trainable=True)`, which needs an authority, passes the flag to
   `check`, as `plan_login` passes, and `check(team, trainable=True)` adds those to each role's driver: a sealed launch, and a result
-  kept under the root that proves trainable for the harness it would run, naming `doctor --check` where it ships.
+  kept under the root that proves trainable for the harness it would run, naming `doctor --check` where it ships, and, where the
+  harness runs from a read-only installation, `check_harness` or `check_driver` there and `write_conformance` too (§9.3).
   `platoon-harness team check --trainable` runs the same check. Its agents run on the gateway, so no plan login is theirs.
 - **What trains is read from the record.** `eligibility(agent, episode)` answers attribution and every bar (§11): a call is
   eligible for its turn's purpose, which a call reported with none has, or for `compaction`, and for no other. What trains is the
@@ -2104,16 +2159,21 @@ class AgentOutcome(Model):
   [RFC 0061](rfcs/0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) and
   [RFC 0078](rfcs/0078-a-span-carries-the-labels-of-the-work-it-was-done-for.md).
 - **The export is the session as it ended,** closed, or stopped for a cut rollout, with `annotations.sqlite` beside its journal and
-  no key in it, nor, once each ended agent's stop has run, which its authority hears of last, its harness's scratch or a file its
-  driver names as where its harness keeps a credential (§7), read by producers and the training system through `Session.attach`
-  once its runtime has stopped. A session started trainable, or whose admit results name the backend's ids, is never resumed
+  no key in it, except, in a session in the environment, one a command printed that a harness's own transcript kept (§15), nor,
+  once each ended agent's stop has run, which its authority hears of last, its harness's scratch or a file its driver names as
+  where its harness keeps a credential (§7), read by producers and the training system through `Session.attach` once its runtime
+  has stopped. A session started trainable, or whose admit results name the backend's ids, is never resumed
   once it has run, as its keys went with its authority and an admit a stop cut short named ids nobody knows (§4). See
   [RFC 0055](rfcs/0055-the-export-is-the-session-as-it-ended.md).
 - **The contract is one test.** `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use
   of the SDK with none behind it, on ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: an authority
   admitting each agent through `FakeModel` acting as a gateway, a program's trainable start, the episode, the prompt to
   `Team.recipients()`, a compaction, `settled`, a cancel and a retirement, the close on each `said`, eligibility `exact` from a kept
-  result, a reward of each status, and `propagate`'s rows, for each agent and for the span its last words lie in. Beside it,
+  result, a reward of each status, and `propagate`'s rows, for each agent and for the span its last words lie in.
+  `test_a_session_in_the_environment_runs_as_a_training_authority_drives_it` runs the same in the environment, on
+  ScriptedDriver in the fast pass and on pi and OpenHands in the slow pass: each gateway says so and names the environment's
+  `PATH`, each start records it and is trainable, and each agent's own shell runs, allowed by policy, in its workspace on
+  that `PATH`, recorded as its harness reported it. Beside them,
   `test_an_isolated_sealed_agent_reaches_its_gateway_on_loopback` runs one agent `isolated` under `bwrap` in the slow pass, as
   every confined session runs, on a scripted harness on the wire, as a harness in the runtime's own process cannot be confined,
   and on pi and OpenHands: confined, it calls the gateway on loopback with its own bearer, reports each compaction by its id, is
@@ -2140,13 +2200,22 @@ Threat tiers stay separate, in docs and in events. [security.md](security.md) is
 | Model arguments | Hallucination, prompt injection through tool arguments | Closed by construction: laws 6 and 7, server-side authorization, strict decoding |
 | Untrusted content | Board contents, repository files, tool output, rendered Markdown | `SafeText` in the terminal; escaping and hash-only CSP in the browser. Content is data, never instructions |
 | Network | Browser and remote clients | Loopback by default, and any other address needs `--host` and TLS, with a wildcard refused. View and control credentials are separate classes, fixed when minted. Links are one-time, in the fragment, and exchanged for session tokens that expire, of which `web` keeps hashes in memory. `Host` must name the authority served and a POST's `Origin` the page's own. The sessions page, `web` with no session, is served on loopback alone, as its link acts as you on every session there, and its server keeps credentials of its own, so only the link the command says opens it |
-| Shell-capable agent at the same UID | Reads another agent's token, the owner token, other sessions | **Not closed by this tier.** On such a session, approvals and session isolation are workflow controls, not boundaries. Assurance is `cooperative`; only a launch inside an extension's isolation earns `isolated`, which hides the session root, the runtime directory and your home, and leaves the network, loopback and every socket outside those reachable (§13) |
+| Shell-capable agent at the same UID | Reads another agent's token or bearer, the owner token, other sessions; writes the journal and the conformance results kept under the root, which each start reads; and writes into any harness's pipes, so it can report as any harness and steer it | **Not closed by this tier.** On such a session, approvals and session isolation are workflow controls, not boundaries. Assurance is `cooperative`; only a launch inside an extension's isolation earns `isolated`, which hides the session root, the runtime directory and your home, and leaves the network, loopback and every socket outside those reachable (§13) |
 | Plugins | Extensions and drivers | Trusted code unless separately isolated |
 
 - **Bodies.** A body's hash is a capability to whoever reads the journal, a person or a program, and a low-entropy body can be
   guessed: bodies are for content, not for secrets. An agent reads a body only by the ref of an event it was handed or made.
-- **Secrets.** Config holds env var names, never values. `Secret` refuses serialization. Redaction covers values, their encoded forms, and URLs.
-  No model-access credential reaches a log, event, artifact, export or resolved config. An agent's end removes each file its driver
+- **Secrets.** Config holds env var names, never values. `Secret` refuses serialization. Redaction covers values, their encoded forms, and URLs:
+  every report is masked of every credential the runtime has given a harness, an ended agent's among them, whichever harness
+  made it, as a command one agent runs can read another's and print it, and a value shorter than eight characters, too short to
+  be any provider's key and found in ordinary words and in the ids reports name, only where the harness it was given says it. No
+  model-access credential reaches a log, event, artifact, export or resolved config, but in a session in the environment (§14),
+  where it holds only of the journal: a harness's own transcript keeps what a command printed, a bearer among it, and stays in
+  its agent's folder as the record, which the export holds. A bearer that dies with its rollout bounds that, and a command that
+  recodes a credential before it prints it gets it past every mask, as on any session whose agents have a shell. The journal can
+  keep a part of one too: a driver that cuts what its harness said, as to a gist, a reason or the last of a long output, masks
+  its own harness's credentials before the cut, and the host masks only whole credentials, so where a cut splits another agent's
+  credential, the part on the side it kept reaches the journal. An agent's end removes each file its driver
   names as where its harness keeps a credential in its folder (§7), so a session's folder holds none of the files its drivers name
   once each ended agent's stop has run; an agent that has not ended keeps its own.
 - **Bodies and retention.** A body can be tombstoned while its hash survives, so the graph stays whole. A secret in a `gist` needs an

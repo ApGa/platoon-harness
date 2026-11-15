@@ -48,6 +48,7 @@ platoon_harness.drivers.DriverInfo
 platoon_harness.drivers.DriverInfo.check
 platoon_harness.drivers.DriverInfo.credentials
 platoon_harness.drivers.DriverInfo.installed
+platoon_harness.drivers.env.command_path
 platoon_harness.drivers.env.harness_env
 platoon_harness.drivers.env.Held
 platoon_harness.drivers.env.homedir
@@ -65,7 +66,7 @@ platoon_harness.drivers.exec.GOAL
 platoon_harness.drivers.Exited
 platoon_harness.drivers.GapReport
 platoon_harness.drivers.Gateway
-platoon_harness.drivers.Gateway(*,origin,bearer,model,tools,compaction_headers)
+platoon_harness.drivers.Gateway(*,origin,bearer,model,tools,compaction_headers,in_environment,environment_path)
 platoon_harness.drivers.InputDelivered
 platoon_harness.drivers.Item
 platoon_harness.drivers.keys_of
@@ -74,6 +75,7 @@ platoon_harness.drivers.levels.Check
 platoon_harness.drivers.levels.Checks
 platoon_harness.drivers.levels.Conformance
 platoon_harness.drivers.levels.implementation
+platoon_harness.drivers.levels.installation
 platoon_harness.drivers.levels.Level
 platoon_harness.drivers.levels.levels
 platoon_harness.drivers.levels.Levels

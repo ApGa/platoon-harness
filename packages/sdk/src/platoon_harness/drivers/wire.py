@@ -1,7 +1,9 @@
 """A driver in another process or language: line-delimited JSON-RPC 2.0 on stdio, its verbs equal to the Python methods.
 
 Credentials never travel in a frame. `start` names them, and the program finds their values in its own environment: a
-gateway's bearer under the variable its frame names, beside the gateway's origin, model, tools and compaction headers.
+gateway's bearer under the variable its frame names, beside the gateway's origin, model, tools and compaction headers,
+its word that the session runs in the environment where it says so, and the `PATH` the environment gives its commands
+where it names one.
 """
 
 import asyncio
@@ -42,17 +44,23 @@ _DESCRIBE_TIMEOUT = 30.0
 _END_GRACE = 5.0
 _STDERR_TAIL = 2048
 
+_GIVEN = {"in_environment", "environment_path"}
+"""What of a gateway a frame names only where it is given, as a program built on an earlier SDK refuses it."""
+
 __all__ = ["DRIVER_ERROR", "UNKNOWN_PROTOCOL", "WireDriver", "serve"]
 
 
 def _to_frame(spec: AgentSpec) -> dict[str, Any]:
-    """A spec with credentials by name: the variables of its access, or its gateway with the bearer's. The program's
-    own folder sits inside the agent's, so that its record and ours stay apart, and `reap` finds both. It runs inside
-    what wraps it, so its frame names no wrap."""
+    """A spec with credentials by name: the variables of its access, or its gateway with the bearer's, which names
+    `in_environment` and `environment_path` only where they are given, so that a program built on an earlier SDK takes
+    every frame it took before. The program's own folder sits inside the agent's, so that its record and ours stay
+    apart, and `reap` finds both. It runs inside what wraps it, so its frame names no wrap."""
     tools = None if spec.tools is None else spec.tools.model_dump(mode="json", exclude={"token"})
     fields = spec.model_dump(mode="json", exclude={"access", "tools", "folder", "wrap"})
     if isinstance(spec.access, Gateway):
-        access: Any = {**spec.access.model_dump(mode="json", exclude={"bearer"}), "bearer": BEARER_VARIABLE}
+        always = spec.access.model_dump(mode="json", exclude={"bearer", *_GIVEN})
+        given = spec.access.model_dump(mode="json", include=_GIVEN, exclude_defaults=True)
+        access: Any = {**always, **given, "bearer": BEARER_VARIABLE}
     else:
         access = sorted(spec.access)
     return {**fields, "folder": str(spec.folder / WIRE), "tools": tools, "access": access}

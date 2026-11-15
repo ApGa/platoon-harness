@@ -4,6 +4,7 @@ import asyncio
 import json
 import signal
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -13,7 +14,9 @@ from platoon_harness.drivers import (
     Capabilities,
     ChildSeen,
     DriverError,
+    DriverInfo,
     Exited,
+    Gateway,
     InputDelivered,
     Item,
     ModelCall,
@@ -22,6 +25,7 @@ from platoon_harness.drivers import (
     Reporter,
     TurnEnded,
     Usage,
+    levels,
 )
 from platoon_harness.drivers.exec import ExecDriver
 from platoon_harness.drivers.process import Process
@@ -88,6 +92,9 @@ def test_every_check_a_level_reads_exists():
         "approval_shows_its_ask",
         "effort_honored_or_refused",
         "reconcile_claims_nothing_unseen",
+        "sealed_first_request_holds_only_ours",
+        "environment_tools_in_first_request",
+        "own_tools_in_first_request_in_the_environment",
     } <= names
 
 
@@ -591,6 +598,7 @@ async def test_unsupported_is_a_skip_with_a_reason_never_a_pass(tmp_path):
         "measures_reported": "it declares no measures",
         "call_ids_reported": "it declares no id per model call",
         "dialects_spoken": "it declares no dialect",
+        "own_tools_in_first_request_in_the_environment": "it declares no launch in the environment",
     }.items():
         assert (result.get(name).state, result.get(name).reason) == ("skipped", reason)
 
@@ -731,6 +739,44 @@ async def test_the_pin_is_the_version_the_harness_reported(tmp_path):
     assert (result.driver, result.version) == ("scripted", "9.9")
 
 
+class Installed(Filtered):
+    """A scripted harness that says it reads `paths` to run."""
+
+    def __init__(self, *paths: Path) -> None:
+        super().__init__()
+        self._paths = paths
+
+    def describe(self) -> DriverInfo:
+        return super().describe().model_copy(update={"installed": self._paths})
+
+
+@pytest.mark.parametrize(
+    ("reads", "named"),
+    [
+        (("on-path", "build"), ("build/bin/harness", "build")),
+        (("build", "scratch"), None),
+        (("build", "loop"), None),
+        ((), None),
+    ],
+    ids=["every path read-only", "one path writable", "one path whose mount cannot be read", "no path"],
+)
+async def test_a_result_names_its_installation_only_where_every_path_is_read_only(tmp_path, monkeypatch, reads, named):
+    """A result names the paths its harness reads to run, each resolved, in its driver's order, only where every one
+    lies on a read-only mount: one made from what could change vouches for no installation, and neither does one made
+    where the mount of a path cannot be read; and a harness that reads no path, as one in this process, names none."""
+    here = tmp_path.resolve()
+    (here / "build" / "bin").mkdir(parents=True)
+    (here / "build" / "bin" / "harness").touch()
+    (here / "on-path").symlink_to(here / "build" / "bin" / "harness")
+    (here / "scratch").mkdir()
+    (here / "loop").symlink_to(here / "loop")
+    monkeypatch.setattr(levels, "_read_only", lambda path: path.is_relative_to(here / "build"))
+
+    result = await check(lambda: Installed(*(here / name for name in reads)), tmp_path)
+
+    assert result.installation == (None if named is None else tuple(str(here / name) for name in named))
+
+
 async def test_a_program_that_is_no_driver_fails_its_checks_and_ends(tmp_path):
     script = tmp_path / "broken.py"
     script.write_text("import sys\nprint('hello, no protocol here', flush=True)\nsys.stdin.read()\n")
@@ -811,6 +857,39 @@ async def test_a_sealed_launch_that_leaves_the_environment_s_tools_out_fails(tmp
     result = await check(Unconnected, tmp_path)
 
     assert result.get("environment_tools_in_first_request").state == "failed"
+
+
+class Sealing(Filtered):
+    """A scripted harness that declares a launch in the environment and launches sealed on every gateway, as if its
+    gateway never said its session runs there."""
+
+    async def start(self, spec: AgentSpec, report: Reporter) -> None:
+        if isinstance(spec.access, Gateway):
+            spec = spec.model_copy(update={"access": spec.access.model_copy(update={"in_environment": False})})
+        return await super().start(spec, report)
+
+
+async def test_a_launch_in_the_environment_that_shows_no_shell_of_its_own_fails_its_check(tmp_path):
+    """A driver that declares a launch in the environment and shows the model no shell of its own there has a launch
+    that does not keep its harness's own tools."""
+    result = await check(Sealing, tmp_path, shell=shell)
+
+    assert result.get("own_tools_in_first_request_in_the_environment").reason == (
+        "the first request does not show shell, the harness's own shell"
+    )
+
+
+async def test_a_launch_in_the_environment_that_shows_its_shell_beside_ours_and_the_environment_s_passes(tmp_path):
+    """Its shell is shown only on a gateway in the environment, so its sealed launch still holds only ours; and with no
+    shell named the check has nothing to look for, so it skips, saying so."""
+    named = await check(Filtered, tmp_path / "named", shell=shell)
+    unnamed = await check(Filtered, tmp_path / "unnamed")
+
+    assert named.get("own_tools_in_first_request_in_the_environment").state == "passed"
+    assert named.get("sealed_first_request_holds_only_ours").state == "passed"
+    assert unnamed.get("own_tools_in_first_request_in_the_environment").reason == (
+        "nothing was given that names this harness's shell"
+    )
 
 
 async def test_a_harness_with_no_sealed_launch_skips_the_sealed_checks(tmp_path):

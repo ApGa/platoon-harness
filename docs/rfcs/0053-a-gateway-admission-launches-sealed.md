@@ -2,10 +2,14 @@
 
 | | |
 |---|---|
-| Status | Accepted, 2026-11-05; amended 2026-11-06 |
+| Status | Accepted, 2026-11-05; amended 2026-11-06; amended by [RFC 0082](0082-a-launch-in-the-environment-keeps-the-harness-s-own-tools.md) (a draft) |
 
 **Amended 2026-11-06**: the environment's tools reach the model named by their server, never bare,
 as a sealed OpenHands that showed them bare was refused at launch on an environment with a tool named `finish`.
+
+**Amended by [RFC 0082](0082-a-launch-in-the-environment-keeps-the-harness-s-own-tools.md)**, a draft. RFC 0082
+proposes that a launch on a gateway that says its session runs in the environment, `Gateway.in_environment`, keeps
+the harness's own tools, and that the rest of a sealed launch stands.
 
 ## Summary
 

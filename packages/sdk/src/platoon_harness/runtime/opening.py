@@ -12,7 +12,7 @@ from typing import Any
 
 from platoon_harness.config import Manifest
 from platoon_harness.drivers import Capabilities, Driver, DriverError, DriverInfo
-from platoon_harness.drivers.levels import Profile, implementation, unearned
+from platoon_harness.drivers.levels import Profile, implementation, installation, unearned
 from platoon_harness.extensions import DRIVERS, Installed, load
 from platoon_harness.kernel import NAME, Kernel, Principal, Refused
 from platoon_harness.primitives import PRIMITIVES, Policy
@@ -79,8 +79,9 @@ def _on_a_plan_login(team: Team, known: Mapping[str, DriverInfo]) -> list[Proble
 
 
 def _untrainable(team: Team, known: Mapping[str, DriverInfo], cwd: Path, root: Path) -> list[Problem]:
-    """What keeps each role's driver from training on this machine: no sealed launch, or no result kept under `root`
-    that proves trainable for the harness it would run, naming what makes one."""
+    """What keeps each role's driver from training on this machine: no sealed launch, an installation no result can be
+    said to speak for, as the mount of a path it reads to run cannot be read, or no result kept under `root` that
+    proves trainable for the harness it would run, naming what makes one."""
     problems = []
     for name, info in known.items():
         where = f"roles.{name}.harness"
@@ -88,7 +89,14 @@ def _untrainable(team: Team, known: Mapping[str, DriverInfo], cwd: Path, root: P
             problems.append(Problem(where, f"`{info.name}` has no sealed launch, which a trainable session needs"))
             continue
         made = implementation(make_driver(team.roles[name], cwd))
-        profile = Profile(driver=info.name, implementation=made, version=info.version, login="gateway")
+        try:
+            installed = installation(info.installed)
+        except DriverError as error:
+            problems.append(Problem(where, str(error)))
+            continue
+        profile = Profile(
+            driver=info.name, implementation=made, version=info.version, installation=installed, login="gateway"
+        )
         problems += [Problem(where, why) for why in unearned(profile, read_conformance(root, info.name), "trainable")]
     return problems
 

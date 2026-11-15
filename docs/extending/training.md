@@ -52,7 +52,13 @@ class MyAuthority:
   the same bearer, and `compaction_headers` are what each call a harness makes to compact its context carries, so the gateway can
   tell such a call apart when it is made. No URL or header of it may hold the bearer in any form, and no header may authorize a
   call. A secret the SDK cannot know, such as another agent's key in a path, is yours to keep out of every URL. Only a driver that
-  declares the capability `sealed` is given a gateway, and its agent's login is `gateway`.
+  declares the capability `sealed` is given a gateway, and its agent's login is `gateway`. `in_environment` says the session runs
+  in your environment, on the machine its tools act on, where a driver that declares `in_environment` keeps the harness's own
+  tools and any other is refused before its harness launches: say it only where it is so, as the SDK cannot see where it runs,
+  and alike for every agent of a session, which runs in one place, as an admission whose gateway says otherwise than the first
+  is refused. `environment_path` names the `PATH` your environment gives its own commands, on which the model's commands run
+  there, behind the agent's folder that holds `ph`, while the harness keeps the runtime's, so a task's `python3` or `node` is
+  the image's and not your toolchain's; a gateway that does not say its session runs in your environment is refused one.
 - **A bearer is one agent's.** Your gateway records each call on a bearer as one agent's, so an admission on a bearer another agent
   of the session holds is refused, and the spawn fails, in words that name no key.
 - **`backend`** is your ids for the agent. The admit effect records them as its result, which is the one join between an agent of
@@ -103,6 +109,19 @@ async with Session.start(
   team alone, as a load check can with no driver to ask, and then each role's driver, for a sealed launch and a result kept under
   the root that proves trainable for the harness it would run. `platoon-harness team check --trainable` runs the same check, so run
   it, and `platoon-harness doctor --check`, on each machine that runs rollouts before you spend anything.
+- **In a sandbox, place a result made from the build.** A session you run inside a sandbox, from a read-only build that holds the
+  SDK and the harness and need not hold the command line, starts in a fresh root, which holds no result. Make one result for each
+  build, with `check_harness(name, folder)` from `platoon_harness.testing`, or `check_driver` for a harness no check ships for,
+  from the build mounted read-only at the paths your sandboxes mount it at, in a sandbox like theirs. Keep it inside the build,
+  written before the build is finished, so that a build made again brings a result of its own. Then place it in each fresh root
+  before the session starts, as the user the session runs as, whose root it is: with `write_conformance(root, result)` from
+  `platoon_harness.runtime.paths`, or as a copy of the file, at `conformance/<driver>.json`. It names the build's paths, so it
+  speaks for an agent whose harness runs from them, read-only, on any host, and each level earned from it says the host it was
+  made on. That the paths still hold what was checked is yours to keep: change no build in place once it is mounted. Keep
+  `<root>/conformance` read-only in the sandbox too, as by binding a folder of the build's results there read-only: each start
+  and resume reads it again, and the model's commands run as the root's user, so one could otherwise remove it, which leaves
+  every later start of that driver short of `trainable` and its agent barred `not_trainable`, or write a result of its own
+  there for those starts to read.
 - **What `trainable_problems` refuses:** a model or an auth profile a role names, as your gateway gives both; approvals left to
   `ask`, which nobody answers, by the session's own `approvals` where it states one and else by each role's; a harness's own agents
   allowed, whose calls go on their parent's key; a workspace other than `shared` or `isolated`; and an `until` only a person
@@ -132,7 +151,13 @@ cut short while an admit was under way. Read it as history.
 `session.eligibility(agent, episode)` answers from the record alone, alike after a rebuild and on a closed copy, whether an
 agent's calls in an episode can train: an agent is barred by `not_trainable`, `shared_key`, `forked` or `no_end`, and a call
 by `outside_episode`, `person` or `purpose`. A call your gateway recorded that no harness reported has no call id to join, so it
-never trains. [provenance.md](../how-to/provenance.md#what-can-train) says what each bar means; what trains is yours to decide.
+never trains, in a session whose journal and harness pipes no command wrote. In a session in your environment, a command the
+model runs can call your gateway on any agent's bearer and write the journal, and, without writing the journal, it can have such
+a call recorded as that agent's own, under the id your gateway gave it, by writing a report of it into that agent's harness's
+pipes. Nothing here detects either, nor can a check against your gateway's records for that agent's key, which did serve the
+call, so what trains there rests on what the agents' commands left of the record: put agents of one policy only in such a
+session, so that no policy's commands write what another trains on. [provenance.md](../how-to/provenance.md#what-can-train)
+says what each bar means; what trains is yours to decide.
 
 **Labels.** Give your team a vocabulary for its work, each label with the values it may take, and its agents label the tasks they
 add and the agents they spawn, from it alone, as their tools' schemas show them:
@@ -180,6 +205,21 @@ out. What a trainer can count on:
 - **It is earned, never declared.** `doctor --check`, or `check_driver` with `write_conformance`, proves on `FakeModel` acting
   as a gateway that the first request goes under the bearer, holds none of the project's instructions and shows only our
   tools, the environment's, and those of the harness's own that act on nothing.
+- **In your environment, a harness keeps its own tools.** A gateway that says its session runs in the environment keeps the
+  harness's own tools, such as its shell and its file tools, on a driver that declares `in_environment`, and each start records
+  that it did. There every harness, the runtime and whatever the model runs share one user, so a command can read any agent's
+  bearer: the runtime masks every credential it has given a harness in every report, but a harness's own transcript, which the
+  export holds, keeps what a command printed, so let each bearer die with its rollout. A command can also write the journal,
+  and into any harness's pipes, so as to report a call it made as any agent's, so put agents of one policy only in such a
+  session, as [What can train](#what-can-train) says. It is earned too:
+  `own_tools_in_first_request_in_the_environment` proves on `FakeModel` acting as a gateway in the environment that the first
+  request shows the harness's own shell beside ours and the environment's, and `trainable` stands on it there, so a driver whose
+  launch in the environment failed it is refused before you spend anything. Of the drivers here, ScriptedDriver, OpenHands
+  and pi declare it: OpenHands keeps its terminal, file editor and task tracker there, and pi its `read`, `bash`, `edit` and
+  `write`, and the commands their shells run get the gateway's `environment_path`, where it names one, behind the agent's
+  `bin`. So put your toolchain first on the runtime's `PATH`, where the SDK finds each harness, and name the image's own as
+  `environment_path`, so a task's `python3` is the image's. `ph` then runs on the image's `python3` too, so it fails where the
+  image has none of 3.7 or later, and the model reaches our tools only as its harness shows them.
 
 ## Write rewards and credit
 
@@ -255,7 +295,8 @@ on its row less its agent's baseline shared equally by that agent's scored spans
 ## The export
 
 The export is the session as it ended: its folder, closed, or stopped for a rollout cut short, with `annotations.sqlite` beside
-its journal. It holds no key, as bearers lived only in the harnesses' environments. Nor does it hold an agent's harness's
+its journal. It holds no key, as bearers lived only in the harnesses' environments, except in a session in your environment,
+where a harness's own transcript can keep a bearer a command printed. Nor does it hold an agent's harness's
 scratch or a file its driver names as where its harness kept a credential, once that agent has ended and its stop has run,
 which removes them before your `finish` hears of the end. So end every agent, as above, and wait until your `finish` has heard
 of each before you leave the session: a stop that has not begun when the session stops runs only at a resume, which a
@@ -277,7 +318,11 @@ digest. The form a gist is shown in is the SDK's to change, so read it there.
   logs every request with its bearer and headers, gives each response an id in its body, and answers an `Overflow` in its script
   with each dialect's own refusal of a request too long for the model's window.
 - **`ScriptedDriver` launches sealed** with no binary: its tool calls are real MCP, its `AskModel` step a real model call, and its
-  `Compact` step a compaction call with the headers.
+  `Compact` step a compaction call with the headers. On a gateway that says its session runs in your environment it keeps its
+  `shell`, which its model can call, and which runs each command on the gateway's `environment_path`, where it names one,
+  behind the agent's `bin`.
 - **An example to read:** this repository's `tests/integration/test_contract.py`, whose
   `test_a_managed_session_runs_as_a_training_authority_drives_it` runs a training system's whole use of the SDK with none
-  behind it, on ScriptedDriver, pi and OpenHands.
+  behind it, on ScriptedDriver, pi and OpenHands, and whose
+  `test_a_session_in_the_environment_runs_as_a_training_authority_drives_it` runs it in your environment, on ScriptedDriver,
+  pi and OpenHands.

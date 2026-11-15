@@ -57,16 +57,16 @@ amended or extended an RFC.
 | [0041](0041-a-commit-cites-what-informed-it-by-its-ref.md) | A commit cites what informed it by its ref | Accepted |
 | [0042](0042-agents-are-asked-to-cite-by-their-template.md) | Agents are asked to cite by their template, on by default | Accepted |
 | [0043](0043-a-person-follows-provenance-from-where-they-read.md) | A person follows provenance from where they read | Accepted; amended by [RFC 0064](0064-an-act-is-one-form-and-a-read-one-route.md) |
-| [0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) | A level is earned on the machine that runs it | Accepted |
+| [0044](0044-a-level-is-earned-on-the-machine-that-runs-it.md) | A level is earned on the machine that runs it | Accepted; amended by [RFC 0083](0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md) (a draft) |
 | [0045](0045-an-agent-s-process-is-not-its-identity.md) | An agent's process is not its identity | Accepted |
 | [0046](0046-a-daemon-that-keeps-failing-needs-a-person.md) | A daemon that keeps failing needs a person | Accepted |
 | [0047](0047-an-empty-read-names-what-was-already-handed-over.md) | An empty read names what was already handed over | Accepted |
 | [0048](0048-a-setting-nothing-carries-out-is-refused.md) | A setting nothing carries out is refused | Accepted; superseded in part by [RFC 0068](0068-a-program-is-a-script-that-owns-its-session.md) |
-| [0049](0049-the-contract-a-training-authority-gets.md) | The contract a training authority gets | Accepted |
+| [0049](0049-the-contract-a-training-authority-gets.md) | The contract a training authority gets | Accepted; extended by [RFC 0082](0082-a-launch-in-the-environment-keeps-the-harness-s-own-tools.md) (a draft) |
 | [0050](0050-a-script-is-a-person-or-a-program.md) | A script is a person or a program | Accepted |
 | [0051](0051-one-rule-for-whom-a-prompt-goes-to.md) | One rule for whom a session's prompt goes to | Accepted |
 | [0052](0052-a-reward-has-five-statuses-and-eligibility-is-read-from-the-record.md) | A reward has five statuses, and eligibility is read from the record | Accepted; extended by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
-| [0053](0053-a-gateway-admission-launches-sealed.md) | A gateway admission launches sealed | Accepted; amended 2026-11-06 |
+| [0053](0053-a-gateway-admission-launches-sealed.md) | A gateway admission launches sealed | Accepted; amended 2026-11-06; amended by [RFC 0082](0082-a-launch-in-the-environment-keeps-the-harness-s-own-tools.md) (a draft) |
 | [0054](0054-credit-is-a-producers-annotation-and-propagate-is-the-first.md) | Credit is a producer's annotation, and `propagate@1` is the first | Accepted; superseded in part by [RFC 0061](0061-credit-is-kept-per-span-and-a-span-rests-on-what-it-took.md) |
 | [0055](0055-the-export-is-the-session-as-it-ended.md) | The export is the session as it ended | Accepted; extended by [RFC 0075](0075-an-ended-agent-s-folder-keeps-its-record-and-no-credential.md) |
 | [0056](0056-a-runtime-test-is-a-person-s-act-and-isolated-code-never-leaves.md) | A runtime test is a person's act, and isolated code never leaves | Accepted |
@@ -95,6 +95,8 @@ amended or extended an RFC.
 | [0079](0079-a-client-edits-the-project-s-team-file-in-place-from-fields-made-from-its-schema.md) | A client edits the project's team file in place, from fields made from its schema | Accepted |
 | [0080](0080-a-replay-is-a-read-only-copy-of-a-session-s-record-through-its-playhead.md) | A replay is a read-only copy of a session's record through its playhead | Accepted |
 | [0081](0081-platoon-harness-is-one-distribution-with-the-command-line-as-its-cli-extra.md) | platoon-harness is one distribution, with the command line as its cli extra | Accepted |
+| [0082](0082-a-launch-in-the-environment-keeps-the-harness-s-own-tools.md) | A launch in the environment keeps the harness's own tools | Draft |
+| [0083](0083-a-result-made-from-a-read-only-installation-speaks-for-it-wherever-it-is-mounted.md) | A result made from a read-only installation speaks for it wherever it is mounted | Draft |
 
 `tests/unit/docs/test_rfcs.py` checks that this table lists every RFC with the title and status the RFC itself gives, so
 add the row in the same pull request as the RFC.
